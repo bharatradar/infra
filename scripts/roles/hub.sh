@@ -671,15 +671,9 @@ role_hub_deploy_services() {
 role_hub_setup_frpc() {
     log_step "Setting up FRP Client"
 
-    local local_ip
-    local_ip=$(hostname -I | awk '{print $1}')
-
-    # If keepalived is enabled, point FRP to VIP instead of local
+    # Use 127.0.0.1 for FRP since K3s LoadBalancer services are accessible
+    # via kube-proxy on localhost, regardless of VIP configuration.
     local frp_local_ip="127.0.0.1"
-    if [ "$KEEPALIVED_ENABLED" = true ]; then
-        frp_local_ip="${KEEPALIVED_VIP}"
-        log_info "FRP will use VIP: ${KEEPALIVED_VIP}"
-    fi
 
     local arch
     arch=$(detect_arch)
