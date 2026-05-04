@@ -6,7 +6,7 @@ set -euo pipefail
 
 DOMAIN="bharatradar.com"
 SUBDOMAINS="map mlat history api my ws feed"
-ALL_DOMAINS="$DOMAIN"
+ALL_DOMAINS="www.$DOMAIN $DOMAIN"
 for sub in $SUBDOMAINS; do
     ALL_DOMAINS="$ALL_DOMAINS $sub.$DOMAIN"
 done
@@ -37,7 +37,7 @@ echo ">>> Certificates issued successfully"
 
 # Step 2: Write ACME challenge HTTP server
 sudo tee /etc/nginx/sites-enabled/bharatradar-http > /dev/null <<EOF
-# HTTP - ACME challenge for all bharatradar.com domains
+# HTTP - ACME challenge + www redirect for all bharatradar.com domains
 server {
     listen 80;
     server_name ${ALL_DOMAINS// / };
@@ -45,6 +45,11 @@ server {
     location ^~ /.well-known/ {
         root /var/www/html;
         allow all;
+    }
+
+    # www redirect directly to naked HTTPS
+    if (\$host = 'www.${DOMAIN}') {
+        return 301 https://${DOMAIN}\$request_uri;
     }
 
     # Redirect all other traffic to HTTPS
@@ -90,6 +95,19 @@ EOF
 
 # Step 4: Write SSL vhosts for each subdomain
 sudo tee /etc/nginx/sites-enabled/bharatradar-subdomains > /dev/null <<EOF
+# HTTPS - www redirect to naked domain
+server {
+    listen 443 ssl http2;
+    server_name www.${DOMAIN};
+
+    ssl_certificate /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+
+    location / {
+        return 301 https://${DOMAIN}\$request_uri;
+    }
+}
+
 # HTTPS - Map subdomain
 server {
     listen 443 ssl http2;

@@ -223,12 +223,12 @@ install_nginx() {
 configure_nginx() {
     log_step "Configuring Nginx"
 
-    local all_domains="${BASE_DOMAIN}"
+    local all_domains="www.${BASE_DOMAIN} ${BASE_DOMAIN}"
     for sub in "${SUBDOMAINS[@]}"; do
         all_domains="${all_domains} ${sub}.${BASE_DOMAIN}"
     done
 
-    # HTTP server - ACME challenge + redirect to HTTPS
+    # HTTP server - ACME challenge + www redirect to HTTPS
     cat > /etc/nginx/sites-available/bharatradar-http <<EOF
 server {
     listen 80;
@@ -237,6 +237,11 @@ server {
     location ^~ /.well-known/ {
         root /var/www/html;
         allow all;
+    }
+
+    # www redirect directly to naked HTTPS
+    if (\$host = 'www.${BASE_DOMAIN}') {
+        return 301 https://${BASE_DOMAIN}\$request_uri;
     }
 
     location / {
@@ -331,12 +336,14 @@ setup_certbot() {
     systemctl restart nginx
 
     local all_domains="${BASE_DOMAIN}"
+    local certbot_args="-d ${BASE_DOMAIN} -d www.${BASE_DOMAIN}"
     for sub in "${SUBDOMAINS[@]}"; do
-        all_domains="${all_domains} -d ${sub}.${BASE_DOMAIN}"
+        all_domains="${all_domains} ${sub}.${BASE_DOMAIN}"
+        certbot_args="${certbot_args} -d ${sub}.${BASE_DOMAIN}"
     done
 
     log_info "Requesting SSL certificate for: $all_domains"
-    certbot --nginx -d ${BASE_DOMAIN} $(for sub in "${SUBDOMAINS[@]}"; do echo "-d ${sub}.${BASE_DOMAIN}"; done) \
+    certbot --nginx $certbot_args \
         --non-interactive --agree-tos --email "${EMAIL}" --redirect
 
     # Setup auto-renewal
