@@ -10,6 +10,7 @@ if 'MY_DOMAIN' not in settings_content:
     )
     with open('/app/src/adsb_api/utils/settings.py', 'w') as f:
         f.write(settings_content)
+    print("settings.py patched successfully")
 
 # Patch provider.py
 with open('/app/src/adsb_api/utils/provider.py', 'r') as f:
@@ -20,15 +21,16 @@ if 'MY_DOMAIN' not in content:
         'from adsb_api.utils.settings import (INGEST_DNS',
         'from adsb_api.utils.settings import (MY_DOMAIN, INGEST_DNS'
     )
+    # Change adsblol_my_url to use MY_DOMAIN instead of hardcoded my.adsb.lol
+    content = content.replace(
+        '"adsblol_my_url": f"https://{_humanhash(c[0][:18], SALT_MY)}.my.adsb.lol"',
+        '"bharatradar_my_url": f"https://{_humanhash(c[0][:18], SALT_MY)}.{MY_DOMAIN}"'
+    )
+    content = content.replace('"ip": c[1].split()[1]', '"ip": c[1].split()[0]')
 
-content = content.replace(
-    '"bharatradar_my_url": f"https://{_humanhash(c[0][:18], SALT_MY)}.{MY_DOMAIN}"'
-)
-
-content = content.replace('"ip": c[1].split()[1]', '"ip": c[1].split()[0]')
-
-with open('/app/src/adsb_api/utils/provider.py', 'w') as f:
-    f.write(content)
+    with open('/app/src/adsb_api/utils/provider.py', 'w') as f:
+        f.write(content)
+    print("provider.py patched successfully")
 
 # Patch app.py - add startup event to force v2 route loading
 with open('/app/src/adsb_api/app.py', 'r') as f:
@@ -65,7 +67,7 @@ async def api_my(request: Request):
             url="https://adsb.lol#sorry-but-i-could-not-find-your-receiver?"
         )
     for client in my_beast_clients:
-        uids.append(client["bharatradar_my_url"].split("https://")[1].split(".")[0])
+        uids.append(client["adsblol_my_url"].split("https://")[1].split(".")[0])
     host = "https://" + "_".join(uids) + ".my.adsb.lol"
     return RedirectResponse(url=host)'''
 
@@ -110,6 +112,7 @@ content = content.replace(old_my, new_my)
 
 with open('/app/src/adsb_api/app.py', 'w') as f:
     f.write(content)
+print("app.py patched successfully")
 
 # Patch api_v2.py - fix broken decorator pattern
 with open('/app/src/adsb_api/utils/api_v2.py', 'r') as f:
@@ -174,4 +177,4 @@ if old_reapi in content:
 else:
     print("WARNING: Could not find api_v2.py pattern to patch")
 
-print("Patches applied successfully")
+print("All patches applied successfully")
