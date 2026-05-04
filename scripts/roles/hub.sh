@@ -613,7 +613,7 @@ role_hub_deploy_services() {
     wait_for_deployment "reapi-readsb"
     wait_for_deployment "planes-readsb"
     wait_for_deployment "mlat-mlat-server"
-    wait_for_deployment "api-api"
+    wait_for_deployment "api"
 
     # Give CoreDNS time to register services
     log_info "Waiting for CoreDNS to register services..."
@@ -642,7 +642,7 @@ role_hub_deploy_services() {
         -n bharatradar 2>/dev/null || true
 
     # Apply API env patch (Redis URL + domain)
-    kubectl set env deployment/api-api \
+    kubectl set env deployment/api \
         MY_DOMAIN="my.${BASE_DOMAIN}" \
         ADSBLOL_REDIS_HOST="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}" \
         -n bharatradar 2>/dev/null || true

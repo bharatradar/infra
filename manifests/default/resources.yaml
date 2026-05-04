@@ -213,7 +213,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: api-api
+            name: api
             port:
               name: http
 ---
@@ -236,7 +236,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: api-api
+            name: api
             port:
               name: api-internal
 ---

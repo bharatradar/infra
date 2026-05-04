@@ -21,7 +21,6 @@ if 'MY_DOMAIN' not in content:
         'from adsb_api.utils.settings import (INGEST_DNS',
         'from adsb_api.utils.settings import (MY_DOMAIN, INGEST_DNS'
     )
-    # Change adsblol_my_url to use MY_DOMAIN instead of hardcoded my.adsb.lol
     content = content.replace(
         '"adsblol_my_url": f"https://{_humanhash(c[0][:18], SALT_MY)}.my.adsb.lol"',
         '"bharatradar_my_url": f"https://{_humanhash(c[0][:18], SALT_MY)}.{MY_DOMAIN}"'
@@ -32,17 +31,18 @@ if 'MY_DOMAIN' not in content:
         f.write(content)
     print("provider.py patched successfully")
 
-# Patch app.py - add startup event to force v2 route loading
+# Patch app.py
 with open('/app/src/adsb_api/app.py', 'r') as f:
     content = f.read()
 
-if 'MY_DOMAIN,' not in content:
+# Add MY_DOMAIN import if missing
+if 'MY_DOMAIN,' not in content and 'MY_DOMAIN,' not in content:
     content = content.replace(
         'from adsb_api.utils.settings import (INSECURE,',
         'from adsb_api.utils.settings import (INSECURE, MY_DOMAIN,'
     )
 
-# Add v2 route discovery right after provider.startup() AND force into schema
+# Add startup event to force v2 route loading
 if '_ = v2_router.routes' not in content and 'await provider.startup()' in content:
     content = content.replace('await provider.startup()\n', '''await provider.startup()
     _ = v2_router.routes  # Force v2 route discovery
@@ -56,20 +56,8 @@ if '_ = v2_router.routes' not in content and 'await provider.startup()' in conte
     _ = app.openapi()['paths']
 ''')
 
-old_my = '''@app.get("/0/my", tags=["v0"], summary="My Map redirect based on IP")
-@app.get("/api/0/my", tags=["v0"], summary="My Map redirect based on IP", include_in_schema=False)
-async def api_my(request: Request):
-    client_ip = request.client.host
-    my_beast_clients = await provider.get_clients_per_client_ip(client_ip)
-    uids = []
-    if len(my_beast_clients) == 0:
-        return RedirectResponse(
-            url="https://adsb.lol#sorry-but-i-could-not-find-your-receiver?"
-        )
-    for client in my_beast_clients:
-        uids.append(client["adsblol_my_url"].split("https://")[1].split(".")[0])
-    host = "https://" + "_".join(uids) + ".my.adsb.lol"
-    return RedirectResponse(url=host)'''
+# Replace the /0/my route using regex (handles whitespace variations)
+old_my_pattern = r'@app\.get\("/0/my"[^)]+\)\s*\n@app\.get\("/api/0/my"[^)]+\)\s*\nasync def api_my\(request: Request\):.*?return RedirectResponse\(url=host\)'
 
 new_my = '''def _get_client_ip(request: Request) -> str:
     x_real_ip = request.headers.get("X-Real-IP")
@@ -106,9 +94,9 @@ async def my_root(request: Request):
 @app.get("/0/my", tags=["v0"], summary="My Map redirect based on IP")
 @app.get("/api/0/my", tags=["v0"], summary="My Map redirect based on IP", include_in_schema=False)
 async def api_my(request: Request):
-    return RedirectResponse(url=f"https://{MY_DOMAIN}/")'''
+    return RedirectResponse(url=f"https://map.bharatradar.com/")'''
 
-content = content.replace(old_my, new_my)
+content = re.sub(old_my_pattern, new_my, content, flags=re.DOTALL)
 
 with open('/app/src/adsb_api/app.py', 'w') as f:
     f.write(content)
@@ -118,7 +106,6 @@ print("app.py patched successfully")
 with open('/app/src/adsb_api/utils/api_v2.py', 'r') as f:
     content = f.read()
 
-# Replace the broken decorator factory with direct route registration
 old_reapi = '''    def decorator(func):
         async def handler(request: Request, **path_kwargs) -> Response:
             actual_params = params(request) if callable(params) else params

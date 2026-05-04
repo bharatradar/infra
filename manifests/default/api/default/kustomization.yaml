@@ -1,7 +1,6 @@
 resources:
 - ../base
 - flux.yaml
-namePrefix: api-
 commonLabels:
   name: api
 generatorOptions:
