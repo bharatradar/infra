@@ -11,11 +11,6 @@ spec:
       - name: api
         image: ghcr.io/bharatradar/api:5.0.0
         imagePullPolicy: Always
-        volumeMounts:
-        - name: api-app-py
-          mountPath: /app/src/adsb_api/app.py
-          subPath: app.py
-          readOnly: true
         envFrom:
         - configMapRef:
             name: api-salts
@@ -61,9 +56,6 @@ spec:
             cpu: 50m
             memory: 64Mi
       volumes:
-      - name: api-app-py
-        configMap:
-          name: api-app-py
       - name: api-index
         configMap:
           name: api-index
