@@ -2,7 +2,7 @@
 
 BharatRadar ADS-B/MLAT aggregator platform. Aggregates [ADS-B](https://github.com/wiedehopf/readsb) & [MLAT](https://github.com/wiedehopf/mlat-server) data from multiple feeders and serves a public map interface.
 
-> **Version:** 5.3.1 (installer) / 3.3.0 (docs) / 5.0.0 (API image)
+> **Version:** 5.3.2 (installer) / 3.3.1 (docs) / 5.0.0 (API image)
 > **GitHub:** https://github.com/bharatradar/infra
 
 ## Why?
@@ -89,7 +89,16 @@ Hub Cluster:
 | **external-readsb** | `ghcr.io/bharatradar/readsb` | bharatradar | 30004 | External feeds (cnvr.io) |
 | **api** | `ghcr.io/bharatradar/api:5.0.0` | bharatradar | 8080, 80 | Main web API (patched for MY_DOMAIN) |
 | **history** | `ghcr.io/bharatradar/history` | bharatradar | 8080, 80 | Historical data (amd64 only) |
-| **website** | nginx | bharatradar | 80 | Homepage |
+| **website** | `ghcr.io/bharatradar/website` | bharatradar | 80 | Homepage |
+
+### Shared Services (192.168.200.187)
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| **PostgreSQL** | 5432 | K3s external datastore |
+| **Redis** | 6379 | Cache for API, feeder lookups |
+| **InfluxDB** | 8086 | Metrics storage |
+| **MinIO** | 9000 (API), 9001 (Console) | S3-compatible storage for history |
 
 ### Custom Images
 
@@ -167,12 +176,41 @@ The MLAT map shows `"peers": {}` when there is only one feeder. This is normal �
 
 ### Prerequisites
 
-1. **AWS EC2 Server** (or any cloud VPS) with public IP — runs FRP server + nginx reverse proxy
-2. **Primary Hub** — Ubuntu 24.04, amd64, internet access
-3. **HA Server** (optional) — Ubuntu 24.04, amd64, same network as Primary
-4. **br-aggrigator Pi** — Debian 12 or Raspberry Pi OS, arm64, for shared services
+1. **Shared Services Node** — Debian 12 or Raspberry Pi OS (br-aggrigator Pi at 192.168.200.187), for PostgreSQL, Redis, InfluxDB, MinIO
+2. **AWS EC2 Server** (or any cloud VPS) with public IP — runs FRP server + nginx reverse proxy
+3. **Primary Hub** — Ubuntu 24.04, amd64, internet access
+4. **HA Server** (optional) — Ubuntu 24.04, amd64, same network as Primary
 5. **Feeder Pi** — Raspberry Pi OS, arm64, RTL-SDR dongle
 6. **Cloudflare DNS** — A records pointing to AWS EC2 IP for all subdomains
+
+### Install Order
+
+> **Important:** Shared services must be set up FIRST. The Primary Hub needs the PostgreSQL connection string from shared services.
+
+#### Step 0: DNS Records (Manual)
+
+Create these A records in your DNS provider (Cloudflare recommended). Replace `<AWS_IP>` with your FRP server's public IP.
+
+| Type | Name | Value | Cloudflare Proxy | Purpose |
+|------|------|-------|------------------|---------|
+| `A` | `bharatradar.com` | `<AWS_IP>` | **Proxied** | Homepage |
+| `A` | `map.bharatradar.com` | `<AWS_IP>` | **Proxied** | Live map |
+| `A` | `my.bharatradar.com` | `<AWS_IP>` | **Proxied** | Feeder map |
+| `A` | `mlat.bharatradar.com` | `<AWS_IP>` | **Proxied** | MLAT map |
+| `A` | `history.bharatradar.com` | `<AWS_IP>` | **Proxied** | History |
+| `A` | `api.bharatradar.com` | `<AWS_IP>` | **Proxied** | REST API |
+| `A` | `feed.bharatradar.com` | `<AWS_IP>` | **DNS only** | Feeder TCP endpoint |
+| `A` | `ws.bharatradar.com` | `<AWS_IP>` | **Proxied** | WebSocket (future) |
+
+> **Critical:** `feed.bharatradar.com` must be **DNS only** (grey cloud). Cloudflare proxy blocks raw TCP connections for ADS-B beast feeds.
+
+#### Step 1: Shared Services (br-aggrigator Pi — 192.168.200.187)
+
+```bash
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
+```
+
+This installs PostgreSQL, Redis, InfluxDB, and MinIO. **Save the credentials shown at the end** — you'll need the PostgreSQL connection string for the Hub.
 
 ### AWS Server Setup (FRP + nginx + Certbot)
 
@@ -337,27 +375,36 @@ sudo certbot certonly --cert-name bharatradar.com \
 
 ### Cluster Setup
 
-#### Step 1: Shared Services (br-aggrigator Pi)
-```bash
-curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
-```
-This installs PostgreSQL, Redis, InfluxDB, and MinIO. Save the credentials shown at the end.
-
 #### Step 2: Primary Hub
+
 Create `/tmp/hub.env`:
 ```bash
-BASE_DOMAIN="bharatradar.com"
-REDIS_HOST="192.168.200.187"
-REDIS_PORT="6379"
-REDIS_PASSWORD="your-redis-password"
-DB_CONNECTION_STRING="postgres://k3s:your-password@192.168.200.187:5432/k3s"
-GHCR_USERNAME="your-github-username"
-GHCR_PASSWORD="your-github-pat"
-FRP_ENABLED="true"
-FRP_SERVER="13.48.249.103"
-FRP_TOKEN="your-frp-token"
-KEEPALIVED_ENABLED="true"
-KEEPALIVED_VIP="192.168.200.150"
+cat > /tmp/hub.env << 'EOF'
+ROLE=hub
+BASE_DOMAIN=bharatradar.com
+READSB_LAT=18.480718
+READSB_LON=73.898235
+TIMEZONE=Asia/Kolkata
+REDIS_HOST=192.168.200.187
+REDIS_PORT=6379
+REDIS_PASSWORD=<from-shared-services>
+GHCR_USERNAME=your-github-username
+GHCR_PASSWORD=your-github-pat
+USE_EXTERNAL_DB=true
+DB_HOST=192.168.200.187
+DB_PORT=5432
+DB_DBNAME=k3s
+DB_DBUSER=k3s
+DB_DBPASS=<from-shared-services>
+MINIO_ENDPOINT=192.168.200.187:9000
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=<from-shared-services>
+FRP_ENABLED=true
+FRP_SERVER=13.48.249.103
+FRP_TOKEN=<from-frp-server>
+KEEPALIVED_ENABLED=true
+KEEPALIVED_VIP=192.168.200.150
+EOF
 ```
 
 Install:
@@ -368,14 +415,21 @@ curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharat
 #### Step 3: HA Server (Optional but Recommended)
 Create `/tmp/ha.env`:
 ```bash
-DB_CONNECTION_STRING="postgres://k3s:your-password@192.168.200.187:5432/k3s"
-K3S_CLUSTER_TOKEN="K10...your-token..."
-PRIMARY_HUB_IP="192.168.200.145"
-BASE_DOMAIN="bharatradar.com"
-KEEPALIVED_ENABLED="true"
-KEEPALIVED_VIP="192.168.200.150"
-KEEPALIVED_STATE="BACKUP"
-KEEPALIVED_PRIORITY="90"
+cat > /tmp/ha.env << 'EOF'
+ROLE=ha-server
+BASE_DOMAIN=bharatradar.com
+DB_HOST=192.168.200.187
+DB_PORT=5432
+DB_DBNAME=k3s
+DB_DBUSER=k3s
+DB_DBPASS=<from-shared-services>
+K3S_CLUSTER_TOKEN=K10...your-token...
+PRIMARY_HUB_IP=192.168.200.145
+KEEPALIVED_ENABLED=true
+KEEPALIVED_VIP=192.168.200.150
+KEEPALIVED_STATE=BACKUP
+KEEPALIVED_PRIORITY=90
+EOF
 ```
 
 Install:

@@ -1,6 +1,6 @@
 # BharatRadar Infrastructure - Installation Guide
 
-> **Version:** 3.3.0
+> **Version:** 3.3.1
 > **Last Updated:** May 2026
 > **GitHub:** https://github.com/bharatradar/infra
 
@@ -80,7 +80,7 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
 | **br-aggrigator** | 192.168.200.187 | K3s agent, shared services | Debian 12 (Pi) | arm64 | Yes |
 | **Feeder Pi** | 192.168.200.127 | RTL-SDR + readsb + mlat-client | Raspberry Pi OS | arm64 | No |
 
-### Components
+### Services
 
 | Component | Image | Port | Notes |
 |-----------|-------|------|-------|
@@ -89,12 +89,20 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
 | **planes-readsb** | `ghcr.io/bharatradar/docker-tar1090-uuid` | 80, 30152 | Public tar1090 map with UUID tracking |
 | **mlat-mlat-server** | `ghcr.io/bharatradar/mlat-server` | 31090, 30104 | MLAT processing |
 | **mlat-map** | `ghcr.io/bharatradar/mlat-server-sync-map` | 80 | MLAT coverage map |
-| **reapi-readsb** | `ghcr.io/bharatradar/readsb` | 30006 | REST API data feed |
+| **reapi-readsb** | `ghcr.io/bharatradar/readsb` | 30152 | REST API data feed (v2 endpoints) |
 | **external-readsb** | `ghcr.io/bharatradar/readsb` | 30004 | External feeds (cnvr.io) |
 | **api** | `ghcr.io/bharatradar/api` | 8080 | Main web API |
 | **history** | `ghcr.io/bharatradar/history` | 8080, 80 | Historical data (amd64 only) |
-| **haproxy** | `haproxy:2.7` | 80, 443 | Load balancer (3 replicas) |
-| **redis** | `redis:alpine` | 6379 | Cache |
+| **website** | `ghcr.io/bharatradar/website` | 80 | Homepage |
+
+### Shared Services (192.168.200.187)
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| **PostgreSQL** | 5432 | K3s external datastore |
+| **Redis** | 6379 | Cache for API, feeder lookups |
+| **InfluxDB** | 8086 | Metrics storage |
+| **MinIO** | 9000 (API), 9001 (Console) | S3-compatible storage for history |
 
 ---
 
@@ -600,7 +608,22 @@ Below are all environment variables accepted by each role for silent installatio
 
 ## Step-by-Step Installation
 
-### Step 1: DNS Setup
+### Step 1: Shared Services (br-aggrigator Pi — 192.168.200.187)
+
+This installs PostgreSQL, Redis, InfluxDB, and MinIO. These are prerequisites for the K3s cluster.
+
+```bash
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
+```
+
+After installation, save the credentials shown at the end. You'll need:
+- **PostgreSQL connection string** (for K3s `--datastore-endpoint`)
+- **Redis host and password** (for API, planes, mlat-map)
+- **MinIO endpoint and credentials** (for history service rclone config)
+
+> **Note:** This must be done BEFORE installing the Primary Hub. The Hub needs the PostgreSQL connection string to use as its external datastore.
+
+### Step 2: DNS Setup
 
 Add the following A records to your DNS provider (Cloudflare recommended).
 All records point to your AWS EC2 (FRP server) public IP.
@@ -682,8 +705,14 @@ sudo kubectl create secret docker-registry ghcr-secret \
   --docker-password=YOUR_GH_PAT \
   -n bharatradar
 
-# Create rclone secret (optional, for history)
-echo -e "[bharatradar]\ntype = s3\nprovider = AWS\nenv_auth = true" | \
+# Create TLS secret (copy from AWS EC2 after certbot)
+sudo kubectl create secret tls bharatradar-tls \
+  --cert=/etc/letsencrypt/live/bharatradar.com/fullchain.pem \
+  --key=/etc/letsencrypt/live/bharatradar.com/privkey.pem \
+  -n bharatradar
+
+# Create rclone secret for history service (MinIO)
+echo -e "[bharatradar]\ntype = s3\nprovider = MinIO\naccess_key_id = minioadmin\nsecret_access_key = <from-shared-services>\nendpoint = http://192.168.200.187:9000\nacl = private" | \
   sudo kubectl create secret generic bharatradar-rclone \
   --from-file=rclone.conf=/dev/stdin -n bharatradar
 ```
@@ -711,13 +740,13 @@ See [FRP Server Setup](#frp-server-setup-awscloud) below.
 
 See [FRP Client Setup](#frp-client-setup-hub-node) below.
 
-### Step 8: Join Aggregator Node (Optional)
+### Step 8: Join Aggregator Node (br-aggrigator Pi as K3s agent)
 
 ```bash
 # On Hub - get join token
 sudo cat /var/lib/rancher/k3s/server/node-token
 
-# On aggregator Pi
+# On br-aggrigator Pi (192.168.200.187)
 curl -sfL https://get.k3s.io | \
   K3S_URL=https://192.168.200.145:6443 \
   K3S_TOKEN=K10xxxxxxxxx \

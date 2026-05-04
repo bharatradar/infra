@@ -248,7 +248,37 @@ uninstall_influxdb() {
     fi
 }
 
-# Uninstall shared services (PostgreSQL + Redis + InfluxDB)
+# Uninstall MinIO
+uninstall_minio() {
+    log_step "Uninstalling MinIO"
+
+    if systemctl is-active --quiet minio 2>/dev/null; then
+        systemctl stop minio 2>/dev/null || true
+        systemctl disable minio 2>/dev/null || true
+        rm -f /etc/systemd/system/minio.service
+        systemctl daemon-reload
+        log_info "MinIO service removed"
+    fi
+
+    if [ -f /usr/local/bin/minio ]; then
+        rm -f /usr/local/bin/minio
+        log_info "MinIO binary removed"
+    fi
+
+    if [ -f /usr/local/bin/mc ]; then
+        rm -f /usr/local/bin/mc
+        log_info "MinIO client removed"
+    fi
+
+    if prompt_confirm "Also remove MinIO data directory (/data/minio)?"; then
+        rm -rf /data/minio
+        log_info "MinIO data removed"
+    fi
+
+    log_success "MinIO uninstalled"
+}
+
+# Uninstall shared services (PostgreSQL + Redis + InfluxDB + MinIO)
 uninstall_shared_services() {
     log_step "Uninstalling Shared Services"
 
@@ -264,8 +294,12 @@ uninstall_shared_services() {
         uninstall_influxdb
     fi
 
-    if prompt_confirm "Remove all shared data directories (/var/lib/postgresql, /var/lib/redis, /var/lib/influxdb2)?"; then
-        rm -rf /var/lib/postgresql/* /var/lib/redis/* /var/lib/influxdb2/*
+    if prompt_confirm "Remove MinIO?"; then
+        uninstall_minio
+    fi
+
+    if prompt_confirm "Remove all shared data directories (/var/lib/postgresql, /var/lib/redis, /var/lib/influxdb2, /data/minio)?"; then
+        rm -rf /var/lib/postgresql/* /var/lib/redis/* /var/lib/influxdb2/* /data/minio
         log_info "All shared data directories removed"
     fi
 }
