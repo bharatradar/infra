@@ -615,16 +615,26 @@ A       feed.bharat-radar.vellur.in  <AWS_IP>
 
 ### Step 2: Build and Push Custom Images
 
-All upstream images are mirrored to `ghcr.io/bharatradar/` with multi-arch support:
+Images are built from forked source repos in the bharatradar org. Each fork has its own GitHub Actions workflow that pushes to `ghcr.io/bharatradar/`.
 
-| Image | Source | Build Dir |
-|-------|--------|-----------|
-| `ghcr.io/bharatradar/readsb` | `ghcr.io/wiedehopf/readsb` | `build/readsb/` |
-| `ghcr.io/bharatradar/docker-tar1090-uuid` | `ghcr.io/sdr-enthusiasts/docker-tar1090` + uuid binaries | `build/docker-tar1090-uuid/` |
-| `ghcr.io/bharatradar/mlat-server` | `ghcr.io/adsblol/mlat-server` | `build/mlat-server/` |
-| `ghcr.io/bharatradar/mlat-server-sync-map` | `ghcr.io/adsblol/mlat-server-sync-map` + nginx proxy | `build/mlat-server-sync-map/` |
-| `ghcr.io/bharatradar/api` | `ghcr.io/adsblol/api` | `build/api/` |
-| `ghcr.io/bharatradar/history` | `ghcr.io/adsblol/history` | `build/history/` (amd64 only) |
+### Forked Source Repos (built in fork CI)
+
+| Fork | Upstream | Image | Platforms |
+|------|----------|-------|-----------|
+| [bharatradar/readsb](https://github.com/bharatradar/readsb) | wiedehopf/readsb | `ghcr.io/bharatradar/readsb` | amd64, arm64 |
+| [bharatradar/docker-tar1090](https://github.com/bharatradar/docker-tar1090) | sdr-enthusiasts/docker-tar1090 | `ghcr.io/bharatradar/docker-tar1090` | amd64, arm64 |
+| [bharatradar/mlat-server](https://github.com/bharatradar/mlat-server) | adsblol/mlat-server | `ghcr.io/bharatradar/mlat-server` | amd64 |
+| [bharatradar/mlat-server-sync-map](https://github.com/bharatradar/mlat-server-sync-map) | adsblol/mlat-server-sync-map | `ghcr.io/bharatradar/mlat-server-sync-map` | amd64 |
+| [bharatradar/api](https://github.com/bharatradar/api) | adsblol/api | `ghcr.io/bharatradar/api` | amd64 |
+| [bharatradar/history](https://github.com/bharatradar/history) | adsblol/history | `ghcr.io/bharatradar/history` | amd64 |
+
+### Wrapper Images (built by infra CI)
+
+| Image | Base | Build Dir |
+|-------|------|-----------|
+| `ghcr.io/bharatradar/docker-tar1090-uuid` | `docker-tar1090` fork + uuid binaries from `readsb` fork | `build/docker-tar1090-uuid/` |
+| `ghcr.io/bharatradar/mlat-server-sync-map` | fork image + nginx proxy | `build/mlat-server-sync-map/` |
+| `ghcr.io/bharatradar/api` | fork image + patch.py | `build/api/` |
 
 ```bash
 # Authenticate with GHCR
@@ -731,24 +741,28 @@ docker buildx build --push --platform linux/amd64,linux/arm64 \
 
 ### Image Matrix
 
-| Custom Image | Upstream | Customizations | Archs |
-|-------------|----------|----------------|-------|
-| `readsb` | `ghcr.io/wiedehopf/readsb` | None (re-tag) | amd64, arm64 |
-| `docker-tar1090-uuid` | `ghcr.io/sdr-enthusiasts/docker-tar1090` | Adds `readsb-with-uuids` binary, enables `rId` in aircraft.json | amd64, arm64 |
-| `mlat-server` | `ghcr.io/adsblol/mlat-server` | None (re-tag) | amd64, arm64 |
-| `mlat-server-sync-map` | `ghcr.io/adsblol/mlat-server-sync-map` | Adds redirect index.html, nginx reverse proxy for `/api/0/mlat-server/` | amd64, arm64 |
-| `api` | `ghcr.io/adsblol/api` | None (re-tag) | amd64, arm64 |
-| `history` | `ghcr.io/adsblol/history` | None (re-tag) | amd64 only |
+| Fork | Upstream | CI | Archs |
+|------|----------|----|-------|
+| [bharatradar/readsb](https://github.com/bharatradar/readsb) | wiedehopf/readsb | Fork workflow | amd64, arm64 |
+| [bharatradar/docker-tar1090](https://github.com/bharatradar/docker-tar1090) | sdr-enthusiasts/docker-tar1090 | Fork workflow | amd64, arm64 |
+| [bharatradar/mlat-server](https://github.com/bharatradar/mlat-server) | adsblol/mlat-server | Fork workflow | amd64 |
+| [bharatradar/mlat-server-sync-map](https://github.com/bharatradar/mlat-server-sync-map) | adsblol/mlat-server-sync-map | Fork workflow + infra wrapper | amd64 |
+| [bharatradar/api](https://github.com/bharatradar/api) | adsblol/api | Fork workflow + infra wrapper (patch.py) | amd64 |
+| [bharatradar/history](https://github.com/bharatradar/history) | adsblol/history | Fork workflow | amd64 |
+
+### Wrapper Images (built by infra CI)
+
+| Image | Base | Customizations | Archs |
+|-------|------|----------------|-------|
+| `docker-tar1090-uuid` | `bharatradar/docker-tar1090` + `bharatradar/readsb` | Adds `readsb-with-uuids` binary, enables `rId` in aircraft.json | amd64, arm64 |
+| `mlat-server-sync-map` | `bharatradar/mlat-server-sync-map` | Adds redirect index.html, nginx reverse proxy for `/api/0/mlat-server/` | amd64 |
+| `api` | `bharatradar/api` | Patches MY_DOMAIN, v2 routes, Redis integration | amd64 |
 
 ### CI/CD
 
-The `.github/workflows/build-image.yml` workflow builds all images on push:
+Each forked repo has its own GitHub Actions workflow (`build-ghcr.yml`) that builds and pushes to `ghcr.io/bharatradar/`.
 
-```yaml
-# Trigger: push to main or manual dispatch
-# Platforms: linux/amd64, linux/arm64
-# Registry: ghcr.io/bharatradar/
-```
+The infra repo's `.github/workflows/build-image.yml` builds wrapper images (docker-tar1090-uuid, mlat-server-sync-map, api) that add customizations on top of fork images.
 
 ---
 

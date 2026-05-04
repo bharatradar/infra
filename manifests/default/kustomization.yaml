@@ -12,10 +12,3 @@ resources:
 - website/default
 - resources.yaml
 namespace: bharatradar
-images:
-- name: ghcr.io/bharatradar/mlat-server
-  newName: ghcr.io/bharatradar/mlat-server
-  newTag: latest
-- name: ghcr.io/bharatradar/history
-  newName: ghcr.io/bharatradar/history
-  newTag: latest

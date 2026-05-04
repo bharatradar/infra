@@ -4,7 +4,7 @@ resources:
 namePrefix: planes-
 namespace: bharatradar
 images:
-- name: ghcr.io/bharatradar/wiedehopf-readsb
+- name: ghcr.io/bharatradar/readsb
   newName: ghcr.io/bharatradar/docker-tar1090-uuid
   newTag: latest
 generatorOptions:

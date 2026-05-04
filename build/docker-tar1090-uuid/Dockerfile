@@ -1,5 +1,5 @@
-FROM ghcr.io/bharatradar/sdr-enthusiasts-docker-tar1090:latest AS base
-FROM ghcr.io/bharatradar/wiedehopf-readsb:latest AS uuid
+FROM ghcr.io/bharatradar/docker-tar1090:latest AS base
+FROM ghcr.io/bharatradar/readsb:latest AS uuid
 
 FROM base
 COPY --from=uuid /usr/local/bin/readsb-with-uuids /usr/local/bin/readsb

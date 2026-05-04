@@ -38,13 +38,19 @@ Services (manifests/default):
 - build/     Custom Dockerfiles for multi-arch images
 
 ## Custom Images
-All built with `--platform linux/amd64,linux/arm64` and pushed to `ghcr.io/bharatradar/`:
-- `readsb` ← ghcr.io/wiedehopf/readsb
-- `docker-tar1090-uuid` ← ghcr.io/sdr-enthusiasts/docker-tar1090 + uuid binaries
-- `mlat-server` ← ghcr.io/adsblol/mlat-server
-- `mlat-server-sync-map` ← ghcr.io/adsblol/mlat-server-sync-map + nginx proxy
-- `api` ← ghcr.io/adsblol/api + patches (v2 routes, MY_DOMAIN, Redis, nginx routes)
-- `history` ← ghcr.io/adsblol/history (amd64 only)
+
+### Forked Source Repos (CI builds images directly)
+- `readsb` ← fork of wiedehopf/readsb → `ghcr.io/bharatradar/readsb` (multi-arch)
+- `docker-tar1090` ← fork of sdr-enthusiasts/docker-tar1090 → `ghcr.io/bharatradar/docker-tar1090` (multi-arch)
+- `mlat-server` ← fork of adsblol/mlat-server → `ghcr.io/bharatradar/mlat-server` (amd64)
+- `mlat-server-sync-map` ← fork of adsblol/mlat-server-sync-map → `ghcr.io/bharatradar/mlat-server-sync-map` (amd64)
+- `api` ← fork of adsblol/api → `ghcr.io/bharatradar/api` (amd64, + patches in build/api/)
+- `history` ← fork of adsblol/history → `ghcr.io/bharatradar/history` (amd64)
+
+### Wrapper Images (built by infra CI)
+- `docker-tar1090-uuid` ← `ghcr.io/bharatradar/docker-tar1090` + uuid binaries from readsb fork (multi-arch)
+- `mlat-server-sync-map` ← fork image + custom nginx proxy (amd64)
+- `api` ← fork image + patch.py for v2 routes, MY_DOMAIN, Redis (amd64)
 
 ## Deployment
 - Manual: `kustomize build manifests/default | kubectl apply -f -`
@@ -80,7 +86,7 @@ All built with `--platform linux/amd64,linux/arm64` and pushed to `ghcr.io/bhara
 - MLAT map has nginx reverse proxy for `/api/0/mlat-server/` endpoints
 - Peers: {} on MLAT map is normal with single feeder (requires multiple receivers)
 - `my.bharat-radar.vellur.in/` redirects to `map.bharat-radar.vellur.in/?filter_uuid=<uuid>` based on IP lookup from Redis `beast:clients`
-- API image built from `build/api/` which patches upstream `ghcr.io/adsblol/api` at runtime
+- API image built from `build/api/` which patches `ghcr.io/bharatradar/api` fork at runtime
 - v2 route registration bug fixed in v5.0.0 by removing broken decorator pattern
 - ReAPI port (--net-api-port=30152) required for v2 endpoints to fetch aircraft data
 

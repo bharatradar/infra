@@ -93,16 +93,26 @@ Hub Cluster:
 
 ### Custom Images
 
-All images are built with `--platform linux/amd64,linux/arm64` and pushed to `ghcr.io/bharatradar/`.
+#### Forked Source Repos (CI builds images directly)
+All forked repos have their own GitHub Actions workflow that builds and pushes to `ghcr.io/bharatradar/`.
 
-| Image | Source | Purpose |
-|-------|--------|---------|
-| `ghcr.io/bharatradar/readsb` | `ghcr.io/wiedehopf/readsb` | Base readsb image |
-| `ghcr.io/bharatradar/docker-tar1090-uuid` | `ghcr.io/sdr-enthusiasts/docker-tar1090` + uuid binaries | tar1090 with UUID tracking (`rId` in aircraft.json) |
-| `ghcr.io/bharatradar/mlat-server` | `ghcr.io/adsblol/mlat-server` | MLAT processing server |
-| `ghcr.io/bharatradar/mlat-server-sync-map` | `ghcr.io/adsblol/mlat-server-sync-map` + nginx proxy | MLAT coverage map with `/api/0/mlat-server/` reverse proxy |
-| `ghcr.io/bharatradar/api` | `ghcr.io/adsblol/api` + patches | REST API with v2 routes, MY_DOMAIN support, Redis integration |
-| `ghcr.io/bharatradar/history` | `ghcr.io/adsblol/history` | Historical data (amd64 only) |
+| Fork | Upstream | Image | Platforms |
+|------|----------|-------|-----------|
+| [bharatradar/readsb](https://github.com/bharatradar/readsb) | wiedehopf/readsb | `ghcr.io/bharatradar/readsb` | amd64, arm64 |
+| [bharatradar/docker-tar1090](https://github.com/bharatradar/docker-tar1090) | sdr-enthusiasts/docker-tar1090 | `ghcr.io/bharatradar/docker-tar1090` | amd64, arm64 |
+| [bharatradar/mlat-server](https://github.com/bharatradar/mlat-server) | adsblol/mlat-server | `ghcr.io/bharatradar/mlat-server` | amd64 |
+| [bharatradar/mlat-server-sync-map](https://github.com/bharatradar/mlat-server-sync-map) | adsblol/mlat-server-sync-map | `ghcr.io/bharatradar/mlat-server-sync-map` | amd64 |
+| [bharatradar/api](https://github.com/bharatradar/api) | adsblol/api | `ghcr.io/bharatradar/api` | amd64 |
+| [bharatradar/history](https://github.com/bharatradar/history) | adsblol/history | `ghcr.io/bharatradar/history` | amd64 |
+
+#### Wrapper Images (built by infra CI)
+Built from `build/` directory in this repo.
+
+| Image | Base | Purpose |
+|-------|------|---------|
+| `ghcr.io/bharatradar/docker-tar1090-uuid` | `docker-tar1090` fork + uuid binaries from `readsb` fork | tar1090 with UUID tracking (`rId` in aircraft.json) |
+| `ghcr.io/bharatradar/mlat-server-sync-map` | `mlat-server-sync-map` fork + nginx proxy | MLAT coverage map with `/api/0/mlat-server/` reverse proxy |
+| `ghcr.io/bharatradar/api` | `api` fork + patch.py | REST API with v2 routes, MY_DOMAIN support, Redis integration |
 
 ### Subdomains
 
@@ -128,7 +138,7 @@ All feeder connections route through the FRP tunnel (AWS EC2 → Hub), which mea
 When the FRP tunnel terminates at the Hub, Traefik forwards requests to backend pods but the `X-Real-IP` header from the AWS nginx proxy is not preserved. The API app sees the Traefik pod's internal IP instead of the feeder's real IP. This compounds the FRP IP tracking issue.
 
 ### 4. API Image Patches Applied at Runtime
-The `api` image (`ghcr.io/bharatradar/api:5.0.0`) is built from upstream `adsblol/api` with runtime patches (`build/api/patch.py`). The patches replace hardcoded `adsb.lol` references with `MY_DOMAIN` and fix v2 route registration. These patches must be reapplied if the upstream image changes.
+The `api` image (`ghcr.io/bharatradar/api:5.0.0`) is built from our fork `bharatradar/api` with runtime patches (`build/api/patch.py`). The patches replace hardcoded `adsb.lol` references with `MY_DOMAIN` and fix v2 route registration. These patches must be reapplied if the fork image changes.
 
 ### 5. History Pod is amd64-Only
 The `history` image does not have an arm64 build. It will fail to run on Raspberry Pi nodes. The deployment has `nodeSelector: kubernetes.io/arch: amd64` to prevent scheduling on arm64 nodes.

@@ -1,4 +1,4 @@
-name: Build Images
+name: Build Wrapper Images
 
 on:
   push:
@@ -20,23 +20,14 @@ jobs:
     strategy:
       matrix:
         include:
-          - context: build/readsb
-            image: ghcr.io/bharatradar/readsb
-            platforms: linux/amd64,linux/arm64
           - context: build/docker-tar1090-uuid
             image: ghcr.io/bharatradar/docker-tar1090-uuid
             platforms: linux/amd64,linux/arm64
-          - context: build/mlat-server
-            image: ghcr.io/bharatradar/mlat-server
-            platforms: linux/amd64
           - context: build/mlat-server-sync-map
             image: ghcr.io/bharatradar/mlat-server-sync-map
             platforms: linux/amd64
           - context: build/api
             image: ghcr.io/bharatradar/api
-            platforms: linux/amd64
-          - context: build/history
-            image: ghcr.io/bharatradar/history
             platforms: linux/amd64
     steps:
       - name: Checkout
@@ -76,6 +67,7 @@ jobs:
           tags: |
             type=sha,format=short
             type=raw,value=latest
+            type=semver,pattern={{version}}
 
       - name: Build and push
         if: steps.should-build.outputs.skip != 'true'
@@ -85,5 +77,6 @@ jobs:
           platforms: ${{ matrix.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
