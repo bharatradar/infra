@@ -9,7 +9,7 @@
 
 set -euo pipefail
 
-VERSION="5.4.0"
+VERSION="5.5.0"
 FEEDER_DOMAIN="feed.bharatradar.com"
 
 # Colors
@@ -333,6 +333,23 @@ collect_config() {
         log_info "Installation cancelled."
         exit 0
     fi
+}
+
+configure_cleanup() {
+    log_step "Disk Cleanup Configuration"
+
+    echo ""
+    echo "  Automatic disk cleanup prevents disk-full issues."
+    echo "  Runs daily via systemd timer, cleans by age OR disk size (whichever comes first)."
+    echo ""
+
+    read -rp "  Keep files for [7] days: " cleanup_days < /dev/tty
+    CLEANUP_DAYS="${cleanup_days:-7}"
+
+    read -rp "  Force cleanup if disk exceeds [80]%: " cleanup_pct < /dev/tty
+    CLEANUP_SIZE_PCT="${cleanup_pct:-80}"
+
+    log_info "Cleanup: ${CLEANUP_DAYS} days retention, ${CLEANUP_SIZE_PCT}% disk threshold"
 }
 
 install_packages() {
@@ -710,6 +727,75 @@ EOF
     log_success "Configuration saved to /etc/bharatradar/config.env"
 }
 
+install_cleanup() {
+    log_step "Installing Disk Cleanup Utility"
+
+    # Install the cleanup script
+    local cleanup_script
+    cleanup_script=$(mktemp)
+
+    curl -sL "https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-cleanup" -o "$cleanup_script" 2>/dev/null || {
+        log_warn "Cannot fetch cleanup script from GitHub, bundling inline"
+        # Bundle the cleanup script inline if curl fails
+        cat > "$cleanup_script" <<'CLEANUP_EOF'
+CLEANUP_EOF
+        cat /dev/stdin >> "$cleanup_script" 2>/dev/null || true
+    }
+
+    if [ -s "$cleanup_script" ]; then
+        cp "$cleanup_script" /usr/local/bin/bharatradar-cleanup
+        chmod +x /usr/local/bin/bharatradar-cleanup
+    fi
+    rm -f "$cleanup_script"
+
+    # Write cleanup config
+    cat > /etc/bharatradar/cleanup.conf <<EOF
+# BharatRadar Disk Cleanup Configuration
+# Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+CLEANUP_DAYS=${CLEANUP_DAYS}
+CLEANUP_SIZE_PCT=${CLEANUP_SIZE_PCT}
+EOF
+
+    chmod 644 /etc/bharatradar/cleanup.conf
+
+    # Create systemd service
+    cat > /etc/systemd/system/bharatradar-cleanup.service <<EOF
+[Unit]
+Description=BharatRadar Disk Cleanup
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/bharatradar-cleanup --run
+Nice=19
+IOSchedulingClass=idle
+EOF
+
+    # Create systemd timer (daily at 3am with random delay)
+    cat > /etc/systemd/system/bharatradar-cleanup.timer <<EOF
+[Unit]
+Description=BharatRadar Daily Disk Cleanup
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=3600
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable bharatradar-cleanup.timer
+    systemctl start bharatradar-cleanup.timer
+
+    log_success "Cleanup utility installed (daily at 3am)"
+    log_info "Retention: ${CLEANUP_DAYS} days, Threshold: ${CLEANUP_SIZE_PCT}%"
+    log_info "Manual run: bharatradar-cleanup --run"
+    log_info "Dry run: bharatradar-cleanup --dry-run"
+}
+
 post_install() {
     local local_ip
     local_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
@@ -755,6 +841,7 @@ main() {
     detect_existing_software
     prompt_existing_mode
     collect_config
+    configure_cleanup
     install_packages
     install_rtlsdr
     install_readsb
@@ -766,6 +853,7 @@ main() {
     create_mlat_service
     start_services
     save_config
+    install_cleanup
     post_install
 
     log_success "Feeder installation complete!"
