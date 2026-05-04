@@ -2,7 +2,6 @@ resources:
 - ../base
 - flux.yaml
 - nginx-config.yaml
-- mlat-map-html.yaml
 commonLabels:
   name: mlat-map
 patches:
@@ -16,24 +15,9 @@ patches:
         - name: nginx-conf
           configMap:
             name: mlat-map-nginx
-        - name: mlat-html
-          configMap:
-            name: mlat-map-html
     - op: add
       path: /spec/template/spec/containers/0/volumeMounts
       value:
         - name: nginx-conf
           mountPath: /etc/nginx/conf.d
-          readOnly: true
-        - name: mlat-html
-          mountPath: /usr/share/nginx/html/syncmap/index.html
-          subPath: syncmap-index.html
-          readOnly: true
-        - name: mlat-html
-          mountPath: /usr/share/nginx/html/syncmap/overlay.js
-          subPath: syncmap-overlay.js
-          readOnly: true
-        - name: mlat-html
-          mountPath: /usr/share/nginx/html/synctable/index.html
-          subPath: synctable-index.html
           readOnly: true
