@@ -173,4 +173,27 @@ if old_reapi in content:
 else:
     print("WARNING: Could not find api_v2.py pattern to patch")
 
+# Rebrand: Replace all adsb.lol references with bharatradar.com
+for filepath in [
+    '/app/src/adsb_api/app.py',
+    '/app/README.md',
+    '/app/src/adsb_api/utils/dependencies.py',
+    '/app/src/adsb_api/utils/api_routes.py',
+    '/app/src/adsb_api/utils/provider.py',
+    '/app/src/adsb_api/utils/reapi.py',
+]:
+    try:
+        with open(filepath, 'r') as f:
+            content = f.read()
+        original = content
+        content = content.replace('adsb.lol', 'bharatradar.com')
+        content = content.replace('BharatRadar API', 'BharatRadar API')
+        content = content.replace('The BharatRadar API is a free and open source API for the BharatRadar project.', 'The BharatRadar API is a free and open source API for the BharatRadar project.')
+        if content != original:
+            with open(filepath, 'w') as f:
+                f.write(content)
+            print(f"Rebranded {filepath}")
+    except FileNotFoundError:
+        print(f"Skipping {filepath} (not found)")
+
 print("All patches applied successfully")
