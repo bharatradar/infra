@@ -440,7 +440,7 @@ Commands:
   hub             Set up Primary Hub (first K3s server, new cluster)
   ha-server       Join existing cluster as second K3s server (HA)
   worker          Join existing cluster as K3s agent
-  feeder          Set up RTL-SDR receiver
+  feeder          Set up RTL-SDR receiver (use bharatradar-feeder for standalone)
   frp-server      Set up FRP server on cloud/VPS
   status          Show health dashboard
   remove-node     Remove a node from cluster (interactive)
@@ -448,6 +448,9 @@ Commands:
   backup          Backup configuration files
   uninstall       Remove BharatRadar components
   help            Show this help message
+
+Feeder (Recommended — standalone):
+  curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-feeder | sudo bash
 
 Silent Install:
   sudo $0 --conf-file /path/to/config.env hub

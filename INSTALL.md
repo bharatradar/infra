@@ -247,7 +247,7 @@ curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharat
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- db-standby
 
 # Feeder Pi (RTL-SDR receiver, standalone)
-curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- feeder
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-feeder | sudo bash
 
 # FRP Server (Cloud/VPS with public IP)
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- frp-server

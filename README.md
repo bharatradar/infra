@@ -9,6 +9,16 @@ BharatRadar ADS-B/MLAT aggregator platform. Aggregates [ADS-B](https://github.co
 
 Community-driven ADS-B aggregation, built as a fork of [adsblol/infra](https://github.com/adsblol/infra). All upstream images are mirrored to `ghcr.io/bharatradar/` with multi-arch support (amd64 + arm64) for Raspberry Pi compatibility.
 
+## Quick Start: Set Up a Feeder
+
+If you just want to feed data to BharatRadar (no server/cluster setup needed), run this on your Raspberry Pi:
+
+```bash
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-feeder | sudo bash
+```
+
+This auto-detects your SDR, installs readsb + mlat-client, and connects to `feed.bharatradar.com`. Setup takes under 15 minutes. [Full docs →](https://bharatradar.com/docs/get-started/become-a-feeder/)
+
 ## Architecture
 
 ```
@@ -438,6 +448,15 @@ curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharat
 ```
 
 #### Step 4: Feeder Pi
+
+**Recommended** — standalone one-line installer (auto-detects SDR, handles existing software):
+
+```bash
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-feeder | sudo bash
+```
+
+**Alternative** — via main installer:
+
 ```bash
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- feeder
 ```
