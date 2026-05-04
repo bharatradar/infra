@@ -102,12 +102,12 @@ cleanup_apt_autoremove() {
     log_step "Removing orphaned packages"
 
     local count
-    count=$(apt list --autoremove 2>/dev/null | grep -c "^" || echo "0")
-    count=$((count - 1))  # subtract header line
+    count=$(apt list --autoremove 2>/dev/null | grep -c "/" || true)
+    count=${count:-0}
 
     if [ "$DRY_RUN" = true ]; then
         log_info "Would remove $count orphaned packages"
-        apt list --autoremove 2>/dev/null | grep "^" | head -10
+        apt list --autoremove 2>/dev/null | grep "/" | head -10
         return
     fi
 
