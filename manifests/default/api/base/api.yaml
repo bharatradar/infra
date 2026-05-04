@@ -11,6 +11,11 @@ spec:
       - name: api
         image: ghcr.io/bharatradar/api:5.0.0
         imagePullPolicy: Always
+        volumeMounts:
+        - name: api-app-py
+          mountPath: /app/src/adsb_api/app.py
+          subPath: app.py
+          readOnly: true
         envFrom:
         - configMapRef:
             name: api-salts
@@ -20,7 +25,7 @@ spec:
         - name: MY_DOMAIN
           value: "bharatradar.com"
         - name: ADSBLOL_REDIS_HOST
-          value: "redis://:pXlpa1DdLpEn4Lih93H8l2zx42C0ThcTwBuHFiqA@192.168.200.187:6379"
+          value: "redis://:placeholder@REDIS_HOST:6379"
         - name: ADSBLOL_REAPI_ENDPOINT
           value: "http://reapi-readsb.bharatradar.svc.cluster.local:30152/re-api/"
         - name: ADSBLOL_STATS_URL
@@ -56,6 +61,9 @@ spec:
             cpu: 50m
             memory: 64Mi
       volumes:
+      - name: api-app-py
+        configMap:
+          name: api-app-py
       - name: api-index
         configMap:
           name: api-index

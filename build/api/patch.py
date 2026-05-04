@@ -1,5 +1,3 @@
-import re
-
 # Patch settings.py to add MY_DOMAIN env var
 with open('/app/src/adsb_api/utils/settings.py', 'r') as f:
     settings_content = f.read()
@@ -36,7 +34,7 @@ with open('/app/src/adsb_api/app.py', 'r') as f:
     content = f.read()
 
 # Add MY_DOMAIN import if missing
-if 'MY_DOMAIN,' not in content and 'MY_DOMAIN,' not in content:
+if 'MY_DOMAIN,' not in content:
     content = content.replace(
         'from adsb_api.utils.settings import (INSECURE,',
         'from adsb_api.utils.settings import (INSECURE, MY_DOMAIN,'
@@ -56,10 +54,18 @@ if '_ = v2_router.routes' not in content and 'await provider.startup()' in conte
     _ = app.openapi()['paths']
 ''')
 
-# Replace the /0/my route using regex (handles whitespace variations)
-old_my_pattern = r'@app\.get\("/0/my"[^)]+\)\s*\n@app\.get\("/api/0/my"[^)]+\)\s*\nasync def api_my\(request: Request\):.*?return RedirectResponse\(url=host\)'
+# Replace the /0/my route using string search (robust)
+start = '@app.get("/0/my", tags=["v0"], summary="My Map redirect based on IP")'
+end = 'return RedirectResponse(url=host)'
 
-new_my = '''def _get_client_ip(request: Request) -> str:
+si = content.find(start)
+if si >= 0:
+    region = content[si:]
+    # Find the LAST occurrence of the end marker (the function's final return)
+    last_end = region.rfind(end)
+    if last_end >= 0:
+        old = region[:last_end + len(end)]
+        new = '''def _get_client_ip(request: Request) -> str:
     x_real_ip = request.headers.get("X-Real-IP")
     if x_real_ip:
         return x_real_ip.split(",")[0].strip()
@@ -95,12 +101,15 @@ async def my_root(request: Request):
 @app.get("/api/0/my", tags=["v0"], summary="My Map redirect based on IP", include_in_schema=False)
 async def api_my(request: Request):
     return RedirectResponse(url=f"https://map.bharatradar.com/")'''
-
-content = re.sub(old_my_pattern, new_my, content, flags=re.DOTALL)
+        content = content.replace(old, new)
+        print("app.py patched successfully (my_root route added)")
+    else:
+        print("WARNING: Could not find end of /0/my function")
+else:
+    print("WARNING: Could not find /0/my function to patch")
 
 with open('/app/src/adsb_api/app.py', 'w') as f:
     f.write(content)
-print("app.py patched successfully")
 
 # Patch api_v2.py - fix broken decorator pattern
 with open('/app/src/adsb_api/utils/api_v2.py', 'r') as f:

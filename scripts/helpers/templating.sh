@@ -41,6 +41,9 @@ templating_generate_kustomization() {
     # Generate API domain/salt patch
     templating_patch_api "$domain" "$api_salt"
 
+    # Generate api-app-py configmap from patched source
+    templating_create_api_app_configmap
+
     # Generate ingest args patch if FRP server specified
     if [ -n "$frp_server" ]; then
         templating_patch_ingest "$frp_server"
@@ -119,7 +122,7 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: api-api
+  name: api
 spec:
   template:
     spec:
@@ -131,6 +134,26 @@ spec:
 EOF
 
     log_info "Generated API patch (MY_DOMAIN=my.${domain})"
+}
+
+# Create api-app-py configmap from patched app.py source
+templating_create_api_app_configmap() {
+    local src="${SCRIPT_DIR}/../manifests/default/api/default/patched-app.py"
+
+    if [ -f "$src" ]; then
+        cat > "${OVERLAY_DIR}/api-app-py-configmap.yaml" <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-app-py
+data:
+  app.py: |
+$(sed 's/^/    /' "$src")
+EOF
+        log_info "Generated api-app-py configmap from patched source"
+    else
+        log_warn "patched-app.py not found, api-app-py configmap will not be created"
+    fi
 }
 
 # Patch ingest to point to FRP server

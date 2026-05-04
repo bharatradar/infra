@@ -6,6 +6,9 @@ commonLabels:
 generatorOptions:
   disableNameSuffixHash: true
 configMapGenerator:
+- name: api-app-py
+  files:
+  - app.py=patched-app.py
 - name: api-index
   files:
   - index.html=index.html
