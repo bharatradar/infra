@@ -4,7 +4,7 @@ namePrefix: ingest-
 commonLabels:
   service: public
 images:
-- name: ghcr.io/sdr-enthusiasts/docker-tar1090:latest
+- name: ghcr.io/bharatradar/sdr-enthusiasts-docker-tar1090:latest
   newName: ghcr.io/bharatradar/readsb
   newTag: latest
 patches:

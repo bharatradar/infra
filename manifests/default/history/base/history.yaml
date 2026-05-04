@@ -13,10 +13,10 @@ spec:
           name: history-nginx-conf
       - name: rclone-config
         secret:
-          secretName: adsblol-rclone
+          secretName: bharatradar-rclone
       - name: rclone-emptydir
         emptyDir: {}
-      - name: adsblol-history
+      - name: bharatradar-history
         emptyDir: {}
       - name: remote-mount
         emptyDir: {}
@@ -53,7 +53,7 @@ spec:
             cpu: 1
             memory: 512Mi
         volumeMounts:
-        - name: adsblol-history
+        - name: bharatradar-history
           mountPath: /out
       - name: nginx
         image: nginx:alpine
@@ -62,8 +62,8 @@ spec:
           mountPath: /etc/nginx/conf.d/default.conf
           subPath: default.conf
         - name: remote-mount
-          mountPath: /adsblol
-          subPath: adsblol
+          mountPath: /bharatradar
+          subPath: bharatradar
           mountPropagation: HostToContainer
         ports:
         - containerPort: 80
@@ -77,11 +77,11 @@ spec:
             memory: 256Mi
       - name: rclone-sync
         image: rclone/rclone
-        command: ["/bin/sh", "-c", "while true; do rclone -v move  /in adsblol:history; sleep 10; done"]
+        command: ["/bin/sh", "-c", "while true; do rclone -v move  /in bharatradar:history; sleep 10; done"]
         volumeMounts:
         - name: rclone-emptydir
           mountPath: /config/rclone/
-        - name: adsblol-history
+        - name: bharatradar-history
           mountPath: /in
       - name: rclone-mount
         image: rclone/rclone
@@ -93,8 +93,8 @@ spec:
         args:
         - -v
         - mount
-        - "adsblol:history"
-        - /adsblol/adsblol
+        - "bharatradar:history"
+        - /bharatradar/bharatradar
         - --config=/config/rclone.conf
         - --allow-non-empty
         - --allow-other
@@ -103,12 +103,12 @@ spec:
         lifecycle:
           preStop:
             exec:
-              command: ["/bin/sh", "-c", "fusermount -uz /adsblol"]
+              command: ["/bin/sh", "-c", "fusermount -uz /bharatradar"]
         volumeMounts:
         - name: rclone-emptydir
           mountPath: /config
         - name: remote-mount
-          mountPath: /adsblol
+          mountPath: /bharatradar
           mountPropagation: Bidirectional
 ---
 kind: Service

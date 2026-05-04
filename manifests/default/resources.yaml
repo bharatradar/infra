@@ -81,10 +81,10 @@ metadata:
         return 302 https://discord.gg/3wPfmyNFRq;
       }
       location /todo {
-        return 302 https://github.com/ragavellur/infra/issues;
+        return 302 https://github.com/bharatradar/infra/issues;
       }
       location /feed {
-        return 302 https://github.com/ragavellur/infra?tab=readme-ov-file#feeder;
+        return 302 https://github.com/bharatradar/infra?tab=readme-ov-file#feeder;
       }
       location /stats {
         return 302 https://bharat-radar.vellur.in;
@@ -99,7 +99,7 @@ spec:
   tls:
   - hosts:
     - bharat-radar.vellur.in
-    secretName: adsblol-tls-new
+    secretName: bharatradar-tls
   rules:
   - host: bharat-radar.vellur.in
     http:
@@ -122,7 +122,7 @@ spec:
   tls:
   - hosts:
     - map.bharat-radar.vellur.in
-    secretName: adsblol-tls-new
+    secretName: bharatradar-tls
   rules:
   - host: map.bharat-radar.vellur.in
     http:
@@ -150,7 +150,7 @@ spec:
   tls:
   - hosts:
     - map.bharat-radar.vellur.in
-    secretName: adsblol-tls-new
+    secretName: bharatradar-tls
   rules:
   - host: map.bharat-radar.vellur.in
     http:
@@ -166,9 +166,9 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: adsblol-tls
+  name: bharatradar-tls
 spec:
-  secretName: adsblol-tls-new
+  secretName: bharatradar-tls
   issuerRef:
     name: letsencrypt-cloudflare
     kind: ClusterIssuer
@@ -204,7 +204,7 @@ spec:
   tls:
   - hosts:
     - api.bharat-radar.vellur.in
-    secretName: adsblol-tls-new
+    secretName: bharatradar-tls
   rules:
   - host: api.bharat-radar.vellur.in
     http:
@@ -227,7 +227,7 @@ spec:
   tls:
   - hosts:
     - my.bharat-radar.vellur.in
-    secretName: adsblol-tls-new
+    secretName: bharatradar-tls
   rules:
   - host: my.bharat-radar.vellur.in
     http:
@@ -250,7 +250,7 @@ spec:
   tls:
   - hosts:
     - history.bharat-radar.vellur.in
-    secretName: adsblol-tls-new
+    secretName: bharatradar-tls
   rules:
   - host: history.bharat-radar.vellur.in
     http:
@@ -275,7 +275,7 @@ spec:
   tls:
   - hosts:
     - mlat.bharat-radar.vellur.in
-    secretName: adsblol-tls-new
+    secretName: bharatradar-tls
   rules:
   - host: mlat.bharat-radar.vellur.in
     http:
@@ -314,7 +314,7 @@ spec:
   tls:
   - hosts:
     - mlat.bharat-radar.vellur.in
-    secretName: adsblol-tls-new
+    secretName: bharatradar-tls
   rules:
   - host: mlat.bharat-radar.vellur.in
     http:

@@ -2,7 +2,7 @@
 
 > **Version:** 3.3.0
 > **Last Updated:** May 2026
-> **GitHub:** https://github.com/ragavellur/infra
+> **GitHub:** https://github.com/bharatradar/infra
 
 Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with FRP tunneling and multi-node Kubernetes cluster support.
 
@@ -146,7 +146,7 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
 ### 1. Build Custom Images
 
 ```bash
-git clone https://github.com/ragavellur/infra.git
+git clone https://github.com/bharatradar/infra.git
 cd infra
 
 # Build and push all images (multi-arch)
@@ -220,29 +220,29 @@ Run the appropriate one-liner on each machine. The installer will prompt only fo
 ```bash
 # Step 1: Shared Services (PostgreSQL + Redis + InfluxDB + MinIO)
 # Always prompts for primary or standby mode
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
 
 # Step 2: Primary Hub (first K3s server, creates cluster)
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- hub
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- hub
 
 # Step 2b: Primary Hub with Keepalived VIP (prepares for HA failover)
 # Create /tmp/hub.env with KEEPALIVED_ENABLED=true and KEEPALIVED_VIP first
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/hub.env hub
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/hub.env hub
 
 # Step 3a: HA Server (second K3s server, shares control plane)
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- ha-server
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- ha-server
 
 # Step 3b: Worker Node (K3s agent, runs pods only)
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- worker
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- worker
 
 # DB Standby (PostgreSQL streaming replica for failover)
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- db-standby
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- db-standby
 
 # Feeder Pi (RTL-SDR receiver, standalone)
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- feeder
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- feeder
 
 # FRP Server (Cloud/VPS with public IP)
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- frp-server
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- frp-server
 ```
 
 > **Note:** If the script is interrupted (network error, package failure, etc.), simply re-run the same command. It will detect saved progress and resume from the last completed phase. See [Checkpoint / Resume](#checkpoint--resume) below.
@@ -330,7 +330,7 @@ sudo ./bharatradar-install --conf-file /tmp/hub.env hub
 
 # Online
 # When piping via curl, write the config to a file first, then reference it
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/hub.env hub
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/hub.env hub
 ```
 
 ### 3. Resume on Failure
@@ -371,7 +371,7 @@ All roles now support automatic checkpoint/resume. If the installer is interrupt
 sudo ./bharatradar-install hub
 
 # Non-interactive mode — same command resumes
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- hub
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- hub
 
 # Silent mode — same file resumes
 sudo ./bharatradar-install --conf-file /tmp/hub.env hub
@@ -443,7 +443,7 @@ EOF
 **3. Run the installer:**
 
 ```bash
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/ha.env ha-server
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/ha.env ha-server
 ```
 
 ### Failover Behavior
@@ -664,8 +664,8 @@ sudo kubectl create secret docker-registry ghcr-secret \
   -n bharatradar
 
 # Create rclone secret (optional, for history)
-echo -e "[adsblol]\ntype = s3\nprovider = AWS\nenv_auth = true" | \
-  sudo kubectl create secret generic adsblol-rclone \
+echo -e "[bharatradar]\ntype = s3\nprovider = AWS\nenv_auth = true" | \
+  sudo kubectl create secret generic bharatradar-rclone \
   --from-file=rclone.conf=/dev/stdin -n bharatradar
 ```
 
@@ -766,7 +766,7 @@ The FRP server runs on your cloud machine and tunnels traffic to the Hub's Kuber
 ### Automated Setup
 
 ```bash
-git clone https://github.com/ragavellur/infra.git
+git clone https://github.com/bharatradar/infra.git
 cd infra
 
 sudo scripts/frp/setup-frps.sh \
@@ -1390,6 +1390,6 @@ kubectl rollout restart deployment -n bharatradar
 
 ## Support
 
-- **GitHub:** https://github.com/ragavellur/infra
-- **Issues:** https://github.com/ragavellur/infra/issues
+- **GitHub:** https://github.com/bharatradar/infra
+- **Issues:** https://github.com/bharatradar/infra/issues
 - **Original Project:** https://github.com/adsblol/infra

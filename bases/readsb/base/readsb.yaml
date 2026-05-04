@@ -18,7 +18,7 @@ spec:
         volumeMounts:
         - name: run
           mountPath: /run/readsb
-        image: ghcr.io/sdr-enthusiasts/docker-tar1090:latest
+        image: ghcr.io/bharatradar/sdr-enthusiasts-docker-tar1090:latest
         resources:
           limits:
             cpu: "1"

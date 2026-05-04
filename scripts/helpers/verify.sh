@@ -235,7 +235,7 @@ verify_secrets() {
     local namespace="bharatradar"
     log_step "Verifying Kubernetes Secrets"
 
-    local secrets=("ghcr-secret" "adsblol-tls" "adsblol-rclone")
+    local secrets=("ghcr-secret" "bharatradar-tls" "bharatradar-rclone")
 
     for secret in "${secrets[@]}"; do
         if kubectl get secret "${secret}" -n "${namespace}" &>/dev/null; then

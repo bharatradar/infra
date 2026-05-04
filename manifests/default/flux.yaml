@@ -8,7 +8,7 @@ spec:
   interval: 1m
   ref:
     branch: main
-  url: ssh://git@github.com/ragavellur/infra.git
+  url: ssh://git@github.com/bharatradar/infra.git
   secretRef:
     name: infra
 ---

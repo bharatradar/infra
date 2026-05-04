@@ -482,12 +482,12 @@ role_hub_create_secrets() {
     log_success "GHCR secret created"
 
     # TLS secret (self-signed placeholder)
-    if ! kubectl get secret adsblol-tls -n bharatradar &>/dev/null; then
+    if ! kubectl get secret bharatradar-tls -n bharatradar &>/dev/null; then
         openssl req -x509 -nodes -days 365 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
             -keyout /tmp/tls.key -out /tmp/tls.crt \
             -subj "/CN=${BASE_DOMAIN}" 2>/dev/null
 
-        kubectl create secret tls adsblol-tls \
+        kubectl create secret tls bharatradar-tls \
             --cert=/tmp/tls.crt --key=/tmp/tls.key \
             -n bharatradar 2>/dev/null || true
 
@@ -496,15 +496,15 @@ role_hub_create_secrets() {
     fi
 
     # Rclone secret - use existing config path or create from MinIO credentials
-    if ! kubectl get secret adsblol-rclone -n bharatradar &>/dev/null; then
+    if ! kubectl get secret bharatradar-rclone -n bharatradar &>/dev/null; then
         if [ -n "${RCLONE_CONFIG_PATH:-}" ] && [ -f "$RCLONE_CONFIG_PATH" ]; then
-            kubectl create secret generic adsblol-rclone \
+            kubectl create secret generic bharatradar-rclone \
                 --from-file=rclone.conf="$RCLONE_CONFIG_PATH" \
                 -n bharatradar --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
             log_success "Rclone secret created from: $RCLONE_CONFIG_PATH"
         elif [ -n "${MINIO_ENDPOINT:-}" ] && [ -n "${MINIO_ROOT_USER:-}" ] && [ -n "${MINIO_ROOT_PASSWORD:-}" ]; then
-            kubectl create secret generic adsblol-rclone \
-                --from-literal=rclone.conf="[adsblol]
+            kubectl create secret generic bharatradar-rclone \
+                --from-literal=rclone.conf="[bharatradar]
 type = s3
 provider = Other
 access_key_id = ${MINIO_ROOT_USER}
@@ -513,8 +513,8 @@ endpoint = http://${MINIO_ENDPOINT}" \
                 -n bharatradar --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
             log_success "Rclone secret created for MinIO (${MINIO_ENDPOINT})"
         else
-            kubectl create secret generic adsblol-rclone \
-                --from-literal=rclone.conf="[adsblol]
+            kubectl create secret generic bharatradar-rclone \
+                --from-literal=rclone.conf="[bharatradar]
 type = s3
 provider = Other
 access_key_id = YOUR_ACCESS_KEY
@@ -941,8 +941,8 @@ role_hub_post_install() {
     fi
     echo ""
     echo -e "  ${CYAN}To add more nodes later:${NC}"
-    echo "    HA Server:   curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- ha-server"
-    echo "    Worker Node: curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- worker"
+    echo "    HA Server:   curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- ha-server"
+    echo "    Worker Node: curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- worker"
     echo ""
     echo -e "  ${CYAN}Cluster token (save this!):${NC} ${K3S_TOKEN}"
     echo ""

@@ -1,4 +1,4 @@
-FROM ghcr.io/adsblol/mlat-server-sync-map:latest
+FROM ghcr.io/bharatradar/mlat-server-sync-map:latest
 
 RUN cat > /usr/share/nginx/html/index.html << 'HTMLEOF'
 <!DOCTYPE html>
@@ -31,7 +31,7 @@ cat > /usr/share/nginx/html/syncmap/index.html << 'HTMLEOF'
     <h1>Bharat Radar MLAT feeder map</h1>
     <p class="note"><b>For privacy: locations are approximate</b></p>
     <p class="note"><b>For privacy: The Bharat Radar feed client sends a privacy flag by default.
-        To disable it, <a href="https://github.com/ragavellur/infra#feeder">see the infra
+        To disable it, <a href="https://github.com/bharatradar/infra#feeder">see the infra
           repo.</a>
       </b>
     </p>

@@ -1,1 +1,1 @@
-FROM ghcr.io/wiedehopf/readsb:latest
+FROM ghcr.io/bharatradar/wiedehopf-readsb:latest

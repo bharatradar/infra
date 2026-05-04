@@ -16,7 +16,7 @@
 #   sudo ./bharatradar-install backup             # Backup configs
 #
 # Online install:
-#   curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash
+#   curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash
 
 set -eo pipefail
 
@@ -36,17 +36,17 @@ if [ "$SELF_INSTALL" = true ]; then
     log_step "Downloading installer..."
     TMPDIR=$(mktemp -d /tmp/bharatradar-install.XXXXXX)
     git clone --depth 1 --sparse -b main \
-        https://github.com/ragavellur/infra.git "${TMPDIR}/infra" 2>/dev/null || {
+        https://github.com/bharatradar/infra.git "${TMPDIR}/infra" 2>/dev/null || {
         # Fallback: full shallow clone if sparse not supported
         git clone --depth 1 -b main \
-            https://github.com/ragavellur/infra.git "${TMPDIR}/infra" 2>/dev/null || {
+            https://github.com/bharatradar/infra.git "${TMPDIR}/infra" 2>/dev/null || {
             log_info "Git clone failed, trying direct download..."
             for f in scripts/bharatradar-install scripts/helpers/functions.sh scripts/helpers/templating.sh scripts/helpers/verify.sh scripts/helpers/uninstall.sh scripts/helpers/ssh-helpers.sh scripts/roles/frp-server.sh scripts/roles/hub.sh scripts/roles/ha-server.sh scripts/roles/worker.sh scripts/roles/shared-services.sh scripts/roles/db-standby.sh scripts/roles/feeder.sh scripts/roles/keepalived.sh scripts/roles/aggregator.sh; do
                 mkdir -p "${TMPDIR}/$(dirname "$f")"
-                curl -sL "https://raw.githubusercontent.com/ragavellur/infra/main/${f}" -o "${TMPDIR}/${f}"
+                curl -sL "https://raw.githubusercontent.com/bharatradar/infra/main/${f}" -o "${TMPDIR}/${f}"
             done
             # Download manifests and bases for hub role
-            curl -sL "https://github.com/ragavellur/infra/archive/refs/heads/main.tar.gz" | tar xz -C "${TMPDIR}" --strip-components=1 "infra-main/manifests" "infra-main/bases" 2>/dev/null || true
+            curl -sL "https://github.com/bharatradar/infra/archive/refs/heads/main.tar.gz" | tar xz -C "${TMPDIR}" --strip-components=1 "infra-main/manifests" "infra-main/bases" 2>/dev/null || true
             chmod +x "${TMPDIR}/scripts/bharatradar-install"
             exec bash "${TMPDIR}/scripts/bharatradar-install" "$@"
         }
@@ -455,8 +455,8 @@ Silent Install:
   sudo $0 -c /path/to/config.env hub
 
 Online Install:
-  curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash
-  curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- hub
+  curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash
+  curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- hub
 
 Config File Format:
   ROLE=hub

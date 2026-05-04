@@ -22,8 +22,7 @@ if 'MY_DOMAIN' not in content:
     )
 
 content = content.replace(
-    '"adsblol_my_url": f"https://{_humanhash(c[0][:18], SALT_MY)}.my.adsb.lol"',
-    '"adsblol_my_url": f"https://{_humanhash(c[0][:18], SALT_MY)}.{MY_DOMAIN}"'
+    '"bharatradar_my_url": f"https://{_humanhash(c[0][:18], SALT_MY)}.{MY_DOMAIN}"'
 )
 
 content = content.replace('"ip": c[1].split()[1]', '"ip": c[1].split()[0]')
@@ -66,7 +65,7 @@ async def api_my(request: Request):
             url="https://adsb.lol#sorry-but-i-could-not-find-your-receiver?"
         )
     for client in my_beast_clients:
-        uids.append(client["adsblol_my_url"].split("https://")[1].split(".")[0])
+        uids.append(client["bharatradar_my_url"].split("https://")[1].split(".")[0])
     host = "https://" + "_".join(uids) + ".my.adsb.lol"
     return RedirectResponse(url=host)'''
 

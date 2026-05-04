@@ -1,4 +1,4 @@
-FROM ghcr.io/adsblol/api:latest
+FROM ghcr.io/bharatradar/api:latest
 
 ENV MY_DOMAIN=bharat-radar.vellur.in
 

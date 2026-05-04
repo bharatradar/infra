@@ -4,7 +4,7 @@ resources:
 namePrefix: planes-
 namespace: bharatradar
 images:
-- name: ghcr.io/wiedehopf/readsb
+- name: ghcr.io/bharatradar/wiedehopf-readsb
   newName: ghcr.io/bharatradar/docker-tar1090-uuid
   newTag: latest
 generatorOptions:
@@ -64,7 +64,7 @@ patches:
           configMap:
             name: tar1090-config
             defaultMode: 0755
-        - name: adsblol
+        - name: bharatradar
           emptyDir: {}
         - name: state
           persistentVolumeClaim:
@@ -76,9 +76,9 @@ patches:
       value:
         - name: run
           mountPath: /run/readsb
-        - name: adsblol
+        - name: bharatradar
           mountPath: /var/globe_history/2023
-          subPath: adsblol
+          subPath: bharatradar
           mountPropagation: HostToContainer
         - name: state
           mountPath: /var/globe_history/internal_state
@@ -98,7 +98,7 @@ patches:
       value:
         - name: ghcr-secret
 
-# rclone sidecar disabled - needs adsblol-rclone secret with OneDrive config
+# rclone sidecar disabled - needs bharatradar-rclone secret with OneDrive config
 # Uncomment when secret is available:
 # - target:
 #     kind: Deployment
@@ -116,8 +116,8 @@ patches:
 #         args:
 #           - -v
 #           - mount
-#           - "bharat-radar-planes-default:adsblol"
-#           - /adsblol/adsblol
+#           - "bharat-radar-planes-default:bharatradar"
+#           - /bharatradar/bharatradar
 #           - --config=/etc/rclone/rclone.conf
 #           - --allow-non-empty
 #           - --allow-other
@@ -126,7 +126,7 @@ patches:
 #         lifecycle:
 #           preStop:
 #             exec:
-#               command: ["/bin/sh", "-c", "fusermount -uz /adsblol"]
+#               command: ["/bin/sh", "-c", "fusermount -uz /bharatradar"]
 #         resources:
 #           requests:
 #             cpu: 250m
@@ -137,6 +137,6 @@ patches:
 #         volumeMounts:
 #           - name: config-data
 #             mountPath: /etc/rclone
-#           - name: adsblol
-#             mountPath: /adsblol
+#           - name: bharatradar
+#             mountPath: /bharatradar
 #             mountPropagation: Bidirectional

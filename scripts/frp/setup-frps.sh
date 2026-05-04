@@ -1,5 +1,5 @@
 #!/bin/bash
-# adsblol Infrastructure - FRP Server (frps) Setup Script
+# BharatRadar Infrastructure - FRP Server (frps) Setup Script
 # Version: 1.0.0
 #
 # This script sets up the FRP server on AWS/remote machine that will:
@@ -161,7 +161,7 @@ EOF
     # Create systemd service
     cat > /etc/systemd/system/frps.service <<EOF
 [Unit]
-Description=FRP Server (adsblol)
+Description=FRP Server (BharatRadar)
 After=network.target
 Wants=network.target
 
@@ -229,7 +229,7 @@ configure_nginx() {
     done
 
     # HTTP server - ACME challenge + redirect to HTTPS
-    cat > /etc/nginx/sites-available/adsblol-http <<EOF
+    cat > /etc/nginx/sites-available/bharatradar-http <<EOF
 server {
     listen 80;
     server_name ${all_domains};
@@ -292,14 +292,14 @@ server {
 }
 "
 
-    cat > /etc/nginx/sites-available/adsblol-ssl <<EOF
+    cat > /etc/nginx/sites-available/bharatradar-ssl <<EOF
 ${server_blocks}
 EOF
 
     # Enable sites
     rm -f /etc/nginx/sites-enabled/default
-    ln -sf /etc/nginx/sites-available/adsblol-http /etc/nginx/sites-enabled/
-    ln -sf /etc/nginx/sites-available/adsblol-ssl /etc/nginx/sites-enabled/
+    ln -sf /etc/nginx/sites-available/bharatradar-http /etc/nginx/sites-enabled/
+    ln -sf /etc/nginx/sites-available/bharatradar-ssl /etc/nginx/sites-enabled/
 
     # Test and reload
     nginx -t
@@ -350,9 +350,9 @@ setup_certbot() {
 save_config() {
     log_step "Saving Configuration"
 
-    mkdir -p /etc/adsblol
+    mkdir -p /etc/bharatradar
 
-    cat > /etc/adsblol/frps-config.env <<EOF
+    cat > /etc/bharatradar/frps-config.env <<EOF
 # FRP Server Configuration
 # Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 # Version: 1.0.0
@@ -374,8 +374,8 @@ FRP_TOKEN=${FRP_AUTH_TOKEN}
 FRP_SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || echo "YOUR_SERVER_IP")
 EOF
 
-    chmod 600 /etc/adsblol/frps-config.env
-    log_success "Configuration saved to /etc/adsblol/frps-config.env"
+    chmod 600 /etc/bharatradar/frps-config.env
+    log_success "Configuration saved to /etc/bharatradar/frps-config.env"
 }
 
 post_install_info() {
@@ -403,7 +403,7 @@ post_install_info() {
     echo "  sudo certbot certificates             # View certificates"
     echo "  sudo nginx -t                          # Test nginx config"
     echo ""
-    echo -e "  ${CYAN}Configuration saved to: /etc/adsblol/frps-config.env${NC}"
+    echo -e "  ${CYAN}Configuration saved to: /etc/bharatradar/frps-config.env${NC}"
     echo -e "${GREEN}================================================================${NC}"
 }
 

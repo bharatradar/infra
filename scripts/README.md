@@ -47,7 +47,7 @@ Automated installation and management for the BharatRadar ADS-B/MLAT platform.
 Run on any machine and follow the prompts:
 
 ```bash
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash
 ```
 
 ### Online Install (Non-Interactive)
@@ -57,32 +57,32 @@ Run the appropriate command on each machine:
 ```bash
 # Step 1: Shared Services (PostgreSQL + Redis + InfluxDB)
 # Always prompts for primary or standby
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
 
 # Step 2: Primary Hub (first K3s server, creates cluster)
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- hub
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- hub
 
 # Step 3a: HA Server (second K3s server, shares control plane)
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- ha-server
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- ha-server
 
 # Step 3b: Worker Node (K3s agent, runs pods only)
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- worker
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- worker
 
 # DB Standby (PostgreSQL streaming replica for failover)
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- db-standby
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- db-standby
 
 # Feeder Pi (RTL-SDR receiver, standalone)
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- feeder
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- feeder
 
 # FRP Server (Cloud/VPS with public IP)
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- frp-server
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- frp-server
 ```
 
 ### Local Install
 
 ```bash
 # Clone the repo
-git clone https://github.com/ragavellur/infra.git
+git clone https://github.com/bharatradar/infra.git
 cd infra/scripts
 
 # Interactive wizard (consolidated menu with sub-prompts)

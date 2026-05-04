@@ -1,5 +1,5 @@
 #!/bin/bash
-# adsblol Infrastructure - FRP Client (frpc) Setup Script
+# BharatRadar Infrastructure - FRP Client (frpc) Setup Script
 # Version: 1.0.0
 #
 # This script sets up the FRP client on Raspberry Pi that will:
@@ -160,7 +160,7 @@ EOF
     # Create systemd service
     cat > /etc/systemd/system/frpc.service <<EOF
 [Unit]
-Description=FRP Client (adsblol)
+Description=FRP Client (BharatRadar)
 After=network.target
 Wants=network.target
 

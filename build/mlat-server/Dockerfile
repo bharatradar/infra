@@ -1,1 +1,1 @@
-FROM ghcr.io/adsblol/mlat-server:latest
+FROM ghcr.io/bharatradar/mlat-server:latest

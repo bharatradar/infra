@@ -114,10 +114,10 @@ uninstall_nginx() {
                 ;;
         esac
 
-        rm -f /etc/nginx/sites-available/adsblol-http
-        rm -f /etc/nginx/sites-available/adsblol-ssl
-        rm -f /etc/nginx/sites-enabled/adsblol-http
-        rm -f /etc/nginx/sites-enabled/adsblol-ssl
+        rm -f /etc/nginx/sites-available/bharatradar-http
+        rm -f /etc/nginx/sites-available/bharatradar-ssl
+        rm -f /etc/nginx/sites-enabled/bharatradar-http
+        rm -f /etc/nginx/sites-enabled/bharatradar-ssl
 
         log_success "Nginx uninstalled"
     fi

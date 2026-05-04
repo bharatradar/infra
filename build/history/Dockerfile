@@ -1,1 +1,1 @@
-FROM ghcr.io/adsblol/history:latest
+FROM ghcr.io/bharatradar/history:latest

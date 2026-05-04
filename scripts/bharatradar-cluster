@@ -143,32 +143,32 @@ install_k3s_agent() {
 create_hub_secrets() {
     log_step "Creating Hub Secrets"
 
-    kubectl create namespace adsblol --dry-run=client -o yaml | kubectl apply -f -
+    kubectl create namespace bharatradar --dry-run=client -o yaml | kubectl apply -f -
 
     # ghcr-secret (placeholder)
     kubectl create secret generic ghcr-secret \
         --from-literal=.dockerconfigjson='{"auths":{"ghcr.io":{"username":"","password":""}}}' \
         --type=kubernetes.io/dockerconfigjson \
-        -n adsblol --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
+        -n bharatradar --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
 
     # rclone secret (placeholder)
-    if ! kubectl get secret adsblol-rclone -n adsblol &>/dev/null; then
-        echo "[placeholder]" | kubectl create secret generic adsblol-rclone \
+    if ! kubectl get secret bharatradar-rclone -n bharatradar &>/dev/null; then
+        echo "[placeholder]" | kubectl create secret generic bharatradar-rclone \
             --from-file=rclone.conf=/dev/stdin \
-            -n adsblol --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
+            -n bharatradar --dry-run=client -o yaml | kubectl apply -f - 2>/dev/null || true
         log_warn "Rclone secret created with placeholder. Update with:"
-        log_info "  kubectl create secret generic adsblol-rclone --from-file=rclone.conf=<path> -n adsblol"
+        log_info "  kubectl create secret generic bharatradar-rclone --from-file=rclone.conf=<path> -n bharatradar"
     fi
 
     # TLS secret (self-signed placeholder)
-    if ! kubectl get secret adsblol-tls -n adsblol &>/dev/null; then
+    if ! kubectl get secret bharatradar-tls -n bharatradar &>/dev/null; then
         openssl req -x509 -nodes -days 365 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
             -keyout /tmp/tls.key -out /tmp/tls.crt \
             -subj "/CN=${BASE_DOMAIN}" 2>/dev/null
 
-        kubectl create secret tls adsblol-tls \
+        kubectl create secret tls bharatradar-tls \
             --cert=/tmp/tls.crt --key=/tmp/tls.key \
-            -n adsblol 2>/dev/null || true
+            -n bharatradar 2>/dev/null || true
 
         rm -f /tmp/tls.crt /tmp/tls.key
         log_warn "Self-signed TLS certificate created. Replace on FRP server with Let's Encrypt."
@@ -189,7 +189,7 @@ deploy_hub_services() {
     local shared_resources="${MANIFEST_DIR}/default/resources.yaml"
     if [ -f "$shared_resources" ]; then
         log_info "Applying shared resources..."
-        kubectl apply -f "$shared_resources" -n adsblol 2>/dev/null || true
+        kubectl apply -f "$shared_resources" -n bharatradar 2>/dev/null || true
     fi
 
     # Deploy components in order
@@ -199,7 +199,7 @@ deploy_hub_services() {
         local manifest_dir="${MANIFEST_DIR}/default/${component}/default"
         if [ -d "$manifest_dir" ]; then
             log_info "Deploying ${component}..."
-            if kustomize build "$manifest_dir" 2>/dev/null | kubectl apply -f - -n adsblol 2>/dev/null; then
+            if kustomize build "$manifest_dir" 2>/dev/null | kubectl apply -f - -n bharatradar 2>/dev/null; then
                 log_success "${component} deployed"
             else
                 log_warn "Failed to deploy ${component}"
@@ -221,7 +221,7 @@ deploy_feeder_services() {
     local manifest_dir="${MANIFEST_DIR}/default/ingest/default"
     if [ -d "$manifest_dir" ]; then
         log_info "Deploying ingest..."
-        kustomize build "$manifest_dir" 2>/dev/null | kubectl apply -f - -n adsblol 2>/dev/null || {
+        kustomize build "$manifest_dir" 2>/dev/null | kubectl apply -f - -n bharatradar 2>/dev/null || {
             log_warn "Failed to deploy ingest via kustomize, creating manually"
             create_feeder_ingest
         }
@@ -233,11 +233,11 @@ deploy_feeder_services() {
     log_info "Configuring ingest to forward to hub at ${HUB_IP}:30004"
     kubectl set env deployment/ingest-readsb \
         READSB_NET_CONNECTOR="${HUB_IP},30004,beast_out" \
-        -n adsblol 2>/dev/null || true
+        -n bharatradar 2>/dev/null || true
 }
 
 create_feeder_ingest() {
-    cat <<EOF | kubectl apply -f - -n adsblol
+    cat <<EOF | kubectl apply -f - -n bharatradar
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -254,7 +254,7 @@ spec:
     spec:
       containers:
       - name: readsb
-        image: ghcr.io/sdr-enthusiasts/docker-readsb-protobuf:latest
+        image: ghcr.io/bharatradar/sdr-enthusiasts-docker-readsb-protobuf:latest
         command: ["/init"]
         env:
         - name: TZ
@@ -523,8 +523,8 @@ cmd_info() {
         kubectl get nodes 2>/dev/null
         echo ""
 
-        echo -e "  ${CYAN}Pods (adsblol namespace):${NC}"
-        kubectl get pods -n adsblol 2>/dev/null || echo "  No pods found"
+        echo -e "  ${CYAN}Pods (bharatradar namespace):${NC}"
+        kubectl get pods -n bharatradar 2>/dev/null || echo "  No pods found"
         echo ""
     fi
 
@@ -539,8 +539,8 @@ show_status() {
     log_step "Cluster Status"
     sleep 5
 
-    kubectl get pods -n adsblol 2>/dev/null || log_warn "Pods not yet ready, wait a moment and run:"
-    log_info "kubectl get pods -n adsblol"
+    kubectl get pods -n bharatradar 2>/dev/null || log_warn "Pods not yet ready, wait a moment and run:"
+    log_info "kubectl get pods -n bharatradar"
 
     if [ "$ROLE" = "hub" ]; then
         echo ""

@@ -3,7 +3,7 @@
 BharatRadar ADS-B/MLAT aggregator platform. Aggregates [ADS-B](https://github.com/wiedehopf/readsb) & [MLAT](https://github.com/wiedehopf/mlat-server) data from multiple feeders and serves a public map interface.
 
 > **Version:** 5.3.1 (installer) / 3.3.0 (docs) / 5.0.0 (API image)
-> **GitHub:** https://github.com/ragavellur/infra
+> **GitHub:** https://github.com/bharatradar/infra
 
 ## Why?
 
@@ -151,7 +151,7 @@ The MLAT map shows `"peers": {}` when there is only one feeder. This is normal â
 
 #### 1. Install FRP Server
 ```bash
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- frp-server
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- frp-server
 ```
 
 #### 2. Install nginx
@@ -312,7 +312,7 @@ sudo certbot certonly --cert-name bharat-radar.vellur.in \
 
 #### Step 1: Shared Services (br-aggrigator Pi)
 ```bash
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
 ```
 This installs PostgreSQL, Redis, InfluxDB, and MinIO. Save the credentials shown at the end.
 
@@ -335,7 +335,7 @@ KEEPALIVED_VIP="192.168.200.150"
 
 Install:
 ```bash
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/hub.env hub
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/hub.env hub
 ```
 
 #### Step 3: HA Server (Optional but Recommended)
@@ -353,12 +353,12 @@ KEEPALIVED_PRIORITY="90"
 
 Install:
 ```bash
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/ha.env ha-server
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/ha.env ha-server
 ```
 
 #### Step 4: Feeder Pi
 ```bash
-curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash -s -- feeder
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- feeder
 ```
 
 ### Post-Install Verification
@@ -439,6 +439,6 @@ Full installer docs: [install.md](install.md)
 
 ## Where?
 
-- **GitHub:** https://github.com/ragavellur/infra
+- **GitHub:** https://github.com/bharatradar/infra
 - **Images:** https://github.com/orgs/bharatradar/packages
 - **Original Project:** https://github.com/adsblol/infra

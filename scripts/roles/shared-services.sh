@@ -602,7 +602,7 @@ role_shared_services_post_install() {
     echo "    endpoint = http://${DB_LISTEN_IP}:9000"
     echo ""
     echo -e "  ${CYAN}Next step: Install Primary Hub with this connection string:${NC}"
-    echo "    curl -Ls https://raw.githubusercontent.com/ragavellur/infra/main/scripts/bharatradar-install | sudo bash"
+    echo "    curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash"
     echo "    Select: 2) Primary Hub"
     echo ""
     echo -e "  ${CYAN}Useful commands:${NC}"

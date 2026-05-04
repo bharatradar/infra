@@ -1,5 +1,5 @@
 #!/bin/bash
-# adsblol Infrastructure - Nginx + Let's Encrypt Setup Script
+# BharatRadar Infrastructure - Nginx + Let's Encrypt Setup Script
 # Version: 1.0.0
 #
 # This script configures nginx as a reverse proxy for FRP
@@ -103,7 +103,7 @@ configure_nginx() {
     done
 
     # HTTP server block - ACME challenge + redirect
-    cat > /etc/nginx/sites-available/adsblol-http <<EOF
+    cat > /etc/nginx/sites-available/bharatradar-http <<EOF
 server {
     listen 80;
     server_name ${all_domains};
@@ -120,17 +120,17 @@ server {
 EOF
 
     # Create SSL config file (will be populated by certbot)
-    cat > /etc/nginx/sites-available/adsblol-ssl <<EOF
+    cat > /etc/nginx/sites-available/bharatradar-ssl <<EOF
 # SSL server blocks - populated by certbot
 # This file will be modified by certbot during certificate issuance
 EOF
 
     # Enable sites
     rm -f /etc/nginx/sites-enabled/default
-    rm -f /etc/nginx/sites-enabled/adsblol-http
-    rm -f /etc/nginx/sites-enabled/adsblol-ssl
+    rm -f /etc/nginx/sites-enabled/bharatradar-http
+        rm -f /etc/nginx/sites-enabled/bharatradar-ssl
 
-    ln -sf /etc/nginx/sites-available/adsblol-http /etc/nginx/sites-enabled/
+        ln -sf /etc/nginx/sites-available/bharatradar-http /etc/nginx/sites-enabled/
 
     # Test and reload
     nginx -t
