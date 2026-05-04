@@ -1,46 +1,83 @@
-name: Build Wrapper Images
+name: Build All Images
 
 on:
   push:
     branches: [main]
-    paths: ['build/**/Dockerfile']
+    paths: ['build/**']
   workflow_dispatch:
     inputs:
       image:
-        description: 'Image to build (leave empty for all)'
+        description: 'Image to build (leave empty for all): readsb, docker-tar1090, mlat-server, mlat-server-sync-map, api, history, docker-tar1090-uuid'
+        required: false
+        default: ''
+      fork_ref:
+        description: 'Fork branch/ref to build from (default: main)'
         required: false
         default: ''
 
 jobs:
-  build:
+  build-base:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - context: build/docker-tar1090-uuid
-            image: ghcr.io/bharatradar/docker-tar1090-uuid
+          - name: readsb
+            repo: bharatradar/readsb
+            ref: dev
+            image: ghcr.io/bharatradar/readsb
             platforms: linux/amd64,linux/arm64
-          - context: build/mlat-server-sync-map
+          - name: docker-tar1090
+            repo: bharatradar/docker-tar1090
+            ref: main
+            image: ghcr.io/bharatradar/docker-tar1090
+            platforms: linux/amd64,linux/arm64
+          - name: mlat-server
+            repo: bharatradar/mlat-server
+            ref: master
+            image: ghcr.io/bharatradar/mlat-server
+            platforms: linux/amd64
+          - name: mlat-server-sync-map
+            repo: bharatradar/mlat-server-sync-map
+            ref: master
             image: ghcr.io/bharatradar/mlat-server-sync-map
             platforms: linux/amd64
-          - context: build/api
+          - name: api
+            repo: bharatradar/api
+            ref: main
             image: ghcr.io/bharatradar/api
             platforms: linux/amd64
+          - name: history
+            repo: bharatradar/history
+            ref: main
+            image: ghcr.io/bharatradar/history
+            platforms: linux/amd64
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Check if this image should build
         id: should-build
         run: |
-          if [ -n "${{ github.event.inputs.image }}" ] && [ "${{ github.event.inputs.image }}" != "${{ matrix.image }}" ]; then
+          if [ -n "${{ github.event.inputs.image }}" ] && [ "${{ github.event.inputs.image }}" != "${{ matrix.name }}" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
           else
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Checkout fork source
+        if: steps.should-build.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repo }}
+          ref: ${{ github.event.inputs.fork_ref != '' && github.event.inputs.fork_ref || matrix.ref }}
+          path: src
+
+      - name: Checkout infra (for wrapper Dockerfiles)
+        if: steps.should-build.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          path: infra
 
       - name: Login to GHCR
         if: steps.should-build.outputs.skip != 'true'
@@ -51,7 +88,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up QEMU
-        if: steps.should-build.outputs.skip != 'true'
+        if: steps.should-build.outputs.skip != 'true' && matrix.platforms != 'linux/amd64'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -66,11 +103,77 @@ jobs:
           images: ${{ matrix.image }}
           tags: |
             type=sha,format=short
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
 
       - name: Build and push
         if: steps.should-build.outputs.skip != 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: src
+          platforms: ${{ matrix.platforms }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-wrapper:
+    needs: build-base
+    if: |
+      (github.event.inputs.image == '' || 
+       github.event.inputs.image == 'docker-tar1090-uuid' ||
+       github.event.inputs.image == 'mlat-server-sync-map' ||
+       github.event.inputs.image == 'api')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: docker-tar1090-uuid
+            context: build/docker-tar1090-uuid
+            image: ghcr.io/bharatradar/docker-tar1090-uuid
+            platforms: linux/amd64,linux/arm64
+          - name: mlat-server-sync-map
+            context: build/mlat-server-sync-map
+            image: ghcr.io/bharatradar/mlat-server-sync-map
+            platforms: linux/amd64
+          - name: api
+            context: build/api
+            image: ghcr.io/bharatradar/api
+            platforms: linux/amd64
+    steps:
+      - name: Checkout infra
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up QEMU
+        if: matrix.platforms != 'linux/amd64'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context }}

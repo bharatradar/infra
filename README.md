@@ -93,21 +93,20 @@ Hub Cluster:
 
 ### Custom Images
 
-#### Forked Source Repos (CI builds images directly)
-All forked repos have their own GitHub Actions workflow that builds and pushes to `ghcr.io/bharatradar/`.
+All images built from forked source repos via centralized CI in `bharatradar/infra`.
+Fork repos hold source code only — no CI workflows.
 
-| Fork | Upstream | Image | Platforms |
-|------|----------|-------|-----------|
-| [bharatradar/readsb](https://github.com/bharatradar/readsb) | wiedehopf/readsb | `ghcr.io/bharatradar/readsb` | amd64, arm64 |
-| [bharatradar/docker-tar1090](https://github.com/bharatradar/docker-tar1090) | sdr-enthusiasts/docker-tar1090 | `ghcr.io/bharatradar/docker-tar1090` | amd64, arm64 |
-| [bharatradar/mlat-server](https://github.com/bharatradar/mlat-server) | adsblol/mlat-server | `ghcr.io/bharatradar/mlat-server` | amd64 |
-| [bharatradar/mlat-server-sync-map](https://github.com/bharatradar/mlat-server-sync-map) | adsblol/mlat-server-sync-map | `ghcr.io/bharatradar/mlat-server-sync-map` | amd64 |
-| [bharatradar/api](https://github.com/bharatradar/api) | adsblol/api | `ghcr.io/bharatradar/api` | amd64 |
-| [bharatradar/history](https://github.com/bharatradar/history) | adsblol/history | `ghcr.io/bharatradar/history` | amd64 |
+#### Source Forks (built by infra CI)
+| Fork | Upstream | Branch | Image | Platforms |
+|------|----------|--------|-------|-----------|
+| [bharatradar/readsb](https://github.com/bharatradar/readsb) | wiedehopf/readsb | `dev` | `ghcr.io/bharatradar/readsb` | amd64, arm64 |
+| [bharatradar/docker-tar1090](https://github.com/bharatradar/docker-tar1090) | sdr-enthusiasts/docker-tar1090 | `main` | `ghcr.io/bharatradar/docker-tar1090` | amd64, arm64 |
+| [bharatradar/mlat-server](https://github.com/bharatradar/mlat-server) | adsblol/mlat-server | `master` | `ghcr.io/bharatradar/mlat-server` | amd64 |
+| [bharatradar/mlat-server-sync-map](https://github.com/bharatradar/mlat-server-sync-map) | adsblol/mlat-server-sync-map | `master` | `ghcr.io/bharatradar/mlat-server-sync-map` | amd64 |
+| [bharatradar/api](https://github.com/bharatradar/api) | adsblol/api | `main` | `ghcr.io/bharatradar/api` | amd64 |
+| [bharatradar/history](https://github.com/bharatradar/history) | adsblol/history | `main` | `ghcr.io/bharatradar/history` | amd64 |
 
 #### Wrapper Images (built by infra CI)
-Built from `build/` directory in this repo.
-
 | Image | Base | Purpose |
 |-------|------|---------|
 | `ghcr.io/bharatradar/docker-tar1090-uuid` | `docker-tar1090` fork + uuid binaries from `readsb` fork | tar1090 with UUID tracking (`rId` in aircraft.json) |

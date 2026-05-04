@@ -615,18 +615,19 @@ A       feed.bharat-radar.vellur.in  <AWS_IP>
 
 ### Step 2: Build and Push Custom Images
 
-Images are built from forked source repos in the bharatradar org. Each fork has its own GitHub Actions workflow that pushes to `ghcr.io/bharatradar/`.
+All images built from forked source repos via centralized CI in `bharatradar/infra`.
+Fork repos hold source code only — no CI workflows.
 
-### Forked Source Repos (built in fork CI)
+### Source Forks (built by infra CI)
 
-| Fork | Upstream | Image | Platforms |
-|------|----------|-------|-----------|
-| [bharatradar/readsb](https://github.com/bharatradar/readsb) | wiedehopf/readsb | `ghcr.io/bharatradar/readsb` | amd64, arm64 |
-| [bharatradar/docker-tar1090](https://github.com/bharatradar/docker-tar1090) | sdr-enthusiasts/docker-tar1090 | `ghcr.io/bharatradar/docker-tar1090` | amd64, arm64 |
-| [bharatradar/mlat-server](https://github.com/bharatradar/mlat-server) | adsblol/mlat-server | `ghcr.io/bharatradar/mlat-server` | amd64 |
-| [bharatradar/mlat-server-sync-map](https://github.com/bharatradar/mlat-server-sync-map) | adsblol/mlat-server-sync-map | `ghcr.io/bharatradar/mlat-server-sync-map` | amd64 |
-| [bharatradar/api](https://github.com/bharatradar/api) | adsblol/api | `ghcr.io/bharatradar/api` | amd64 |
-| [bharatradar/history](https://github.com/bharatradar/history) | adsblol/history | `ghcr.io/bharatradar/history` | amd64 |
+| Fork | Upstream | Branch | Image | Platforms |
+|------|----------|--------|-------|-----------|
+| [bharatradar/readsb](https://github.com/bharatradar/readsb) | wiedehopf/readsb | `dev` | `ghcr.io/bharatradar/readsb` | amd64, arm64 |
+| [bharatradar/docker-tar1090](https://github.com/bharatradar/docker-tar1090) | sdr-enthusiasts/docker-tar1090 | `main` | `ghcr.io/bharatradar/docker-tar1090` | amd64, arm64 |
+| [bharatradar/mlat-server](https://github.com/bharatradar/mlat-server) | adsblol/mlat-server | `master` | `ghcr.io/bharatradar/mlat-server` | amd64 |
+| [bharatradar/mlat-server-sync-map](https://github.com/bharatradar/mlat-server-sync-map) | adsblol/mlat-server-sync-map | `master` | `ghcr.io/bharatradar/mlat-server-sync-map` | amd64 |
+| [bharatradar/api](https://github.com/bharatradar/api) | adsblol/api | `main` | `ghcr.io/bharatradar/api` | amd64 |
+| [bharatradar/history](https://github.com/bharatradar/history) | adsblol/history | `main` | `ghcr.io/bharatradar/history` | amd64 |
 
 ### Wrapper Images (built by infra CI)
 
@@ -637,14 +638,11 @@ Images are built from forked source repos in the bharatradar org. Each fork has 
 | `ghcr.io/bharatradar/api` | fork image + patch.py | `build/api/` |
 
 ```bash
-# Authenticate with GHCR
-echo $GH_PAT | docker login ghcr.io -u YOUR_GH_USERNAME --password-stdin
+# Build all images (triggers from infra repo)
+# Go to Actions → "Build All Images" → Run workflow
 
-# Build single image
-docker buildx build --push --platform linux/amd64,linux/arm64 \
-  -t ghcr.io/bharatradar/readsb:latest build/readsb/
-
-# Or build all at once (see Quick Start above)
+# Build a single image
+# workflow_dispatch with image=readsb
 ```
 
 > **Note:** `history` image is amd64 only (upstream doesn't provide arm64). The manifest includes `nodeSelector: kubernetes.io/arch: amd64` to ensure it only schedules on amd64 nodes.
@@ -760,9 +758,12 @@ docker buildx build --push --platform linux/amd64,linux/arm64 \
 
 ### CI/CD
 
-Each forked repo has its own GitHub Actions workflow (`build-ghcr.yml`) that builds and pushes to `ghcr.io/bharatradar/`.
+All images are built from a single workflow: `.github/workflows/build-image.yml`.
 
-The infra repo's `.github/workflows/build-image.yml` builds wrapper images (docker-tar1090-uuid, mlat-server-sync-map, api) that add customizations on top of fork images.
+- **Stage 1**: Checks out fork repos and builds base images (readsb, docker-tar1090, mlat-server, etc.)
+- **Stage 2**: Builds wrapper images that add customizations (docker-tar1090-uuid, mlat-server-sync-map, api)
+
+Trigger: push to `main` or manual dispatch with `image=<name>` to build a specific image.
 
 ---
 

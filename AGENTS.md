@@ -39,16 +39,21 @@ Services (manifests/default):
 
 ## Custom Images
 
-### Forked Source Repos (CI builds images directly)
-- `readsb` ← fork of wiedehopf/readsb → `ghcr.io/bharatradar/readsb` (multi-arch)
-- `docker-tar1090` ← fork of sdr-enthusiasts/docker-tar1090 → `ghcr.io/bharatradar/docker-tar1090` (multi-arch)
-- `mlat-server` ← fork of adsblol/mlat-server → `ghcr.io/bharatradar/mlat-server` (amd64)
-- `mlat-server-sync-map` ← fork of adsblol/mlat-server-sync-map → `ghcr.io/bharatradar/mlat-server-sync-map` (amd64)
-- `api` ← fork of adsblol/api → `ghcr.io/bharatradar/api` (amd64, + patches in build/api/)
-- `history` ← fork of adsblol/history → `ghcr.io/bharatradar/history` (amd64)
+All images built from forked source repos via centralized CI in `bharatradar/infra`.
+Fork repos (bharatradar/*) hold source code only — no CI workflows.
+
+### Source Forks (built by infra CI)
+| Fork | Upstream | Branch | Image | Platforms |
+|------|----------|--------|-------|-----------|
+| `bharatradar/readsb` | wiedehopf/readsb | `dev` | `ghcr.io/bharatradar/readsb` | amd64, arm64 |
+| `bharatradar/docker-tar1090` | sdr-enthusiasts/docker-tar1090 | `main` | `ghcr.io/bharatradar/docker-tar1090` | amd64, arm64 |
+| `bharatradar/mlat-server` | adsblol/mlat-server | `master` | `ghcr.io/bharatradar/mlat-server` | amd64 |
+| `bharatradar/mlat-server-sync-map` | adsblol/mlat-server-sync-map | `master` | `ghcr.io/bharatradar/mlat-server-sync-map` | amd64 |
+| `bharatradar/api` | adsblol/api | `main` | `ghcr.io/bharatradar/api` | amd64 |
+| `bharatradar/history` | adsblol/history | `main` | `ghcr.io/bharatradar/history` | amd64 |
 
 ### Wrapper Images (built by infra CI)
-- `docker-tar1090-uuid` ← `ghcr.io/bharatradar/docker-tar1090` + uuid binaries from readsb fork (multi-arch)
+- `docker-tar1090-uuid` ← `docker-tar1090` fork + uuid binaries from `readsb` fork (multi-arch)
 - `mlat-server-sync-map` ← fork image + custom nginx proxy (amd64)
 - `api` ← fork image + patch.py for v2 routes, MY_DOMAIN, Redis (amd64)
 
