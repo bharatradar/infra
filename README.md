@@ -2,7 +2,7 @@
 
 BharatRadar ADS-B/MLAT aggregator platform. Aggregates [ADS-B](https://github.com/wiedehopf/readsb) & [MLAT](https://github.com/wiedehopf/mlat-server) data from multiple feeders and serves a public map interface.
 
-> **Version:** 5.3.2 (installer) / 3.3.1 (docs) / 5.0.0 (API image)
+> **Version:** 5.4.0
 > **GitHub:** https://github.com/bharatradar/infra
 
 ## Why?
@@ -87,7 +87,7 @@ Hub Cluster:
 | **mlat-map** | `ghcr.io/bharatradar/mlat-server-sync-map` | bharatradar | 80 | MLAT coverage map (nginx proxies API) |
 | **reapi-readsb** | `ghcr.io/bharatradar/readsb` | bharatradar | 30152 | REST API data feed (v2 endpoints) |
 | **external-readsb** | `ghcr.io/bharatradar/readsb` | bharatradar | 30004 | External feeds (cnvr.io) |
-| **api** | `ghcr.io/bharatradar/api:5.0.0` | bharatradar | 8080, 80 | Main web API (patched for MY_DOMAIN) |
+| **api** | `ghcr.io/bharatradar/api` | bharatradar | 8080, 80 | Main web API (patched for MY_DOMAIN) |
 | **history** | `ghcr.io/bharatradar/history` | bharatradar | 8080, 80 | Historical data (amd64 only) |
 | **website** | `ghcr.io/bharatradar/website` | bharatradar | 80 | Homepage |
 
@@ -164,7 +164,7 @@ All feeder connections route through the FRP tunnel (AWS EC2 → Hub), which mea
 When the FRP tunnel terminates at the Hub, Traefik forwards requests to backend pods but the `X-Real-IP` header from the AWS nginx proxy is not preserved. The API app sees the Traefik pod's internal IP instead of the feeder's real IP. This compounds the FRP IP tracking issue.
 
 ### 4. API Image Patches Applied at Runtime
-The `api` image (`ghcr.io/bharatradar/api:5.0.0`) is built from our fork `bharatradar/api` with runtime patches (`build/api/patch.py`). The patches replace hardcoded `adsb.lol` references with `MY_DOMAIN` and fix v2 route registration. These patches must be reapplied if the fork image changes.
+The `api` image (`ghcr.io/bharatradar/api`) is built from our fork `bharatradar/api` with runtime patches (`build/api/patch.py`). The patches replace hardcoded `adsb.lol` references with `MY_DOMAIN` and fix v2 route registration. These patches must be reapplied if the fork image changes.
 
 ### 5. History Pod is amd64-Only
 The `history` image does not have an arm64 build. It will fail to run on Raspberry Pi nodes. The deployment has `nodeSelector: kubernetes.io/arch: amd64` to prevent scheduling on arm64 nodes.

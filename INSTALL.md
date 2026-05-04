@@ -1,6 +1,6 @@
 # BharatRadar Infrastructure - Installation Guide
 
-> **Version:** 3.3.1
+> **Version:** 5.4.0
 > **Last Updated:** May 2026
 > **GitHub:** https://github.com/bharatradar/infra
 
