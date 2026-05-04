@@ -13,7 +13,7 @@ role_hub_collect_config() {
     echo "  It runs all BharatRadar services and serves as the control plane."
     echo ""
 
-    prompt_input "Base domain" "bharat-radar.vellur.in" BASE_DOMAIN
+    prompt_input "Base domain" "bharatradar.com" BASE_DOMAIN
 
     while ! validate_domain "$BASE_DOMAIN"; do
         log_error "Invalid domain format"

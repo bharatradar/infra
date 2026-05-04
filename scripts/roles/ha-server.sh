@@ -40,7 +40,7 @@ role_ha_server_collect_config() {
     done
 
     # Domain
-    prompt_input "Base domain (from Primary Hub)" "bharat-radar.vellur.in" BASE_DOMAIN
+    prompt_input "Base domain (from Primary Hub)" "bharatradar.com" BASE_DOMAIN
 
     while ! validate_domain "$BASE_DOMAIN"; do
         log_error "Invalid domain format"

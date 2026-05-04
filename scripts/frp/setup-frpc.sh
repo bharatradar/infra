@@ -27,7 +27,7 @@ Usage: $0 [OPTIONS]
 Options:
   --server IP       FRP server public IP
   --token TOKEN     FRP authentication token
-  --domain DOMAIN   Base domain (e.g., bharat-radar.vellur.in)
+  --domain DOMAIN   Base domain (e.g., bharatradar.com)
   --version VER     FRP version (default: 0.68.1)
   --help            Show this help message
 
@@ -36,7 +36,7 @@ Examples:
   sudo $0
 
   # Automated setup
-  sudo $0 --server 13.48.249.103 --token "your-token" --domain bharat-radar.vellur.in
+  sudo $0 --server 13.48.249.103 --token "your-token" --domain bharatradar.com
 
 EOF
     exit 0
@@ -69,7 +69,7 @@ collect_config() {
     fi
 
     if [ -z "$BASE_DOMAIN" ]; then
-        prompt_input "Base domain" "bharat-radar.vellur.in" BASE_DOMAIN
+        prompt_input "Base domain" "bharatradar.com" BASE_DOMAIN
     fi
 
     echo ""

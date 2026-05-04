@@ -31,7 +31,7 @@ role_aggregator_collect_config() {
     done
 
     # Ask for base domain (needed for status checks, config)
-    prompt_input "Base domain (from hub)" "bharat-radar.vellur.in" BASE_DOMAIN
+    prompt_input "Base domain (from hub)" "bharatradar.com" BASE_DOMAIN
 
     while ! validate_domain "$BASE_DOMAIN"; do
         log_error "Invalid domain format"

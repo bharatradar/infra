@@ -23,7 +23,7 @@ spec:
         - name: ADSBLOL_INGEST_DNS
           value: "ingest-readsb-headless.bharatradar.svc.cluster.local"
         - name: MY_DOMAIN
-          value: "bharat-radar.vellur.in"
+          value: "bharatradar.com"
         - name: ADSBLOL_REDIS_HOST
           value: "redis://:pXlpa1DdLpEn4Lih93H8l2zx42C0ThcTwBuHFiqA@192.168.200.187:6379"
         - name: ADSBLOL_REAPI_ENDPOINT

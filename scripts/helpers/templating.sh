@@ -65,7 +65,7 @@ templating_patch_resources() {
     fi
 
     # Copy and replace the old domain with new one
-    local old_domain="bharat-radar.vellur.in"
+    local old_domain="bharatradar.com"
     sed "s/${old_domain}/${domain}/g" "$src" > "${OVERLAY_DIR}/resources.yaml"
 
     log_info "Patched resources.yaml: ${old_domain} -> ${domain}"
@@ -236,7 +236,7 @@ templating_deploy() {
 templating_fallback_deploy() {
     local domain="$1"
     local namespace="bharatradar"
-    local old_domain="bharat-radar.vellur.in"
+    local old_domain="bharatradar.com"
 
     # Deploy from source manifests
     kustomize build "${SCRIPT_DIR}/../manifests/default" 2>/dev/null | kubectl apply -f - -n "${namespace}" || {

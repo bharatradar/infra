@@ -33,7 +33,7 @@ usage() {
 Usage: $0 [OPTIONS]
 
 Options:
-  --domain DOMAIN           Base domain (e.g., bharat-radar.vellur.in)
+  --domain DOMAIN           Base domain (e.g., bharatradar.com)
   --frp-token TOKEN         FRP authentication token
   --bind-port PORT          FRP bind port (default: 7000)
   --vhttp-port PORT         vhost HTTP port (default: 8080)
@@ -49,7 +49,7 @@ Examples:
   sudo $0
 
   # Automated setup
-  sudo $0 --domain bharat-radar.vellur.in --frp-token "your-token" --email admin@example.com
+  sudo $0 --domain bharatradar.com --frp-token "your-token" --email admin@example.com
 
 EOF
     exit 0
@@ -75,7 +75,7 @@ collect_config() {
     log_step "FRP Server Configuration"
 
     if [ -z "$BASE_DOMAIN" ]; then
-        prompt_input "Enter your base domain" "bharat-radar.vellur.in" BASE_DOMAIN
+        prompt_input "Enter your base domain" "bharatradar.com" BASE_DOMAIN
     fi
 
     while ! validate_domain "$BASE_DOMAIN"; do

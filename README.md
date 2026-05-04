@@ -16,7 +16,7 @@ Community-driven ADS-B aggregation, built as a fork of [adsblol/infra](https://g
                             |
                             v
                     AWS EC2 frps + nginx
-                 (feed.bharat-radar.vellur.in)
+                 (feed.bharatradar.com)
                     /            |            \
             port 30004    port 31090    HTTP/HTTPS tunnels
                    |             |              |
@@ -46,8 +46,8 @@ Community-driven ADS-B aggregation, built as a fork of [adsblol/infra](https://g
 
     FEEDER PI (not K3s)
     192.168.200.127
-    readsb → feed.bharat-radar.vellur.in:30004
-    mlat-client → feed.bharat-radar.vellur.in:31090
+    readsb → feed.bharatradar.com:30004
+    mlat-client → feed.bharatradar.com:31090
 ```
 
 ### Data Flow
@@ -55,11 +55,11 @@ Community-driven ADS-B aggregation, built as a fork of [adsblol/infra](https://g
 ```
 Feeder Pi (readsb + mlat-client)
     |
-    ├── beast_reduce_plus_out ──→ feed.bharat-radar.vellur.in:30004 (AWS FRP server)
+    ├── beast_reduce_plus_out ──→ feed.bharatradar.com:30004 (AWS FRP server)
     │                                                          |
     │                                                          └── TCP tunnel ──→ Hub ingest-readsb:30004
     |
-    └── mlat-client ──→ feed.bharat-radar.vellur.in:31090 (AWS FRP server)
+    └── mlat-client ──→ feed.bharatradar.com:31090 (AWS FRP server)
                                                          |
                                                          └── TCP tunnel ──→ Hub mlat-mlat-server:31090
 
@@ -105,6 +105,7 @@ Fork repos hold source code only — no CI workflows.
 | [bharatradar/mlat-server-sync-map](https://github.com/bharatradar/mlat-server-sync-map) | adsblol/mlat-server-sync-map | `master` | `ghcr.io/bharatradar/mlat-server-sync-map` | amd64 |
 | [bharatradar/api](https://github.com/bharatradar/api) | adsblol/api | `main` | `ghcr.io/bharatradar/api` | amd64 |
 | [bharatradar/history](https://github.com/bharatradar/history) | adsblol/history | `main` | `ghcr.io/bharatradar/history` | amd64 |
+| [bharatradar/website](https://github.com/bharatradar/website) | adsblol/website | `main` | `ghcr.io/bharatradar/website` | amd64, arm64 |
 
 #### Wrapper Images (built by infra CI)
 | Image | Base | Purpose |
@@ -113,22 +114,39 @@ Fork repos hold source code only — no CI workflows.
 | `ghcr.io/bharatradar/mlat-server-sync-map` | `mlat-server-sync-map` fork + nginx proxy | MLAT coverage map with `/api/0/mlat-server/` reverse proxy |
 | `ghcr.io/bharatradar/api` | `api` fork + patch.py | REST API with v2 routes, MY_DOMAIN support, Redis integration |
 
+### DNS Records
+
+All subdomains point to your AWS EC2 (FRP server) public IP.
+
+| Type | Name | Value | Proxy | Purpose |
+|------|------|-------|-------|---------|
+| `A` | `bharatradar.com` | `<AWS_IP>` | Proxied | Homepage (website) |
+| `A` | `map.bharatradar.com` | `<AWS_IP>` | Proxied | Live map (planes-readsb) |
+| `A` | `my.bharatradar.com` | `<AWS_IP>` | Proxied | Personalized feeder map |
+| `A` | `mlat.bharatradar.com` | `<AWS_IP>` | Proxied | MLAT coverage map |
+| `A` | `history.bharatradar.com` | `<AWS_IP>` | Proxied | Historical flight data |
+| `A` | `api.bharatradar.com` | `<AWS_IP>` | Proxied | REST API |
+| `A` | `feed.bharatradar.com` | `<AWS_IP>` | **DNS only** | Feeder endpoint (ports 30004, 31090) |
+| `A` | `ws.bharatradar.com` | `<AWS_IP>` | Proxied | WebSocket (future) |
+
+> **Note:** `feed.bharatradar.com` must be **DNS only** (not proxied by Cloudflare) because it handles raw TCP connections for ADS-B beast feeds. All other subdomains use Cloudflare proxy for TLS termination and CDN.
+
 ### Subdomains
 
 | Subdomain | Service | Notes |
 |-----------|---------|-------|
-| `map.bharat-radar.vellur.in` | planes-readsb | tar1090 map interface |
-| `my.bharat-radar.vellur.in` | api | Personalized feeder map (IP-based lookup from Redis beast:clients) |
-| `mlat.bharat-radar.vellur.in` | mlat-map | MLAT coverage visualization |
-| `history.bharat-radar.vellur.in` | history | Historical flight data |
-| `api.bharat-radar.vellur.in` | api | Main web API (OpenAPI docs at `/docs`) |
-| `bharat-radar.vellur.in` | website | Homepage |
-| `feed.bharat-radar.vellur.in` | AWS FRP server | Feeder endpoint (ports 30004, 31090) |
+| `map.bharatradar.com` | planes-readsb | tar1090 map interface |
+| `my.bharatradar.com` | api | Personalized feeder map (IP-based lookup from Redis beast:clients) |
+| `mlat.bharatradar.com` | mlat-map | MLAT coverage visualization |
+| `history.bharatradar.com` | history | Historical flight data |
+| `api.bharatradar.com` | api | Main web API (OpenAPI docs at `/docs`) |
+| `bharatradar.com` | website | Homepage |
+| `feed.bharatradar.com` | AWS FRP server | Feeder endpoint (ports 30004, 31090) |
 
 ## Known Limitations
 
 ### 1. FRP Tunnel & Feeder IP Tracking
-All feeder connections route through the FRP tunnel (AWS EC2 → Hub), which means the ingest server sees the internal tunnel IP (`10.42.x.x`) instead of the feeder's real public IP. This breaks the `my.bharat-radar.vellur.in` IP-based feeder lookup — it falls back to generic map redirect or single-feeder mode. **Fix:** Remove FRP and have feeders connect directly to the cluster (see TODO).
+All feeder connections route through the FRP tunnel (AWS EC2 → Hub), which means the ingest server sees the internal tunnel IP (`10.42.x.x`) instead of the feeder's real public IP. This breaks the `my.bharatradar.com` IP-based feeder lookup — it falls back to generic map redirect or single-feeder mode. **Fix:** Remove FRP and have feeders connect directly to the cluster (see TODO).
 
 ### 2. PVC-Bound Pods Cannot Fail Over
 `planes-readsb` and `mlat-mlat-server` use `local-path` PersistentVolumes which are bound to a specific node. During a Primary Hub failure, these pods cannot reschedule to the HA Server because the PVC data is local to the failed node. **Fix:** Use shared network storage (NFS, Longhorn, etc.) or run as DaemonSet (see TODO).
@@ -173,15 +191,15 @@ sudo apt update && sudo apt install -y nginx
 sudo apt install -y certbot python3-certbot-nginx
 
 # Expand certificate to include ALL subdomains
-sudo certbot certonly --cert-name bharat-radar.vellur.in \
-  -d bharat-radar.vellur.in \
-  -d api.bharat-radar.vellur.in \
-  -d feed.bharat-radar.vellur.in \
-  -d history.bharat-radar.vellur.in \
-  -d map.bharat-radar.vellur.in \
-  -d mlat.bharat-radar.vellur.in \
-  -d my.bharat-radar.vellur.in \
-  -d ws.bharat-radar.vellur.in \
+sudo certbot certonly --cert-name bharatradar.com \
+  -d bharatradar.com \
+  -d api.bharatradar.com \
+  -d feed.bharatradar.com \
+  -d history.bharatradar.com \
+  -d map.bharatradar.com \
+  -d mlat.bharatradar.com \
+  -d my.bharatradar.com \
+  -d ws.bharatradar.com \
   --nginx --non-interactive --agree-tos -m admin@your-domain.com
 ```
 
@@ -192,9 +210,9 @@ Create `/etc/nginx/sites-enabled/bharat-radar-subdomains`:
 # HTTPS - Map subdomain
 server {
     listen 443 ssl http2;
-    server_name map.bharat-radar.vellur.in;
-    ssl_certificate /etc/letsencrypt/live/bharat-radar.vellur.in/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/bharat-radar.vellur.in/privkey.pem;
+    server_name map.bharatradar.com;
+    ssl_certificate /etc/letsencrypt/live/bharatradar.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bharatradar.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
@@ -208,9 +226,9 @@ server {
 # HTTPS - API subdomain
 server {
     listen 443 ssl http2;
-    server_name api.bharat-radar.vellur.in;
-    ssl_certificate /etc/letsencrypt/live/bharat-radar.vellur.in/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/bharat-radar.vellur.in/privkey.pem;
+    server_name api.bharatradar.com;
+    ssl_certificate /etc/letsencrypt/live/bharatradar.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bharatradar.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
@@ -224,9 +242,9 @@ server {
 # HTTPS - MLAT subdomain
 server {
     listen 443 ssl http2;
-    server_name mlat.bharat-radar.vellur.in;
-    ssl_certificate /etc/letsencrypt/live/bharat-radar.vellur.in/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/bharat-radar.vellur.in/privkey.pem;
+    server_name mlat.bharatradar.com;
+    ssl_certificate /etc/letsencrypt/live/bharatradar.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bharatradar.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
@@ -240,9 +258,9 @@ server {
 # HTTPS - History subdomain
 server {
     listen 443 ssl http2;
-    server_name history.bharat-radar.vellur.in;
-    ssl_certificate /etc/letsencrypt/live/bharat-radar.vellur.in/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/bharat-radar.vellur.in/privkey.pem;
+    server_name history.bharatradar.com;
+    ssl_certificate /etc/letsencrypt/live/bharatradar.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bharatradar.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
@@ -256,9 +274,9 @@ server {
 # HTTPS - My subdomain
 server {
     listen 443 ssl http2;
-    server_name my.bharat-radar.vellur.in;
-    ssl_certificate /etc/letsencrypt/live/bharat-radar.vellur.in/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/bharat-radar.vellur.in/privkey.pem;
+    server_name my.bharatradar.com;
+    ssl_certificate /etc/letsencrypt/live/bharatradar.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bharatradar.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
@@ -272,9 +290,9 @@ server {
 # HTTPS - Feed subdomain (web interface only, not beast/mlat TCP)
 server {
     listen 443 ssl http2;
-    server_name feed.bharat-radar.vellur.in;
-    ssl_certificate /etc/letsencrypt/live/bharat-radar.vellur.in/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/bharat-radar.vellur.in/privkey.pem;
+    server_name feed.bharatradar.com;
+    ssl_certificate /etc/letsencrypt/live/bharatradar.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bharatradar.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
@@ -298,19 +316,19 @@ sudo systemctl status certbot.timer
 ```
 
 #### 7. When Adding New Subdomains
-If you add a new subdomain (e.g., `stats.bharat-radar.vellur.in`):
+If you add a new subdomain (e.g., `stats.bharatradar.com`):
 ```bash
 # Expand the certificate
-sudo certbot certonly --cert-name bharat-radar.vellur.in \
-  --expand -d bharat-radar.vellur.in \
-  -d api.bharat-radar.vellur.in \
-  -d feed.bharat-radar.vellur.in \
-  -d history.bharat-radar.vellur.in \
-  -d map.bharat-radar.vellur.in \
-  -d mlat.bharat-radar.vellur.in \
-  -d my.bharat-radar.vellur.in \
-  -d ws.bharat-radar.vellur.in \
-  -d stats.bharat-radar.vellur.in \
+sudo certbot certonly --cert-name bharatradar.com \
+  --expand -d bharatradar.com \
+  -d api.bharatradar.com \
+  -d feed.bharatradar.com \
+  -d history.bharatradar.com \
+  -d map.bharatradar.com \
+  -d mlat.bharatradar.com \
+  -d my.bharatradar.com \
+  -d ws.bharatradar.com \
+  -d stats.bharatradar.com \
   --nginx --non-interactive --agree-tos
 
 # Add nginx server block
@@ -328,7 +346,7 @@ This installs PostgreSQL, Redis, InfluxDB, and MinIO. Save the credentials shown
 #### Step 2: Primary Hub
 Create `/tmp/hub.env`:
 ```bash
-BASE_DOMAIN="bharat-radar.vellur.in"
+BASE_DOMAIN="bharatradar.com"
 REDIS_HOST="192.168.200.187"
 REDIS_PORT="6379"
 REDIS_PASSWORD="your-redis-password"
@@ -353,7 +371,7 @@ Create `/tmp/ha.env`:
 DB_CONNECTION_STRING="postgres://k3s:your-password@192.168.200.187:5432/k3s"
 K3S_CLUSTER_TOKEN="K10...your-token..."
 PRIMARY_HUB_IP="192.168.200.145"
-BASE_DOMAIN="bharat-radar.vellur.in"
+BASE_DOMAIN="bharatradar.com"
 KEEPALIVED_ENABLED="true"
 KEEPALIVED_VIP="192.168.200.150"
 KEEPALIVED_STATE="BACKUP"
@@ -383,14 +401,14 @@ kubectl get nodes -o wide
 ip addr show | grep 192.168.200.150
 
 # Test endpoints
-curl -s -o /dev/null -w "%{http_code}" https://map.bharat-radar.vellur.in/
-curl -s -o /dev/null -w "%{http_code}" https://api.bharat-radar.vellur.in/
-curl -s -o /dev/null -w "%{http_code}" https://mlat.bharat-radar.vellur.in/syncmap/
-curl -s -o /dev/null -w "%{http_code}" https://history.bharat-radar.vellur.in/
-curl -s -o /dev/null -w "%{http_code}" https://my.bharat-radar.vellur.in/
+curl -s -o /dev/null -w "%{http_code}" https://map.bharatradar.com/
+curl -s -o /dev/null -w "%{http_code}" https://api.bharatradar.com/
+curl -s -o /dev/null -w "%{http_code}" https://mlat.bharatradar.com/syncmap/
+curl -s -o /dev/null -w "%{http_code}" https://history.bharatradar.com/
+curl -s -o /dev/null -w "%{http_code}" https://my.bharatradar.com/
 
 # Check aircraft data
-curl -s https://map.bharat-radar.vellur.in/data/aircraft.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Aircraft: {len(d.get(chr(97)+chr(105)+chr(114)+chr(99)+chr(114)+chr(97)+chr(102)+chr(116)),[]))}')"
+curl -s https://map.bharatradar.com/data/aircraft.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Aircraft: {len(d.get(chr(97)+chr(105)+chr(114)+chr(99)+chr(114)+chr(97)+chr(102)+chr(116)),[]))}')"
 ```
 
 ### Failover Test

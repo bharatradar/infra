@@ -88,7 +88,7 @@ HUB_IP="${HUB_IP:-}"
 K3S_TOKEN="${K3S_TOKEN:-}"
 FRP_SERVER="${FRP_SERVER:-}"
 FRP_TOKEN="${FRP_TOKEN:-}"
-FEEDER_DOMAIN="${FEEDER_DOMAIN:-feed.bharat-radar.vellur.in}"
+FEEDER_DOMAIN="${FEEDER_DOMAIN:-feed.bharatradar.com}"
 FRP_VERSION="0.68.1"
 
 # Load existing configuration
@@ -460,7 +460,7 @@ Online Install:
 
 Config File Format:
   ROLE=hub
-  BASE_DOMAIN=bharat-radar.vellur.in
+  BASE_DOMAIN=bharatradar.com
   REDIS_HOST=192.168.200.187
   REDIS_PASSWORD=your-password
   MINIO_ENDPOINT=192.168.200.187:9000

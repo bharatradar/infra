@@ -15,7 +15,7 @@ source "${SCRIPT_DIR}/helpers/functions.sh"
 # Defaults
 MODE=""
 ROLE=""
-BASE_DOMAIN="bharat-radar.vellur.in"
+BASE_DOMAIN="bharatradar.com"
 READSB_LAT="52.3676"
 READSB_LON="4.9041"
 TIMEZONE="UTC"
@@ -39,7 +39,7 @@ Commands:
 
 Create Options:
   --role ROLE         Node role: hub or feeder (required)
-  --domain DOMAIN     Base domain (default: bharat-radar.vellur.in)
+  --domain DOMAIN     Base domain (default: bharatradar.com)
   --lat LAT           Receiver latitude (default: 52.3676)
   --lon LON           Receiver longitude (default: 4.9041)
   --timezone TZ       System timezone
@@ -51,10 +51,10 @@ Create Options:
 
 Examples:
   # Create hub node
-  sudo $0 create --role hub --domain bharat-radar.vellur.in --lat 18.48 --lon 73.89
+  sudo $0 create --role hub --domain bharatradar.com --lat 18.48 --lon 73.89
 
   # Create hub with FRP tunnel
-  sudo $0 create --role hub --domain bharat-radar.vellur.in --lat 18.48 --lon 73.89 \
+  sudo $0 create --role hub --domain bharatradar.com --lat 18.48 --lon 73.89 \
     --frp-server 13.48.249.103 --frp-token "your-token"
 
   # Create feeder node

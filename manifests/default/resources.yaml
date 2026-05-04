@@ -10,7 +10,7 @@ kind: Service
 metadata:
   name: ingest
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: feed.bharat-radar.vellur.in
+    external-dns.alpha.kubernetes.io/hostname: feed.bharatradar.com
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
 spec:
   # Cluster policy allows kube-proxy on ANY node to forward to the pod,
@@ -87,21 +87,21 @@ metadata:
         return 302 https://github.com/bharatradar/infra?tab=readme-ov-file#feeder;
       }
       location /stats {
-        return 302 https://bharat-radar.vellur.in;
+        return 302 https://bharatradar.com;
       }
       location /metrics {
         return 200 "ok";
       }
       location /graphs1090 {
-        return 302 https://bharat-radar.vellur.in;
+        return 302 https://bharatradar.com;
       }
 spec:
   tls:
   - hosts:
-    - bharat-radar.vellur.in
+    - bharatradar.com
     secretName: bharatradar-tls
   rules:
-  - host: bharat-radar.vellur.in
+  - host: bharatradar.com
     http:
       paths:
       - path: /
@@ -121,10 +121,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - map.bharat-radar.vellur.in
+    - map.bharatradar.com
     secretName: bharatradar-tls
   rules:
-  - host: map.bharat-radar.vellur.in
+  - host: map.bharatradar.com
     http:
       paths:
       - path: /re-api
@@ -143,16 +143,16 @@ metadata:
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
     nginx.ingress.kubernetes.io/configuration-snippet: |
       location /graphs1090 {
-        return 302 https://bharat-radar.vellur.in;
+        return 302 https://bharatradar.com;
       }
       location /globeRates.json { return 200 "{\"refresh\": 500}" ;}
 spec:
   tls:
   - hosts:
-    - map.bharat-radar.vellur.in
+    - map.bharatradar.com
     secretName: bharatradar-tls
   rules:
-  - host: map.bharat-radar.vellur.in
+  - host: map.bharatradar.com
     http:
       paths:
       - path: /
@@ -173,8 +173,8 @@ spec:
     name: letsencrypt-cloudflare
     kind: ClusterIssuer
   dnsNames:
-  - bharat-radar.vellur.in
-  - "*.bharat-radar.vellur.in"
+  - bharatradar.com
+  - "*.bharatradar.com"
   usages:
   - digital signature
   - key encipherment
@@ -203,10 +203,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - api.bharat-radar.vellur.in
+    - api.bharatradar.com
     secretName: bharatradar-tls
   rules:
-  - host: api.bharat-radar.vellur.in
+  - host: api.bharatradar.com
     http:
       paths:
       - path: /
@@ -226,10 +226,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - my.bharat-radar.vellur.in
+    - my.bharatradar.com
     secretName: bharatradar-tls
   rules:
-  - host: my.bharat-radar.vellur.in
+  - host: my.bharatradar.com
     http:
       paths:
       - path: /
@@ -249,10 +249,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - history.bharat-radar.vellur.in
+    - history.bharatradar.com
     secretName: bharatradar-tls
   rules:
-  - host: history.bharat-radar.vellur.in
+  - host: history.bharatradar.com
     http:
       paths:
       - path: /
@@ -274,10 +274,10 @@ spec:
   ingressClassName: traefik
   tls:
   - hosts:
-    - mlat.bharat-radar.vellur.in
+    - mlat.bharatradar.com
     secretName: bharatradar-tls
   rules:
-  - host: mlat.bharat-radar.vellur.in
+  - host: mlat.bharatradar.com
     http:
       paths:
       - path: /
@@ -313,10 +313,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - mlat.bharat-radar.vellur.in
+    - mlat.bharatradar.com
     secretName: bharatradar-tls
   rules:
-  - host: mlat.bharat-radar.vellur.in
+  - host: mlat.bharatradar.com
     http:
       paths:
       - path: /synctable/0A(/|$)(.*)

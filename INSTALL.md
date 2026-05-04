@@ -37,7 +37,7 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
                             |
                             v
                     AWS EC2 frps + nginx
-                 (feed.bharat-radar.vellur.in)
+                 (feed.bharatradar.com)
                     /            |            \
             port 30004    port 31090    HTTP/HTTPS tunnels
                    |             |              |
@@ -67,8 +67,8 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
 
     FEEDER PI (not K3s)
     192.168.200.127
-    readsb → feed.bharat-radar.vellur.in:30004
-    mlat-client → feed.bharat-radar.vellur.in:31090
+    readsb → feed.bharatradar.com:30004
+    mlat-client → feed.bharatradar.com:31090
 ```
 
 ### Nodes
@@ -119,7 +119,7 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
 - Raspberry Pi with RTL-SDR dongle
 - Raspberry Pi OS
 - readsb + tar1090 + mlat-client installed
-- Connects to `feed.bharat-radar.vellur.in:30004` directly (no FRP client needed)
+- Connects to `feed.bharatradar.com:30004` directly (no FRP client needed)
 
 ### AWS/Cloud Server (FRP Server)
 
@@ -181,7 +181,7 @@ kustomize build manifests/default | kubectl apply -f -
 ```bash
 # On AWS server
 sudo scripts/frp/setup-frps.sh \
-  --domain bharat-radar.vellur.in \
+  --domain bharatradar.com \
   --frp-token "your-secret-token" \
   --email admin@example.com
 ```
@@ -193,7 +193,7 @@ sudo scripts/frp/setup-frps.sh \
 sudo scripts/frp/setup-frpc.sh \
   --server 13.48.249.103 \
   --token "your-secret-token" \
-  --domain bharat-radar.vellur.in
+  --domain bharatradar.com
 ```
 
 ### 5. Join Aggregator Node (Optional)
@@ -261,7 +261,7 @@ Create a file (e.g., `/tmp/bharatradar.env`) with the variables for your role:
 ```bash
 cat > /tmp/hub.env << 'EOF'
 ROLE=hub
-BASE_DOMAIN=bharat-radar.vellur.in
+BASE_DOMAIN=bharatradar.com
 READSB_LAT=18.480718
 READSB_LON=73.898235
 TIMEZONE=Asia/Kolkata
@@ -288,7 +288,7 @@ EOF
 ```bash
 cat > /tmp/hub.env << 'EOF'
 ROLE=hub
-BASE_DOMAIN=bharat-radar.vellur.in
+BASE_DOMAIN=bharatradar.com
 READSB_LAT=18.480718
 READSB_LON=73.898235
 TIMEZONE=Asia/Kolkata
@@ -318,7 +318,7 @@ cat > /tmp/worker.env << 'EOF'
 ROLE=worker
 HUB_IP=192.168.200.145
 K3S_TOKEN=K10xxxxxxxx::server:xxxxxxxx
-BASE_DOMAIN=bharat-radar.vellur.in
+BASE_DOMAIN=bharatradar.com
 EOF
 ```
 
@@ -426,7 +426,7 @@ ssh user@192.168.200.145 'sudo cat /var/lib/rancher/k3s/server/node-token'
 ```bash
 cat > /tmp/ha.env << 'EOF'
 ROLE=ha-server
-BASE_DOMAIN=bharat-radar.vellur.in
+BASE_DOMAIN=bharatradar.com
 DB_HOST=192.168.200.187
 DB_PORT=5432
 DB_DBNAME=k3s
@@ -454,7 +454,7 @@ curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharat
 | VIP moves to backup | ~3s | Backup node becomes MASTER, claims `192.168.200.150` |
 | kube-proxy routes traffic | ~3s | `externalTrafficPolicy: Cluster` forwards beast/MLAT to pod on dead primary |
 | K3s reschedules pods | ~30-60s | ingest-readsb and mlat-mlat-server recreated on backup |
-| Feeder Pi reconnects | Auto | readsb and mlat-client auto-reconnect to feed.bharat-radar.vellur.in |
+| Feeder Pi reconnects | Auto | readsb and mlat-client auto-reconnect to feed.bharatradar.com |
 
 **Result:**
 - Web/API/map traffic: **0s downtime**
@@ -516,7 +516,7 @@ Below are all environment variables accepted by each role for silent installatio
 
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
-| `BASE_DOMAIN` | — | Yes | Base domain (e.g., `bharat-radar.vellur.in`) |
+| `BASE_DOMAIN` | — | Yes | Base domain (e.g., `bharatradar.com`) |
 | `READSB_LAT` | `18.480718` | No | Receiver latitude |
 | `READSB_LON` | `73.898235` | No | Receiver longitude |
 | `TIMEZONE` | `UTC` | No | Timezone (e.g., `Asia/Kolkata`) |
@@ -569,7 +569,7 @@ Below are all environment variables accepted by each role for silent installatio
 
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
-| `FEEDER_DOMAIN` | `feed.bharat-radar.vellur.in` | No | Feeder endpoint domain |
+| `FEEDER_DOMAIN` | `feed.bharatradar.com` | No | Feeder endpoint domain |
 | `READSB_LAT` | `18.480718` | No | Receiver latitude |
 | `READSB_LON` | `73.898235` | No | Receiver longitude |
 | `FEEDER_ALT_M` | `10` | No | Antenna altitude (meters) |
@@ -602,16 +602,26 @@ Below are all environment variables accepted by each role for silent installatio
 
 ### Step 1: DNS Setup
 
-Create A records in Cloudflare (set to **DNS Only**, grey cloud):
+Add the following A records to your DNS provider (Cloudflare recommended).
+All records point to your AWS EC2 (FRP server) public IP.
 
-```
-Type    Name                        Value
-A       bharat-radar.vellur.in      <AWS_IP>
-A       map.bharat-radar.vellur.in  <AWS_IP>
-A       history.bharat-radar.vellur.in  <AWS_IP>
-A       mlat.bharat-radar.vellur.in  <AWS_IP>
-A       feed.bharat-radar.vellur.in  <AWS_IP>
-```
+| Type | Name | Value | Cloudflare Proxy | Purpose |
+|------|------|-------|------------------|---------|
+| `A` | `bharatradar.com` | `<AWS_IP>` | **Proxied** | Homepage |
+| `A` | `map.bharatradar.com` | `<AWS_IP>` | **Proxied** | Live map |
+| `A` | `my.bharatradar.com` | `<AWS_IP>` | **Proxied** | Feeder map |
+| `A` | `mlat.bharatradar.com` | `<AWS_IP>` | **Proxied** | MLAT map |
+| `A` | `history.bharatradar.com` | `<AWS_IP>` | **Proxied** | History |
+| `A` | `api.bharatradar.com` | `<AWS_IP>` | **Proxied** | REST API |
+| `A` | `feed.bharatradar.com` | `<AWS_IP>` | **DNS only** | Feeder TCP endpoint |
+| `A` | `ws.bharatradar.com` | `<AWS_IP>` | **Proxied** | WebSocket (future) |
+
+> **Critical:** `feed.bharatradar.com` must be **DNS only** (grey cloud in Cloudflare).
+> Cloudflare proxy only supports HTTP/HTTPS — raw TCP connections for ADS-B beast feeds
+> will fail if proxied.
+
+> **Tip:** Use a wildcard record `*.bharatradar.com` → `<AWS_IP>` (DNS only) as a catch-all,
+> then add explicit proxied records for the web subdomains above.
 
 ### Step 2: Build and Push Custom Images
 
@@ -628,6 +638,7 @@ Fork repos hold source code only — no CI workflows.
 | [bharatradar/mlat-server-sync-map](https://github.com/bharatradar/mlat-server-sync-map) | adsblol/mlat-server-sync-map | `master` | `ghcr.io/bharatradar/mlat-server-sync-map` | amd64 |
 | [bharatradar/api](https://github.com/bharatradar/api) | adsblol/api | `main` | `ghcr.io/bharatradar/api` | amd64 |
 | [bharatradar/history](https://github.com/bharatradar/history) | adsblol/history | `main` | `ghcr.io/bharatradar/history` | amd64 |
+| [bharatradar/website](https://github.com/bharatradar/website) | adsblol/website | `main` | `ghcr.io/bharatradar/website` | amd64, arm64 |
 
 ### Wrapper Images (built by infra CI)
 
@@ -785,7 +796,7 @@ git clone https://github.com/bharatradar/infra.git
 cd infra
 
 sudo scripts/frp/setup-frps.sh \
-  --domain bharat-radar.vellur.in \
+  --domain bharatradar.com \
   --frp-token "your-secret-token" \
   --email admin@example.com
 ```
@@ -855,7 +866,7 @@ cd infra
 sudo scripts/frp/setup-frpc.sh \
   --server 13.48.249.103 \
   --token "your-secret-token" \
-  --domain bharat-radar.vellur.in
+  --domain bharatradar.com
 ```
 
 ### Manual Setup
@@ -902,21 +913,21 @@ name = "web-http"
 type = "http"
 localIP = "TRAEFIK_LB_IP"
 localPort = 80
-customDomains = ["map.bharat-radar.vellur.in", "bharat-radar.vellur.in"]
+customDomains = ["map.bharatradar.com", "bharatradar.com"]
 
 [[proxies]]
 name = "web-https"
 type = "https"
 localIP = "TRAEFIK_LB_IP"
 localPort = 443
-customDomains = ["map.bharat-radar.vellur.in", "bharat-radar.vellur.in"]
+customDomains = ["map.bharatradar.com", "bharatradar.com"]
 
 [[proxies]]
 name = "mlat-map"
 type = "http"
 localIP = "MLAT_MAP_CLUSTER_IP"
 localPort = 80
-customDomains = ["mlat.bharat-radar.vellur.in"]
+customDomains = ["mlat.bharatradar.com"]
 EOF
 
 # Get cluster IPs:
@@ -1003,7 +1014,7 @@ StartLimitIntervalSec=0
 Type=simple
 ExecStart=/usr/bin/readsb --net-only --uuid-file /etc/bharat-radar-id \
   --net-connector 127.0.0.1,30005,beast_in \
-  --net-connector feed.bharat-radar.vellur.in,30004,beast_reduce_plus_out
+  --net-connector feed.bharatradar.com,30004,beast_reduce_plus_out
 Restart=always
 RestartSec=10
 
@@ -1029,7 +1040,7 @@ Type=simple
 ExecStart=/usr/bin/mlat-client \
   --input-type beast \
   --input-connect 127.0.0.1:30005 \
-  --server feed.bharat-radar.vellur.in:31090 \
+  --server feed.bharatradar.com:31090 \
   --user BR-YOUR_UUID_HERE \
   --lat 18.480718 \
   --lon 73.898235 \
@@ -1070,7 +1081,7 @@ The `setup-frps.sh` script handles SSL automatically. For manual setup:
 
 ```bash
 sudo scripts/install/setup-nginx-ssl.sh \
-  --domain bharat-radar.vellur.in \
+  --domain bharatradar.com \
   --email admin@example.com
 ```
 
@@ -1188,7 +1199,7 @@ imagePullSecrets:
 
 | Variable | Location | Description |
 |----------|----------|-------------|
-| `BASE_DOMAIN` | `/etc/bharatradar/config.env` | `bharat-radar.vellur.in` |
+| `BASE_DOMAIN` | `/etc/bharatradar/config.env` | `bharatradar.com` |
 | `READSB_LAT` | `/etc/bharatradar/config.env` | Receiver latitude |
 | `READSB_LON` | `/etc/bharatradar/config.env` | Receiver longitude |
 | `TIMEZONE` | `/etc/bharatradar/config.env` | `Asia/Kolkata` |
@@ -1232,8 +1243,8 @@ sudo systemctl status frps
 journalctl -u frps -f
 
 # Test connectivity from Feeder Pi
-nc -zv feed.bharat-radar.vellur.in 30004
-nc -zv feed.bharat-radar.vellur.in 31090
+nc -zv feed.bharatradar.com 30004
+nc -zv feed.bharatradar.com 31090
 ```
 
 ### Pod Issues
@@ -1263,15 +1274,15 @@ kubectl rollout restart deployment/<name> -n bharatradar
 | FRP `vhost https port is not set` | Add `vhostHTTPSPort = 8443` to `/etc/frps.toml` |
 | nginx 502 Bad Gateway | Check frps is running and vhost ports are configured |
 | No aircraft on map | Check feeder is connected: check `readsb` logs on Pi for hex codes |
-| MLAT map stuck on "Loading regions..." | Check nginx proxy in mlat-server-sync-map: `curl https://mlat.bharat-radar.vellur.in/api/0/mlat-server/0A/sync.json` |
+| MLAT map stuck on "Loading regions..." | Check nginx proxy in mlat-server-sync-map: `curl https://mlat.bharatradar.com/api/0/mlat-server/0A/sync.json` |
 | `peers: {}` on MLAT map | Normal with single feeder - requires multiple receivers for peer sync |
 
 ### FRP Connection Troubleshooting
 
 ```bash
 # On Feeder Pi: Check connectivity to FRP server
-nc -zv feed.bharat-radar.vellur.in 30004
-nc -zv feed.bharat-radar.vellur.in 31090
+nc -zv feed.bharatradar.com 30004
+nc -zv feed.bharatradar.com 31090
 
 # On Feeder Pi: Check readsb is producing data
 sudo journalctl -u readsb --since "1 min ago" | grep "hex:"

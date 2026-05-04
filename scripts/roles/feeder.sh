@@ -14,7 +14,7 @@ role_feeder_collect_config() {
     echo "  to your BharatRadar hub via the FRP server."
     echo ""
 
-    prompt_input "Feeder server domain" "feed.bharat-radar.vellur.in" FEEDER_DOMAIN
+    prompt_input "Feeder server domain" "feed.bharatradar.com" FEEDER_DOMAIN
 
     while ! validate_domain "$FEEDER_DOMAIN"; do
         log_error "Invalid domain format"

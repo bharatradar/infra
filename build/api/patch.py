@@ -6,7 +6,7 @@ with open('/app/src/adsb_api/utils/settings.py', 'r') as f:
 if 'MY_DOMAIN' not in settings_content:
     settings_content = settings_content.replace(
         'INSECURE = os.getenv',
-        'MY_DOMAIN = os.environ.get("MY_DOMAIN", "my.bharat-radar.vellur.in")\nINSECURE = os.getenv'
+        'MY_DOMAIN = os.environ.get("MY_DOMAIN", "my.bharatradar.com")\nINSECURE = os.getenv'
     )
     with open('/app/src/adsb_api/utils/settings.py', 'w') as f:
         f.write(settings_content)
@@ -87,18 +87,18 @@ async def my_root(request: Request):
 
     if len(my_clients) == 1:
         uuid = my_clients[0]["_uuid"][:18]
-        return RedirectResponse(url=f"https://map.bharat-radar.vellur.in/?filter_uuid={uuid}")
+        return RedirectResponse(url=f"https://map.bharatradar.com/?filter_uuid={uuid}")
 
     if len(my_clients) > 1:
         return RedirectResponse(
-            url=f"https://map.bharat-radar.vellur.in/#sorry-but-i-could-not-find-your-receiver?"
+            url=f"https://map.bharatradar.com/#sorry-but-i-could-not-find-your-receiver?"
         )
 
     if len(all_clients) == 1:
         uuid = all_clients[0]["_uuid"][:18]
-        return RedirectResponse(url=f"https://map.bharat-radar.vellur.in/?filter_uuid={uuid}")
+        return RedirectResponse(url=f"https://map.bharatradar.com/?filter_uuid={uuid}")
 
-    return RedirectResponse(url="https://map.bharat-radar.vellur.in")
+    return RedirectResponse(url="https://map.bharatradar.com")
 
 
 @app.get("/0/my", tags=["v0"], summary="My Map redirect based on IP")

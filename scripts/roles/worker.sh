@@ -31,7 +31,7 @@ role_worker_collect_config() {
         prompt_input "K3s join token" "" K3S_TOKEN
     done
 
-    prompt_input "Base domain" "bharat-radar.vellur.in" BASE_DOMAIN
+    prompt_input "Base domain" "bharatradar.com" BASE_DOMAIN
 
     while ! validate_domain "$BASE_DOMAIN"; do
         log_error "Invalid domain format"

@@ -51,6 +51,7 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 | `bharatradar/mlat-server-sync-map` | adsblol/mlat-server-sync-map | `master` | `ghcr.io/bharatradar/mlat-server-sync-map` | amd64 |
 | `bharatradar/api` | adsblol/api | `main` | `ghcr.io/bharatradar/api` | amd64 |
 | `bharatradar/history` | adsblol/history | `main` | `ghcr.io/bharatradar/history` | amd64 |
+| `bharatradar/website` | adsblol/website | `main` | `ghcr.io/bharatradar/website` | amd64, arm64 |
 
 ### Wrapper Images (built by infra CI)
 - `docker-tar1090-uuid` ← `docker-tar1090` fork + uuid binaries from `readsb` fork (multi-arch)
@@ -72,9 +73,9 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 - Requires `--net-api-port=30152` on reapi-readsb deployment
 
 ## Feeder
-- Feeder Pi (192.168.200.127) connects directly to `feed.bharat-radar.vellur.in:30004`
+- Feeder Pi (192.168.200.127) connects directly to `feed.bharatradar.com:30004`
 - Uses `bharat-feeder` systemd service (readsb --net-only --net-connector)
-- Uses `bharat-mlat` systemd service (mlat-client → feed.bharat-radar.vellur.in:31090)
+- Uses `bharat-mlat` systemd service (mlat-client → feed.bharatradar.com:31090)
 - Not part of Kubernetes cluster
 
 ## FRP
@@ -90,7 +91,7 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 - UUID tracking enabled via custom docker-tar1090-uuid image (rId in aircraft.json)
 - MLAT map has nginx reverse proxy for `/api/0/mlat-server/` endpoints
 - Peers: {} on MLAT map is normal with single feeder (requires multiple receivers)
-- `my.bharat-radar.vellur.in/` redirects to `map.bharat-radar.vellur.in/?filter_uuid=<uuid>` based on IP lookup from Redis `beast:clients`
+- `my.bharatradar.com/` redirects to `map.bharatradar.com/?filter_uuid=<uuid>` based on IP lookup from Redis `beast:clients`
 - API image built from `build/api/` which patches `ghcr.io/bharatradar/api` fork at runtime
 - v2 route registration bug fixed in v5.0.0 by removing broken decorator pattern
 - ReAPI port (--net-api-port=30152) required for v2 endpoints to fetch aircraft data
@@ -99,14 +100,14 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 
 ### High Priority
 - ~~**Remove FRP tunnel**~~ → **Alternative: Feeder direct connect or FRP on both nodes**
-  - Current: FRP tunnel masks feeder IPs, breaking `my.bharat-radar.vellur.in` UUID lookup
+  - Current: FRP tunnel masks feeder IPs, breaking `my.bharatradar.com` UUID lookup
   - Options: (a) Move feeders to direct cluster IP, (b) Run frpc on HA Server too for full failover, (c) Use a public load balancer instead of FRP
-  - Note: `my.bharat-radar.vellur.in` now redirects correctly to `map.bharat-radar.vellur.in`, but UUID filter only works when API sees real feeder IP
+  - Note: `my.bharatradar.com` now redirects correctly to `map.bharatradar.com`, but UUID filter only works when API sees real feeder IP
 - **Feeder self-registration script**: A bash script for feeders to get their UUID without relying on IP lookup:
   1. Script runs on feeder Pi
   2. Queries Redis or API for all connected feeders
   3. Matches local MAC address or hostname to UUID
-  4. Prints personalized map URL (`map.bharat-radar.vellur.in/?filter_uuid=<uuid>`)
+  4. Prints personalized map URL (`map.bharatradar.com/?filter_uuid=<uuid>`)
   5. Useful for feeders behind CGNAT, proxies, or when FRP is active
 - **FRP Client on HA Server**: Currently frpc only runs on Primary Hub. If Primary fails, the FRP tunnel dies even though K3s fails over. Need to run frpc on HA Server with Keepalived VIP binding so the tunnel always follows the active node.
 

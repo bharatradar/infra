@@ -5,7 +5,7 @@ Automated installation and management for the BharatRadar ADS-B/MLAT platform.
 ## Architecture
 
 ```
-                     Cloudflare DNS → map.bharat-radar.vellur.in
+                     Cloudflare DNS → map.bharatradar.com
                                            |
                             ┌──────────────┴──────────────┐
                             │      Keepalived VIP         │
@@ -33,8 +33,8 @@ Automated installation and management for the BharatRadar ADS-B/MLAT platform.
                                        │ feeds to FRP server
      FEEDER PI (not K3s, standalone)   │
      192.168.200.127                   │
-     readsb → feed.bharat-radar.vellur.in:30004 (via AWS FRP)
-     mlat-client → feed.bharat-radar.vellur.in:31090 (via AWS FRP)
+     readsb → feed.bharatradar.com:30004 (via AWS FRP)
+     mlat-client → feed.bharatradar.com:31090 (via AWS FRP)
 
      WORKER NODE (K3s agent, optional)
      joins via Hub:6443, runs scheduled pods

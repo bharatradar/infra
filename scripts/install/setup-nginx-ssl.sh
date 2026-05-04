@@ -22,7 +22,7 @@ usage() {
 Usage: $0 [OPTIONS]
 
 Options:
-  --domain DOMAIN   Base domain (e.g., bharat-radar.vellur.in)
+  --domain DOMAIN   Base domain (e.g., bharatradar.com)
   --vhttp-port PORT FRP vhost HTTP port (default: 8080)
   --email EMAIL     Email for Let's Encrypt
   --help            Show this help message
@@ -32,7 +32,7 @@ Examples:
   sudo $0
 
   # Automated setup
-  sudo $0 --domain bharat-radar.vellur.in --email admin@example.com
+  sudo $0 --domain bharatradar.com --email admin@example.com
 
 EOF
     exit 0
@@ -52,7 +52,7 @@ collect_config() {
     log_step "Nginx + SSL Configuration"
 
     if [ -z "$BASE_DOMAIN" ]; then
-        prompt_input "Base domain" "bharat-radar.vellur.in" BASE_DOMAIN
+        prompt_input "Base domain" "bharatradar.com" BASE_DOMAIN
     fi
 
     if [ -z "$EMAIL" ]; then

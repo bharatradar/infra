@@ -18,4 +18,4 @@ data:
   config.js: |
     PageName = "Bharat Radar - ADS-B Flight Tracker";
     BingMapsAPIKey = "AqCdYNFHcAZuy4k9zT_UXZMdfSo5zN-mImkwN6PzcXNYyo0bYHaHik2F8qg-h1c1";
-    shareBaseUrl = "https://map.bharat-radar.vellur.in";
+    shareBaseUrl = "https://map.bharatradar.com";

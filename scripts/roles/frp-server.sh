@@ -13,7 +13,7 @@ FRPS_DASHBOARD_PORT=7500
 role_frps_collect_config() {
     log_step "FRP Server Configuration"
 
-    prompt_input "Base domain" "bharat-radar.vellur.in" BASE_DOMAIN
+    prompt_input "Base domain" "bharatradar.com" BASE_DOMAIN
 
     while ! validate_domain "$BASE_DOMAIN"; do
         log_error "Invalid domain format"

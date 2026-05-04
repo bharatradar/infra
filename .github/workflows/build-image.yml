@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       image:
-        description: 'Image to build (leave empty for all): readsb, docker-tar1090, mlat-server, mlat-server-sync-map, api, history, docker-tar1090-uuid'
+        description: 'Image to build (leave empty for all): readsb, docker-tar1090, mlat-server, mlat-server-sync-map, api, history, website, docker-tar1090-uuid'
         required: false
         default: ''
       fork_ref:
@@ -55,6 +55,11 @@ jobs:
             ref: main
             image: ghcr.io/bharatradar/history
             platforms: linux/amd64
+          - name: website
+            repo: bharatradar/website
+            ref: main
+            image: ghcr.io/bharatradar/website
+            platforms: linux/amd64,linux/arm64
     steps:
       - name: Check if this image should build
         id: should-build
