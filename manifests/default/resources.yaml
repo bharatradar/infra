@@ -99,20 +99,9 @@ spec:
   tls:
   - hosts:
     - bharatradar.com
-    - docs.bharatradar.com
     secretName: bharatradar-tls
   rules:
   - host: bharatradar.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: website-website
-            port:
-              number: 80
-  - host: docs.bharatradar.com
     http:
       paths:
       - path: /
