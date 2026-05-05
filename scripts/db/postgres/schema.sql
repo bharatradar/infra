@@ -370,3 +370,103 @@ CREATE TABLE IF NOT EXISTS download_config (
 INSERT INTO download_config (schedule_time, scheduler_enabled, enabled)
 VALUES ('22:00:00', FALSE, TRUE)
 ON CONFLICT DO NOTHING;
+
+-- ============================================================================
+-- Missing Tables from db_reset.py
+-- ============================================================================
+
+-- Airport weather (METAR data)
+CREATE TABLE IF NOT EXISTS airport_weather (
+    airport_icao VARCHAR(4) PRIMARY KEY REFERENCES airports(icao),
+    metar_raw TEXT,
+    wind_dir INT,
+    wind_speed INT,
+    visibility DOUBLE PRECISION,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Route cache for flight lookups
+CREATE TABLE IF NOT EXISTS route_cache (
+    callsign VARCHAR(10) PRIMARY KEY,
+    origin_icao VARCHAR(4),
+    destination_icao VARCHAR(4),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Aircraft info (registration, type lookup by hex_id)
+CREATE TABLE IF NOT EXISTS aircraft_info (
+    hex_id VARCHAR(10) PRIMARY KEY,
+    registration VARCHAR(20),
+    type VARCHAR(20),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Flight schedules history (audit log)
+CREATE TABLE IF NOT EXISTS flight_schedules_history (
+    history_id SERIAL PRIMARY KEY,
+    schedule_id INT,
+    airport_code VARCHAR(4),
+    direction VARCHAR(10),
+    hex_id VARCHAR(6),
+    flight_number VARCHAR(10),
+    callsign VARCHAR(10),
+    changed_callsign VARCHAR(10),
+    route_airport VARCHAR(4),
+    scheduled_time TIMESTAMP,
+    actual_time TIMESTAMP,
+    anomaly_flag VARCHAR(50),
+    original_id INTEGER,
+    created_from VARCHAR(50),
+    updated_from VARCHAR(50),
+    changed_at TIMESTAMP DEFAULT NOW(),
+    operation VARCHAR(10)
+);
+
+-- Trigger function to log changes to flight_schedules
+CREATE OR REPLACE FUNCTION log_flight_schedule_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'UPDATE') THEN
+        IF (OLD.airport_code IS DISTINCT FROM NEW.airport_code) OR
+           (OLD.hex_id IS DISTINCT FROM NEW.hex_id) OR
+           (OLD.flight_number IS DISTINCT FROM NEW.flight_number) OR
+           (OLD.callsign IS DISTINCT FROM NEW.callsign) OR
+           (OLD.route_airport IS DISTINCT FROM NEW.route_airport) OR
+           (OLD.updated_from IS DISTINCT FROM NEW.updated_from) THEN
+
+            INSERT INTO flight_schedules_history (
+                original_id, operation, airport_code, direction, hex_id,
+                flight_number, callsign, changed_callsign, route_airport,
+                scheduled_time, actual_time, anomaly_flag,
+                created_from, updated_from
+            ) VALUES (
+                OLD.id, 'UPDATE', OLD.airport_code, OLD.direction, OLD.hex_id,
+                OLD.flight_number, OLD.callsign, OLD.changed_callsign, OLD.route_airport,
+                OLD.scheduled_time, OLD.actual_time, OLD.anomaly_flag,
+                OLD.created_from, OLD.updated_from
+            );
+        END IF;
+        RETURN NEW;
+    ELSIF (TG_OP = 'DELETE') THEN
+        INSERT INTO flight_schedules_history (
+            original_id, operation, airport_code, direction, hex_id,
+            flight_number, callsign, changed_callsign, route_airport,
+            scheduled_time, actual_time, anomaly_flag,
+            created_from, updated_from
+        ) VALUES (
+            OLD.id, 'DELETE', OLD.airport_code, OLD.direction, OLD.hex_id,
+            OLD.flight_number, OLD.callsign, OLD.changed_callsign, OLD.route_airport,
+            OLD.scheduled_time, OLD.actual_time, OLD.anomaly_flag,
+            OLD.created_from, OLD.updated_from
+        );
+        RETURN OLD;
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger on flight_schedules
+DROP TRIGGER IF EXISTS flight_schedules_audit_trigger ON flight_schedules;
+CREATE TRIGGER flight_schedules_audit_trigger
+AFTER UPDATE OR DELETE ON flight_schedules
+FOR EACH ROW EXECUTE FUNCTION log_flight_schedule_changes();
