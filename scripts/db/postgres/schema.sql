@@ -124,16 +124,21 @@ CREATE INDEX IF NOT EXISTS idx_ground_ops_airport ON ground_ops(airport);
 -- Flight schedules
 CREATE TABLE IF NOT EXISTS flight_schedules (
     id SERIAL PRIMARY KEY,
-    callsign VARCHAR(20),
-    flight_number VARCHAR(20),
-    airport_code VARCHAR(10),
-    direction VARCHAR(10),  -- 'ARRIVALS' or 'DEPARTURES'
-    scheduled_time TIMESTAMP NOT NULL,
-    status VARCHAR(20) DEFAULT 'SCHEDULED',
-    hex_id VARCHAR(20),
-    route_airport VARCHAR(10),
+    airport_code VARCHAR(4),
+    direction VARCHAR(10) CHECK (direction IN ('ARRIVALS', 'DEPARTURES')),
+    hex_id VARCHAR(6),
+    flight_number VARCHAR(10),
+    callsign VARCHAR(10),
+    changed_callsign VARCHAR(10),
+    route_airport VARCHAR(4),
+    scheduled_time TIMESTAMP,
+    actual_time TIMESTAMP,
+    anomaly_flag VARCHAR(50),
+    created_from VARCHAR(50),
+    updated_from VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (airport_code, direction, flight_number, route_airport, scheduled_time)
 );
 CREATE INDEX IF NOT EXISTS idx_flight_schedules_time ON flight_schedules(scheduled_time);
 CREATE INDEX IF NOT EXISTS idx_flight_schedules_airport_dir ON flight_schedules(airport_code, direction);
