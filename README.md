@@ -522,6 +522,22 @@ sudo systemctl status frpc
 sudo bharatradar-install hub
 ```
 
+### Feeder Pi Disk Cleanup
+
+```bash
+# Run cleanup manually
+sudo bharatradar-cleanup
+
+# View cleanup timer status
+sudo systemctl status bharatradar-cleanup.timer
+
+# View cleanup logs
+sudo journalctl -u bharatradar-cleanup --since "today"
+
+# Disable auto-cleanup (runs daily at 3am)
+sudo systemctl disable --now bharatradar-cleanup.timer
+```
+
 ## Manual Deploy (kustomize)
 
 ```bash

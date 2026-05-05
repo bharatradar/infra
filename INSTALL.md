@@ -10,23 +10,24 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
 
 ## Table of Contents
 
-1. [Architecture Overview](#architecture-overview)
-2. [Prerequisites](#prerequisites)
-3. [Quick Start](#quick-start)
-4. [Online Install (Non-Interactive)](#online-install-non-interactive)
-5. [Silent Installation](#silent-installation)
-6. [Checkpoint / Resume](#checkpoint--resume)
-7. [Silent Configuration Reference](#silent-configuration-reference)
-8. [Step-by-Step Installation](#step-by-step-installation)
-9. [Custom Docker Images](#custom-docker-images)
-10. [FRP Server Setup (AWS/Cloud)](#frp-server-setup-awscloud)
-11. [FRP Client Setup (Hub Node)](#frp-client-setup-hub-node)
-12. [Feeder Pi Setup](#feeder-pi-setup)
-13. [SSL/TLS Configuration](#ssltls-configuration)
-14. [Cluster Management](#cluster-management)
-15. [Configuration Reference](#configuration-reference)
-16. [Troubleshooting](#troubleshooting)
-17. [Useful Commands](#useful-commands)
+ 1. [Architecture Overview](#architecture-overview)
+ 2. [Prerequisites](#prerequisites)
+ 3. [Quick Start](#quick-start)
+ 4. [Online Install (Non-Interactive)](#online-install-non-interactive)
+ 5. [Silent Installation](#silent-installation)
+ 6. [Checkpoint / Resume](#checkpoint--resume)
+ 7. [Silent Configuration Reference](#silent-configuration-reference)
+ 8. [Step-by-Step Installation](#step-by-step-installation)
+ 9. [Custom Docker Images](#custom-docker-images)
+ 10. [FRP Server Setup (AWS/Cloud)](#frp-server-setup-awscloud)
+ 11. [FRP Client Setup (Hub Node)](#frp-client-setup-hub-node)
+ 12. [Feeder Pi Setup](#feeder-pi-setup)
+ 13. [Disk Maintenance (Feeder Pi)](#disk-maintenance-feeder-pi)
+ 14. [SSL/TLS Configuration](#ssltls-configuration)
+ 15. [Cluster Management](#cluster-management)
+ 16. [Configuration Reference](#configuration-reference)
+ 17. [Troubleshooting](#troubleshooting)
+ 18. [Useful Commands](#useful-commands)
 
 ---
 
@@ -1100,6 +1101,14 @@ sudo journalctl -u bharat-mlat --since "1 min ago"
 sudo systemctl status bharat-feeder bharat-mlat
 ```
 
+### Disk Maintenance
+
+The feeder installer sets up automated daily disk cleanup at 3am. To run manually:
+
+```bash
+sudo bharatradar-cleanup
+```
+
 ---
 
 ## SSL/TLS Configuration
@@ -1418,6 +1427,10 @@ sudo journalctl -u bharat-feeder -f       # Live feeder logs
 sudo journalctl -u bharat-mlat -f         # Live MLAT logs
 cat /etc/default/readsb                   # readsb configuration
 cat /etc/bharat-radar-id                  # Feeder UUID
+
+# Disk cleanup
+sudo bharatradar-cleanup                  # Manual cleanup
+sudo systemctl status bharatradar-cleanup.timer  # Timer status
 ```
 
 ---
