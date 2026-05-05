@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-VERSION="5.5.0"
+VERSION="5.7.0"
 CONFIG_FILE="/etc/bharatradar/cleanup.conf"
 
 # Colors
