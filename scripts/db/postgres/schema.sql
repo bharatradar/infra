@@ -112,16 +112,12 @@ CREATE INDEX IF NOT EXISTS idx_flight_events_airport ON flight_events(airport);
 
 -- Ground operations
 CREATE TABLE IF NOT EXISTS ground_ops (
-    id SERIAL PRIMARY KEY,
-    hex_id VARCHAR(20) PRIMARY KEY,
-    callsign VARCHAR(20),
+    hex_id VARCHAR(10) PRIMARY KEY,
+    current_callsign VARCHAR(10),
+    inbound_callsign VARCHAR(10),
     airport VARCHAR(10),
     origin VARCHAR(10),
-    destination VARCHAR(10),
-    arrived_at TIMESTAMP,
-    departed_at TIMESTAMP,
-    last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    inbound_callsign VARCHAR(20)
+    landed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_ground_ops_airport ON ground_ops(airport);
 
