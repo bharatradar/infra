@@ -1,5 +1,5 @@
 #!/bin/bash
-# BharatRadar Feeder Installer v5.4.0
+# BharatRadar Feeder Installer v5.7.0
 #
 # Standalone one-liner for setting up a BharatRadar ADS-B/MLAT feeder.
 # No dependencies on bharatradar-install — works on any fresh Pi.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# BharatRadar Disk Cleanup Utility v5.5.0
+# BharatRadar Disk Cleanup Utility v5.7.0
 #
 # Standalone disk cleanup tool for feeder nodes.
 # Runs automatically via systemd timer or manually.
