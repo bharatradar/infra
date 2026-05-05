@@ -464,9 +464,9 @@ Online Install:
 Config File Format:
   ROLE=hub
   BASE_DOMAIN=bharatradar.com
-  REDIS_HOST=192.168.200.187
+  REDIS_HOST=192.168.200.15
   REDIS_PASSWORD=your-password
-  MINIO_ENDPOINT=192.168.200.187:9000
+  MINIO_ENDPOINT=192.168.200.15:9000
   MINIO_ROOT_USER=minioadmin
   MINIO_ROOT_PASSWORD=your-password
   GHCR_USERNAME=your-github-user

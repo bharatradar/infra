@@ -50,7 +50,7 @@ This auto-detects your SDR, installs readsb + mlat-client, and connects to `feed
                         v
          ┌─────────────────────────────┐
          │  BR-AGGRIGATOR (Pi, agent)  │
-         │  192.168.200.187            │
+         │  192.168.200.15            │
          │  PostgreSQL, Redis, MinIO   │
          └─────────────────────────────┘
 
@@ -83,7 +83,7 @@ Hub Cluster:
 |------|----|----|------|------|-----|
 | **Primary Hub** | 192.168.200.145 | Ubuntu 24.04 (Core i7) | K3s server, MASTER keepalived | amd64 | Yes |
 | **HA Server** | 192.168.200.186 | Ubuntu 24.04 (Core i5) | K3s server, BACKUP keepalived | amd64 | Yes |
-| **br-aggrigator** | 192.168.200.187 | Debian 12 (Raspberry Pi) | K3s agent, shared services | arm64 | Yes |
+| **br-aggrigator** | 192.168.200.15 | Debian 12 (Raspberry Pi) | K3s agent, shared services | arm64 | Yes |
 | **Feeder Pi** | 192.168.200.127 | Raspberry Pi OS | RTL-SDR + readsb + mlat-client (not K3s) | arm64 | No |
 
 ### Services
@@ -101,7 +101,7 @@ Hub Cluster:
 | **history** | `ghcr.io/bharatradar/history` | bharatradar | 8080, 80 | Historical data (amd64 only) |
 | **website** | `ghcr.io/bharatradar/website` | bharatradar | 80 | Homepage |
 
-### Shared Services (192.168.200.187)
+### Shared Services (192.168.200.15)
 
 | Service | Port | Purpose |
 |---------|------|---------|
@@ -186,7 +186,7 @@ The MLAT map shows `"peers": {}` when there is only one feeder. This is normal �
 
 ### Prerequisites
 
-1. **Shared Services Node** — Debian 12 or Raspberry Pi OS (br-aggrigator Pi at 192.168.200.187), for PostgreSQL, Redis, InfluxDB, MinIO
+1. **Shared Services Node** — Debian 12 or Raspberry Pi OS (br-aggrigator Pi at 192.168.200.15), for PostgreSQL, Redis, InfluxDB, MinIO
 2. **AWS EC2 Server** (or any cloud VPS) with public IP — runs FRP server + nginx reverse proxy
 3. **Primary Hub** — Ubuntu 24.04, amd64, internet access
 4. **HA Server** (optional) — Ubuntu 24.04, amd64, same network as Primary
@@ -214,7 +214,7 @@ Create these A records in your DNS provider (Cloudflare recommended). Replace `<
 
 > **Critical:** `feed.bharatradar.com` must be **DNS only** (grey cloud). Cloudflare proxy blocks raw TCP connections for ADS-B beast feeds.
 
-#### Step 1: Shared Services (br-aggrigator Pi — 192.168.200.187)
+#### Step 1: Shared Services (br-aggrigator Pi — 192.168.200.15)
 
 ```bash
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
@@ -395,18 +395,18 @@ BASE_DOMAIN=bharatradar.com
 READSB_LAT=18.480718
 READSB_LON=73.898235
 TIMEZONE=Asia/Kolkata
-REDIS_HOST=192.168.200.187
+REDIS_HOST=192.168.200.15
 REDIS_PORT=6379
 REDIS_PASSWORD=<from-shared-services>
 GHCR_USERNAME=your-github-username
 GHCR_PASSWORD=your-github-pat
 USE_EXTERNAL_DB=true
-DB_HOST=192.168.200.187
+DB_HOST=192.168.200.15
 DB_PORT=5432
 DB_DBNAME=k3s
 DB_DBUSER=k3s
 DB_DBPASS=<from-shared-services>
-MINIO_ENDPOINT=192.168.200.187:9000
+MINIO_ENDPOINT=192.168.200.15:9000
 MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=<from-shared-services>
 FRP_ENABLED=true
@@ -428,7 +428,7 @@ Create `/tmp/ha.env`:
 cat > /tmp/ha.env << 'EOF'
 ROLE=ha-server
 BASE_DOMAIN=bharatradar.com
-DB_HOST=192.168.200.187
+DB_HOST=192.168.200.15
 DB_PORT=5432
 DB_DBNAME=k3s
 DB_DBUSER=k3s

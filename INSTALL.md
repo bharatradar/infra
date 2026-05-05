@@ -62,7 +62,7 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
                         v
          ┌─────────────────────────────┐
          │  BR-AGGRIGATOR (Pi, agent)  │
-         │  192.168.200.187            │
+         │  192.168.200.15            │
          │  PostgreSQL, Redis, MinIO   │
          └─────────────────────────────┘
 
@@ -78,7 +78,7 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
 |------|----|------|----|------|-----|
 | **Primary Hub** | 192.168.200.145 | K3s server (MASTER), all services | Ubuntu 24.04 | amd64 | Yes |
 | **HA Server** | 192.168.200.186 | K3s server (BACKUP), failover | Ubuntu 24.04 | amd64 | Yes |
-| **br-aggrigator** | 192.168.200.187 | K3s agent, shared services | Debian 12 (Pi) | arm64 | Yes |
+| **br-aggrigator** | 192.168.200.15 | K3s agent, shared services | Debian 12 (Pi) | arm64 | Yes |
 | **Feeder Pi** | 192.168.200.127 | RTL-SDR + readsb + mlat-client | Raspberry Pi OS | arm64 | No |
 
 ### Services
@@ -96,7 +96,7 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
 | **history** | `ghcr.io/bharatradar/history` | 8080, 80 | Historical data (amd64 only) |
 | **website** | `ghcr.io/bharatradar/website` | 80 | Homepage |
 
-### Shared Services (192.168.200.187)
+### Shared Services (192.168.200.15)
 
 | Service | Port | Purpose |
 |---------|------|---------|
@@ -274,18 +274,18 @@ BASE_DOMAIN=bharatradar.com
 READSB_LAT=18.480718
 READSB_LON=73.898235
 TIMEZONE=Asia/Kolkata
-REDIS_HOST=192.168.200.187
+REDIS_HOST=192.168.200.15
 REDIS_PORT=6379
 REDIS_PASSWORD=your-redis-password
 GHCR_USERNAME=your-github-user
 GHCR_PASSWORD=your-github-pat
 USE_EXTERNAL_DB=true
-DB_HOST=192.168.200.187
+DB_HOST=192.168.200.15
 DB_PORT=5432
 DB_DBNAME=k3s
 DB_DBUSER=k3s
 DB_DBPASS=your-db-password
-MINIO_ENDPOINT=192.168.200.187:9000
+MINIO_ENDPOINT=192.168.200.15:9000
 MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=your-minio-password
 FRP_ENABLED=false
@@ -301,18 +301,18 @@ BASE_DOMAIN=bharatradar.com
 READSB_LAT=18.480718
 READSB_LON=73.898235
 TIMEZONE=Asia/Kolkata
-REDIS_HOST=192.168.200.187
+REDIS_HOST=192.168.200.15
 REDIS_PORT=6379
 REDIS_PASSWORD=your-redis-password
 GHCR_USERNAME=your-github-user
 GHCR_PASSWORD=your-github-pat
 USE_EXTERNAL_DB=true
-DB_HOST=192.168.200.187
+DB_HOST=192.168.200.15
 DB_PORT=5432
 DB_DBNAME=k3s
 DB_DBUSER=k3s
 DB_DBPASS=your-db-password
-MINIO_ENDPOINT=192.168.200.187:9000
+MINIO_ENDPOINT=192.168.200.15:9000
 MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=your-minio-password
 FRP_ENABLED=false
@@ -436,7 +436,7 @@ ssh user@192.168.200.145 'sudo cat /var/lib/rancher/k3s/server/node-token'
 cat > /tmp/ha.env << 'EOF'
 ROLE=ha-server
 BASE_DOMAIN=bharatradar.com
-DB_HOST=192.168.200.187
+DB_HOST=192.168.200.15
 DB_PORT=5432
 DB_DBNAME=k3s
 DB_DBUSER=k3s
@@ -540,7 +540,7 @@ Below are all environment variables accepted by each role for silent installatio
 | `DB_DBNAME` | `k3s` | No | PostgreSQL database name |
 | `DB_DBUSER` | `k3s` | No | PostgreSQL username |
 | `DB_DBPASS` | — | If `USE_EXTERNAL_DB=true` | PostgreSQL password |
-| `MINIO_ENDPOINT` | — | No | MinIO host:port (e.g., `192.168.200.187:9000`) |
+| `MINIO_ENDPOINT` | — | No | MinIO host:port (e.g., `192.168.200.15:9000`) |
 | `MINIO_ROOT_USER` | `minioadmin` | No | MinIO access key |
 | `MINIO_ROOT_PASSWORD` | — | If using MinIO | MinIO secret key |
 | `RCLONE_CONFIG_PATH` | — | No | Path to existing rclone.conf (alternative to MinIO) |
@@ -609,7 +609,7 @@ Below are all environment variables accepted by each role for silent installatio
 
 ## Step-by-Step Installation
 
-### Step 1: Shared Services (br-aggrigator Pi — 192.168.200.187)
+### Step 1: Shared Services (br-aggrigator Pi — 192.168.200.15)
 
 This installs PostgreSQL, Redis, InfluxDB, and MinIO. These are prerequisites for the K3s cluster.
 
@@ -713,7 +713,7 @@ sudo kubectl create secret tls bharatradar-tls \
   -n bharatradar
 
 # Create rclone secret for history service (MinIO)
-echo -e "[bharatradar]\ntype = s3\nprovider = MinIO\naccess_key_id = minioadmin\nsecret_access_key = <from-shared-services>\nendpoint = http://192.168.200.187:9000\nacl = private" | \
+echo -e "[bharatradar]\ntype = s3\nprovider = MinIO\naccess_key_id = minioadmin\nsecret_access_key = <from-shared-services>\nendpoint = http://192.168.200.15:9000\nacl = private" | \
   sudo kubectl create secret generic bharatradar-rclone \
   --from-file=rclone.conf=/dev/stdin -n bharatradar
 ```
@@ -747,7 +747,7 @@ See [FRP Client Setup](#frp-client-setup-hub-node) below.
 # On Hub - get join token
 sudo cat /var/lib/rancher/k3s/server/node-token
 
-# On br-aggrigator Pi (192.168.200.187)
+# On br-aggrigator Pi (192.168.200.15)
 curl -sfL https://get.k3s.io | \
   K3S_URL=https://192.168.200.145:6443 \
   K3S_TOKEN=K10xxxxxxxxx \
