@@ -1,6 +1,8 @@
 website
 .credentials
 .env
+.env.local
+database.env
 *.pem
 *.key
 kubeconfig

@@ -1,0 +1,86 @@
+# BharatRadar Schedule Downloader CronJob
+# Runs daily to download flight schedules from FlightRadar24
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: schedule-downloader
+  namespace: bharatradar
+  labels:
+    app: schedule-downloader
+    component: data-pipeline
+spec:
+  schedule: "0 22 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  suspend: false
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: schedule-downloader
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: schedule-downloader
+          imagePullSecrets:
+          - name: ghcr-secret
+          containers:
+          - name: downloader
+            image: ghcr.io/bharatradar/schedule-downloader:v1.0.5
+            imagePullPolicy: IfNotPresent
+            command: ["python", "-u", "route_schedule_downloader.py"]
+            env:
+            - name: DB_HOST
+              value: "192.168.200.15"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "flight_db"
+            - name: DB_USER
+              value: "flight_db_user"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: flight-db-credentials
+                  key: password
+            - name: AIRLINES_FILE
+              value: "/opt/bharatradar/flight_radar/data/airlines.csv"
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "250m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: schedule-downloader
+  namespace: bharatradar
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: schedule-downloader
+  namespace: bharatradar
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: schedule-downloader
+  namespace: bharatradar
+subjects:
+- kind: ServiceAccount
+  name: schedule-downloader
+  namespace: bharatradar
+roleRef:
+  kind: Role
+  name: schedule-downloader
+  apiGroup: rbac.authorization.k8s.io

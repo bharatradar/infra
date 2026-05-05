@@ -1,0 +1,372 @@
+-- BharatRadar PostgreSQL Schema
+-- Creates all tables for flight tracking platform
+
+-- ============================================================================
+-- Core Tables
+-- ============================================================================
+
+-- Airports table
+CREATE TABLE IF NOT EXISTS airports (
+    icao VARCHAR(10) PRIMARY KEY,
+    iata VARCHAR(10),
+    name VARCHAR(255) NOT NULL,
+    city VARCHAR(100),
+    state VARCHAR(100),
+    region VARCHAR(50),
+    lat DOUBLE PRECISION NOT NULL,
+    lon DOUBLE PRECISION NOT NULL,
+    elev INT,
+    type VARCHAR(50),
+    timezone VARCHAR(50),
+    hub_for TEXT[],
+    metro_connected BOOLEAN DEFAULT FALSE,
+    mag_var_w DOUBLE PRECISION DEFAULT 0.0
+);
+
+-- Runways table
+CREATE TABLE IF NOT EXISTS runways (
+    id SERIAL PRIMARY KEY,
+    airport_icao VARCHAR(10) REFERENCES airports(icao),
+    runway_id VARCHAR(20),
+    name1 VARCHAR(10),
+    hdg1 DOUBLE PRECISION,
+    lat1 DOUBLE PRECISION,
+    lon1 DOUBLE PRECISION,
+    name2 VARCHAR(10),
+    hdg2 DOUBLE PRECISION,
+    lat2 DOUBLE PRECISION,
+    lon2 DOUBLE PRECISION,
+    width_m DOUBLE PRECISION
+);
+CREATE INDEX IF NOT EXISTS idx_runways_airport ON runways(airport_icao);
+
+-- ============================================================================
+-- Flight Tracking Tables
+-- ============================================================================
+
+-- Live flights in air
+CREATE TABLE IF NOT EXISTS flights_in_air (
+    id SERIAL PRIMARY KEY,
+    hexid VARCHAR(20) NOT NULL,
+    callsign VARCHAR(20),
+    lat DOUBLE PRECISION,
+    lon DOUBLE PRECISION,
+    alt INT DEFAULT 0,
+    speed INT DEFAULT 0,
+    heading DOUBLE PRECISION DEFAULT 0,
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(hexid)
+);
+CREATE INDEX IF NOT EXISTS idx_flights_in_air_hex ON flights_in_air(hexid);
+CREATE INDEX IF NOT EXISTS idx_flights_in_air_lastseen ON flights_in_air(last_seen DESC);
+
+-- Arrivals log
+CREATE TABLE IF NOT EXISTS arrivals_log (
+    id SERIAL PRIMARY KEY,
+    hex_id VARCHAR(20),
+    callsign VARCHAR(20),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    origin VARCHAR(10),
+    airport VARCHAR(10),
+    runway VARCHAR(10),
+    anomaly_flag VARCHAR(50)
+);
+CREATE INDEX IF NOT EXISTS idx_arrivals_log_airport ON arrivals_log(airport);
+CREATE INDEX IF NOT EXISTS idx_arrivals_log_timestamp ON arrivals_log(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_arrivals_log_hex ON arrivals_log(hex_id);
+
+-- Departures log
+CREATE TABLE IF NOT EXISTS departures_log (
+    id SERIAL PRIMARY KEY,
+    hex_id VARCHAR(20),
+    callsign VARCHAR(20),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    destination VARCHAR(10),
+    airport VARCHAR(10),
+    runway VARCHAR(10),
+    anomaly_flag VARCHAR(50)
+);
+CREATE INDEX IF NOT EXISTS idx_departures_log_airport ON departures_log(airport);
+CREATE INDEX IF NOT EXISTS idx_departures_log_timestamp ON departures_log(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_departures_log_hex ON departures_log(hex_id);
+
+-- Flight events
+CREATE TABLE IF NOT EXISTS flight_events (
+    id SERIAL PRIMARY KEY,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    hex_id VARCHAR(20),
+    callsign VARCHAR(20),
+    event_type VARCHAR(50),
+    details TEXT,
+    airport VARCHAR(10),
+    origin VARCHAR(10),
+    destination VARCHAR(10),
+    runway VARCHAR(10),
+    anomaly_flag VARCHAR(50)
+);
+CREATE INDEX IF NOT EXISTS idx_flight_events_timestamp ON flight_events(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_flight_events_hex ON flight_events(hex_id);
+CREATE INDEX IF NOT EXISTS idx_flight_events_type ON flight_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_flight_events_airport ON flight_events(airport);
+
+-- Ground operations
+CREATE TABLE IF NOT EXISTS ground_ops (
+    id SERIAL PRIMARY KEY,
+    hex_id VARCHAR(20) PRIMARY KEY,
+    callsign VARCHAR(20),
+    airport VARCHAR(10),
+    origin VARCHAR(10),
+    destination VARCHAR(10),
+    arrived_at TIMESTAMP,
+    departed_at TIMESTAMP,
+    last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    inbound_callsign VARCHAR(20)
+);
+CREATE INDEX IF NOT EXISTS idx_ground_ops_airport ON ground_ops(airport);
+
+-- Flight schedules
+CREATE TABLE IF NOT EXISTS flight_schedules (
+    id SERIAL PRIMARY KEY,
+    callsign VARCHAR(20),
+    flight_number VARCHAR(20),
+    airport_code VARCHAR(10),
+    direction VARCHAR(10),  -- 'ARRIVALS' or 'DEPARTURES'
+    scheduled_time TIMESTAMP NOT NULL,
+    status VARCHAR(20) DEFAULT 'SCHEDULED',
+    hex_id VARCHAR(20),
+    route_airport VARCHAR(10),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_flight_schedules_time ON flight_schedules(scheduled_time);
+CREATE INDEX IF NOT EXISTS idx_flight_schedules_airport_dir ON flight_schedules(airport_code, direction);
+CREATE INDEX IF NOT EXISTS idx_flight_schedules_callsign ON flight_schedules(callsign);
+
+-- ============================================================================
+-- User Management Tables
+-- ============================================================================
+
+-- API Users
+CREATE TABLE IF NOT EXISTS api_users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(255),
+    google_id VARCHAR(255),
+    tier VARCHAR(20) DEFAULT 'free',
+    contributor_status VARCHAR(20) DEFAULT 'STANDARD',
+    contributor_since TIMESTAMP,
+    contributor_changed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_api_users_email ON api_users(email);
+CREATE INDEX IF NOT EXISTS idx_api_users_contributor ON api_users(contributor_status);
+
+-- API Keys
+CREATE TABLE IF NOT EXISTS api_keys (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES api_users(id) ON DELETE CASCADE,
+    api_key VARCHAR(100) UNIQUE NOT NULL,
+    description VARCHAR(255),
+    tier VARCHAR(20) DEFAULT 'free',
+    daily_limit INTEGER DEFAULT 100,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(api_key);
+CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
+
+-- ============================================================================
+-- Community Feeder Tables
+-- ============================================================================
+
+-- Feeders
+CREATE TABLE IF NOT EXISTS feeders (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(255),
+    user_email VARCHAR(255),
+    station_uuid VARCHAR(100) UNIQUE,
+    location VARCHAR(100),
+    lat DOUBLE PRECISION,
+    lon DOUBLE PRECISION,
+    altitude_m INT DEFAULT 0,
+    antenna_type VARCHAR(50),
+    receiver_type VARCHAR(50),
+    status VARCHAR(20) DEFAULT 'PENDING',
+    tier VARCHAR(20) DEFAULT 'BRONZE',
+    verified BOOLEAN DEFAULT FALSE,
+    last_seen_at TIMESTAMP,
+    total_active_hours INT DEFAULT 0,
+    notify_after_hours INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_feeders_station_uuid ON feeders(station_uuid);
+CREATE INDEX IF NOT EXISTS idx_feeders_status ON feeders(status);
+CREATE INDEX IF NOT EXISTS idx_feeders_tier ON feeders(tier);
+CREATE INDEX IF NOT EXISTS idx_feeders_user_email ON feeders(user_email);
+CREATE INDEX IF NOT EXISTS idx_feeders_last_seen ON feeders(last_seen_at DESC);
+
+-- Add foreign key from feeders to api_users if api_users exists
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'api_users') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conname = 'fk_feeders_user_email'
+            AND conrelid = 'feeders'::regclass
+        ) THEN
+            ALTER TABLE feeders
+                ADD CONSTRAINT fk_feeders_user_email
+                FOREIGN KEY (user_email) REFERENCES api_users(email)
+                ON DELETE SET NULL;
+        END IF;
+    END IF;
+END $$;
+
+-- Feeder daily stats
+CREATE TABLE IF NOT EXISTS feeder_daily_stats (
+    id SERIAL PRIMARY KEY,
+    feeder_id INTEGER REFERENCES feeders(id) ON DELETE CASCADE,
+    stat_date DATE NOT NULL,
+    messages_count BIGINT DEFAULT 0,
+    aircraft_count INT DEFAULT 0,
+    positions_count INT DEFAULT 0,
+    max_range_km INT DEFAULT 0,
+    avg_range_km INT DEFAULT 0,
+    uptime_minutes INT DEFAULT 0,
+    UNIQUE(feeder_id, stat_date)
+);
+CREATE INDEX IF NOT EXISTS idx_feeder_daily_stats_date ON feeder_daily_stats(stat_date DESC);
+CREATE INDEX IF NOT EXISTS idx_feeder_daily_stats_feeder ON feeder_daily_stats(feeder_id);
+
+-- Feeder achievements
+CREATE TABLE IF NOT EXISTS feeder_achievements (
+    id SERIAL PRIMARY KEY,
+    feeder_id INTEGER REFERENCES feeders(id) ON DELETE CASCADE,
+    achievement_type VARCHAR(50) NOT NULL,
+    achievement_name VARCHAR(100),
+    description TEXT,
+    awarded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_feeder_achievements_feeder ON feeder_achievements(feeder_id);
+
+-- Coverage gaps
+CREATE TABLE IF NOT EXISTS coverage_gaps (
+    id SERIAL PRIMARY KEY,
+    lat DOUBLE PRECISION NOT NULL,
+    lon DOUBLE PRECISION NOT NULL,
+    radius_km INT DEFAULT 50,
+    region VARCHAR(100),
+    priority VARCHAR(20) DEFAULT 'MEDIUM',
+    notes TEXT,
+    reported_by INTEGER REFERENCES feeders(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_coverage_gaps_region ON coverage_gaps(region);
+
+-- ============================================================================
+-- Alert & Notification Tables
+-- ============================================================================
+
+-- User alerts
+CREATE TABLE IF NOT EXISTS user_alerts (
+    id SERIAL PRIMARY KEY,
+    chat_id BIGINT,
+    session_id VARCHAR(255),
+    target_callsign VARCHAR(20),
+    alert_type VARCHAR(50),
+    threshold_mins INT DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'ACTIVE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Web push subscriptions
+CREATE TABLE IF NOT EXISTS web_subscriptions (
+    session_id VARCHAR(255) PRIMARY KEY,
+    sub_data JSONB,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================================
+-- AI Enrichment Tables
+-- ============================================================================
+
+-- AI enrichment audit
+CREATE TABLE IF NOT EXISTS ai_enrichment_audit (
+    id SERIAL PRIMARY KEY,
+    target_table VARCHAR(50),
+    record_id INT,
+    hex_id VARCHAR(20),
+    callsign VARCHAR(20),
+    original_value VARCHAR(100),
+    ai_inferred_value VARCHAR(100),
+    ai_reasoning TEXT,
+    confidence_score DECIMAL(3,2),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_ai_enrichment_timestamp ON ai_enrichment_audit(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_enrichment_hex ON ai_enrichment_audit(hex_id);
+
+-- AI insights log
+CREATE TABLE IF NOT EXISTS ai_insights_log (
+    id SERIAL PRIMARY KEY,
+    insight_type VARCHAR(50),
+    trigger_event VARCHAR(100),
+    insight_text TEXT,
+    target_airport VARCHAR(10),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_ai_insights_timestamp ON ai_insights_log(timestamp DESC);
+
+-- ============================================================================
+-- Performance Indexes
+-- ============================================================================
+
+-- Add performance indexes
+CREATE INDEX IF NOT EXISTS idx_flight_events_timestamp ON flight_events(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_flight_events_hex_ts ON flight_events(hex_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_flight_events_airport ON flight_events(airport);
+CREATE INDEX IF NOT EXISTS idx_flight_events_type_time ON flight_events(event_type, timestamp);
+CREATE INDEX IF NOT EXISTS idx_flight_events_anomaly ON flight_events(anomaly_flag);
+CREATE INDEX IF NOT EXISTS idx_flight_schedules_time ON flight_schedules(scheduled_time);
+CREATE INDEX IF NOT EXISTS idx_flight_schedules_airport_dir ON flight_schedules(airport_code, direction);
+CREATE INDEX IF NOT EXISTS idx_flight_schedules_callsign ON flight_schedules(callsign);
+CREATE INDEX IF NOT EXISTS idx_flights_in_air_lastseen ON flights_in_air(last_seen DESC);
+CREATE INDEX IF NOT EXISTS idx_arrivals_log_timestamp ON arrivals_log(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_arrivals_log_airport ON arrivals_log(airport);
+CREATE INDEX IF NOT EXISTS idx_arrivals_log_hex ON arrivals_log(hex_id);
+CREATE INDEX IF NOT EXISTS idx_departures_log_timestamp ON departures_log(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_departures_log_airport ON departures_log(airport);
+CREATE INDEX IF NOT EXISTS idx_ground_ops_aircraft ON ground_ops(hex_id);
+CREATE INDEX IF NOT EXISTS idx_feeders_tier ON feeders(tier);
+CREATE INDEX IF NOT EXISTS idx_feeders_status ON feeders(status);
+CREATE INDEX IF NOT EXISTS idx_feeders_station_uuid ON feeders(station_uuid);
+CREATE INDEX IF NOT EXISTS idx_feeders_user_email ON feeders(user_email);
+CREATE INDEX IF NOT EXISTS idx_feeders_last_seen ON feeders(last_seen_at DESC);
+CREATE INDEX IF NOT EXISTS idx_api_users_contributor ON api_users(contributor_status);
+CREATE INDEX IF NOT EXISTS idx_feeder_daily_stats_date ON feeder_daily_stats(stat_date DESC);
+CREATE INDEX IF NOT EXISTS idx_feeder_daily_stats_feeder ON feeder_daily_stats(feeder_id);
+CREATE INDEX IF NOT EXISTS idx_coverage_gaps_region ON coverage_gaps(region);
+
+-- ============================================================================
+-- Schedule Downloader Configuration
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS download_config (
+    id SERIAL PRIMARY KEY,
+    schedule_time TIME NOT NULL DEFAULT '22:00:00',
+    scheduler_enabled BOOLEAN DEFAULT FALSE,
+    enabled BOOLEAN DEFAULT TRUE,
+    last_run TIMESTAMP,
+    last_status TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO download_config (schedule_time, scheduler_enabled, enabled)
+VALUES ('22:00:00', FALSE, TRUE)
+ON CONFLICT DO NOTHING;

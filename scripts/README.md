@@ -112,6 +112,17 @@ sudo ./bharatradar-install uninstall     # Remove all components
 | `bharatradar-setup` | DEPRECATED - redirects to bharatradar-install |
 | `bharatradar-cluster` | Advanced CLI for CI/CD and power users |
 
+### Database Scripts (`db/`)
+
+| Script | Purpose |
+|--------|---------|
+| `db/init.sh` | Initialize PostgreSQL, Redis, and seed data |
+| `db/postgres/schema.sql` | Table definitions (airports, flights, feeders, etc.) |
+| `db/postgres/seed-airports.sql` | ~130 Indian airports |
+| `db/postgres/seed-runways.sql` | Runway data |
+
+> These are automatically used during `shared-services` installation. See [db/README.md](db/README.md) for manual reset instructions.
+
 ### Role Modules (`roles/`)
 
 | Module | Description |

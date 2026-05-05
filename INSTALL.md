@@ -624,6 +624,37 @@ After installation, save the credentials shown at the end. You'll need:
 
 > **Note:** This must be done BEFORE installing the Primary Hub. The Hub needs the PostgreSQL connection string to use as its external datastore.
 
+For manual database reset or troubleshooting, see [scripts/db/README.md](scripts/db/README.md).
+
+#### Schedule Downloader
+
+After the database is initialized, the schedule-downloader CronJob will be deployed automatically when you install the Hub. By default:
+
+- **Scheduled runs** are `DISABLED` (`scheduler_enabled = FALSE`)
+- **Manual runs** are `ENABLED` (`enabled = TRUE`)
+
+**To run manually:**
+```bash
+/opt/bharatradar/scripts/trigger-downloader.sh
+# or
+sudo kubectl create job manual-run --from=cronjob/schedule-downloader -n bharatradar
+```
+
+**To enable automatic scheduled runs (daily at 22:00 UTC):**
+```bash
+# Connect to PostgreSQL
+psql -h 192.168.200.15 -U flight_db_user -d flight_db
+
+# Enable scheduler
+UPDATE download_config SET scheduler_enabled = TRUE, updated_at = NOW() WHERE id = 1;
+```
+
+**To check status:**
+```bash
+sudo kubectl get jobs -n bharatradar -l app=schedule-downloader
+sudo kubectl logs -n bharatradar job/schedule-downloader-manual -f
+```
+
 ### Step 2: DNS Setup
 
 Add the following A records to your DNS provider (Cloudflare recommended).

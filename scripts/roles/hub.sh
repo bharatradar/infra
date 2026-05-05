@@ -622,6 +622,7 @@ role_hub_deploy_services() {
     # Phase 4: Dependent services (require data sources to be resolvable)
     deploy_component "mlat-map" || return 1
     deploy_component "history" || return 1
+    deploy_component "schedule-downloader" || return 1
     # NOTE: haproxy removed — beast/MLAT now use direct LoadBalancer services (Option C)
 
     log_success "All services deployed"

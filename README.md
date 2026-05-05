@@ -32,9 +32,9 @@ This auto-detects your SDR, installs readsb + mlat-client, and connects to `feed
                    |             |              |
                    v             v              v
          ┌─────────────────────────────────────────────┐
-         │       PRIMARY HUB (Ubuntu i7)               │
-         │       192.168.200.145 (MASTER)              │
-         │       VIP: 192.168.200.150                  │
+│       PRIMARY HUB (Ubuntu i7)               │
+│       192.168.200.10 (MASTER)               │
+│       VIP: 192.168.200.150                  │
          │                                             │
          │  ingest  hub  planes  api  mlat  mlat-map   │
          │  external  reapi  history  website          │
@@ -81,7 +81,7 @@ Hub Cluster:
 
 | Node | IP | OS | Role | Arch | K3s |
 |------|----|----|------|------|-----|
-| **Primary Hub** | 192.168.200.145 | Ubuntu 24.04 (Core i7) | K3s server, MASTER keepalived | amd64 | Yes |
+| **Primary Hub** | 192.168.200.10 | Ubuntu 24.04 (Core i7) | K3s server, MASTER keepalived | amd64 | Yes |
 | **HA Server** | 192.168.200.186 | Ubuntu 24.04 (Core i5) | K3s server, BACKUP keepalived | amd64 | Yes |
 | **br-aggrigator** | 192.168.200.15 | Debian 12 (Raspberry Pi) | K3s agent, shared services | arm64 | Yes |
 | **Feeder Pi** | 192.168.200.127 | Raspberry Pi OS | RTL-SDR + readsb + mlat-client (not K3s) | arm64 | No |
@@ -109,6 +109,53 @@ Hub Cluster:
 | **Redis** | 6379 | Cache for API, feeder lookups |
 | **InfluxDB** | 8086 | Metrics storage |
 | **MinIO** | 9000 (API), 9001 (Console) | S3-compatible storage for history |
+
+### Schedule Downloader
+
+K3s CronJob that downloads flight schedules from FlightRadar24 and stores in PostgreSQL.
+
+| Component | Image | Schedule | Trigger |
+|-----------|-------|---------|---------|
+| **schedule-downloader** | `ghcr.io/bharatradar/schedule-downloader` | Daily 22:00 UTC | Manual via CLI |
+
+#### Configuration
+
+Schedule time and enabled status are stored in `download_config` table:
+
+```sql
+-- View current config
+SELECT * FROM download_config;
+
+-- Update schedule time (HH:MM:SS)
+UPDATE download_config SET schedule_time = '22:00:00', updated_at = NOW() WHERE id = 1;
+
+-- Enable/Disable
+UPDATE download_config SET enabled = TRUE/FALSE, updated_at = NOW() WHERE id = 1;
+```
+
+#### Manual Trigger
+
+```bash
+# Trigger manually
+./scripts/triggers/trigger-downloader.sh
+
+# Check status
+kubectl get jobs -n bharatradar -l app=schedule-downloader
+kubectl logs -n bharatradar job/schedule-downloader-manual
+
+# Delete after completion
+kubectl delete job schedule-downloader-manual -n bharatradar
+```
+
+#### Files
+
+| Path | Description |
+|------|-------------|
+| `scripts/db/downloader/` | Dockerfile, requirements, source code |
+| `scripts/triggers/trigger-downloader.sh` | Manual trigger script |
+| `manifests/default/schedule-downloader-cronjob.yaml` | K3s CronJob manifest |
+
+> **Note:** The CronJob reads `schedule_time` from the database - update there to change schedule without redeploying.
 
 ### Custom Images
 
@@ -221,6 +268,46 @@ curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharat
 ```
 
 This installs PostgreSQL, Redis, InfluxDB, and MinIO. **Save the credentials shown at the end** — you'll need the PostgreSQL connection string for the Hub.
+
+For manual database setup or re-initialization, see [scripts/db/README.md](scripts/db/README.md).
+
+#### Manual Database Reset
+
+To drop and recreate all data:
+
+```bash
+# SSH to the database server
+ssh bharatradar@192.168.200.15
+
+# Drop all tables
+PGPASSWORD='raga@098' psql -h localhost -U flight_db_user -d flight_db -c "
+DROP TABLE IF EXISTS airports CASCADE;
+DROP TABLE IF EXISTS runways CASCADE;
+DROP TABLE IF EXISTS flights_in_air CASCADE;
+DROP TABLE IF EXISTS arrivals_log CASCADE;
+DROP TABLE IF EXISTS departures_log CASCADE;
+DROP TABLE IF EXISTS flight_events CASCADE;
+DROP TABLE IF EXISTS ground_ops CASCADE;
+DROP TABLE IF EXISTS flight_schedules CASCADE;
+DROP TABLE IF EXISTS api_users CASCADE;
+DROP TABLE IF EXISTS api_keys CASCADE;
+DROP TABLE IF EXISTS feeders CASCADE;
+DROP TABLE IF EXISTS feeder_daily_stats CASCADE;
+DROP TABLE IF EXISTS feeder_achievements CASCADE;
+DROP TABLE IF EXISTS coverage_gaps CASCADE;
+DROP TABLE IF EXISTS user_alerts CASCADE;
+DROP TABLE IF EXISTS web_subscriptions CASCADE;
+DROP TABLE IF EXISTS ai_enrichment_audit CASCADE;
+DROP TABLE IF EXISTS ai_insights_log CASCADE;
+"
+
+# Recreate schema and data
+PGPASSWORD='raga@098' psql -h localhost -U flight_db_user -d flight_db -f schema.sql
+PGPASSWORD='raga@098' psql -h localhost -U flight_db_user -d flight_db -f seed-airports.sql
+PGPASSWORD='raga@098' psql -h localhost -U flight_db_user -d flight_db -f seed-runways.sql
+```
+
+See [scripts/db/README.md](scripts/db/README.md) for full documentation.
 
 ### AWS Server Setup (FRP + nginx + Certbot)
 
@@ -434,7 +521,7 @@ DB_DBNAME=k3s
 DB_DBUSER=k3s
 DB_DBPASS=<from-shared-services>
 K3S_CLUSTER_TOKEN=K10...your-token...
-PRIMARY_HUB_IP=192.168.200.145
+PRIMARY_HUB_IP=192.168.200.10
 KEEPALIVED_ENABLED=true
 KEEPALIVED_VIP=192.168.200.150
 KEEPALIVED_STATE=BACKUP

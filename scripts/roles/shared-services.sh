@@ -225,7 +225,36 @@ GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};
 ALTER DATABASE ${DB_NAME} SET timezone TO 'UTC';
 EOF
 
+    # Create BharatRadar database (flight_db)
+    log_info "Creating BharatRadar database..."
+    
+    # Default password for flight_db_user
+    FLIGHT_DB_PASSWORD="${FLIGHT_DB_PASSWORD:-raga@098}"
+    
+    # Create user if not exists, or alter password
+    sudo -u postgres psql <<EOF
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'flight_db_user') THEN
+        CREATE ROLE flight_db_user LOGIN CREATEDB PASSWORD '${FLIGHT_DB_PASSWORD}';
+    ELSE
+        ALTER USER flight_db_user WITH PASSWORD '${FLIGHT_DB_PASSWORD}';
+    END IF;
+END
+\$\$;
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'flight_db') THEN
+        CREATE DATABASE flight_db OWNER flight_db_user;
+        GRANT ALL PRIVILEGES ON DATABASE flight_db TO flight_db_user;
+        ALTER DATABASE flight_db SET timezone TO 'UTC';
+    END IF;
+END
+\$\$;
+EOF
+
     log_success "Database '${DB_NAME}' and user '${DB_USER}' created"
+    log_success "Database 'flight_db' and user 'flight_db_user' ready"
 }
 
 role_shared_services_install_redis() {
@@ -465,6 +494,94 @@ EOF
     log_success "MinIO bucket 'history' created"
 }
 
+role_shared_services_init_flight_db() {
+    log_step "Initializing BharatRadar Database (flight_db)"
+
+    # Default credentials
+    FLIGHT_DB_PASSWORD="${FLIGHT_DB_PASSWORD:-raga@098}"
+
+    # Check if flight_db already has data
+    local existing_count
+    existing_count=$(PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -t -c "SELECT COUNT(*) FROM airports;" 2>/dev/null || echo "0")
+
+    if [ "$existing_count" -gt 0 ] 2>/dev/null; then
+        log_info "flight_db already has $existing_count airports, skipping initialization"
+        return 0
+    fi
+
+    log_info "Downloading BharatRadar schema and seed data..."
+
+    # Download the schema and seed files from GitHub
+    local scripts_dir="/tmp/bharatradar-db-scripts"
+    mkdir -p "$scripts_dir"
+
+    # Download schema.sql
+    curl -sL "https://raw.githubusercontent.com/bharatradar/infra/main/scripts/db/postgres/schema.sql" \
+        -o "$scripts_dir/schema.sql" || {
+        log_warn "Failed to download schema.sql, skipping initialization"
+        return 0
+    }
+
+    # Download seed-airports.sql
+    curl -sL "https://raw.githubusercontent.com/bharatradar/infra/main/scripts/db/postgres/seed-airports.sql" \
+        -o "$scripts_dir/seed-airports.sql" || {
+        log_warn "Failed to download seed-airports.sql, skipping initialization"
+        return 0
+    }
+
+    # Download seed-runways.sql
+    curl -sL "https://raw.githubusercontent.com/bharatradar/infra/main/scripts/db/postgres/seed-runways.sql" \
+        -o "$scripts_dir/seed-runways.sql" || {
+        log_warn "Failed to download seed-runways.sql, skipping initialization"
+        return 0
+    }
+
+    log_info "Creating schema and seeding data..."
+
+    # Create schema
+    PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -f "$scripts_dir/schema.sql" >/dev/null 2>&1 || {
+        log_warn "Schema creation had warnings (continuing anyway)"
+    }
+
+    # Seed airports
+    PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -f "$scripts_dir/seed-airports.sql" >/dev/null 2>&1 || true
+
+    # Seed runways
+    PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -f "$scripts_dir/seed-runways.sql" >/dev/null 2>&1 || true
+
+    # Verify
+    local airport_count runway_count
+    airport_count=$(PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -t -c "SELECT COUNT(*) FROM airports;" 2>/dev/null || echo "0")
+    runway_count=$(PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -t -c "SELECT COUNT(*) FROM runways;" 2>/dev/null || echo "0")
+
+    log_success "BharatRadar database initialized: $airport_count airports, $runway_count runways"
+
+    # Cleanup
+    rm -rf "$scripts_dir"
+
+    # Set up Redis geo-index with ALL airports
+    log_info "Setting up Redis geo-index with all airports..."
+
+    # Delete existing index
+    redis-cli -a "$REDIS_PASSWORD" DEL india_airports >/dev/null 2>&1 || true
+
+    # Add ALL airports from database to Redis geo-index
+    local geo_count=0
+    while IFS='|' read -r icao lat lon; do
+        icao=$(echo "$icao" | tr -d ' ')
+        lat=$(echo "$lat" | tr -d ' ')
+        lon=$(echo "$lon" | tr -d ' ')
+        
+        if [ -n "$icao" ] && [ -n "$lat" ] && [ -n "$lon" ]; then
+            redis-cli -a "$REDIS_PASSWORD" GEOADD india_airports "$lon" "$lat" "$icao" >/dev/null 2>&1 && geo_count=$((geo_count + 1))
+        fi
+    done < <(PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -t -c "SELECT icao, lat, lon FROM airports;" 2>/dev/null)
+
+    log_success "Redis geo-index created: $geo_count airports"
+
+    log_success "BharatRadar database initialization complete"
+}
+
 role_shared_services_save_config() {
     log_step "Saving Configuration"
 
@@ -598,6 +715,9 @@ role_shared_services_post_install() {
     echo -e "  ${CYAN}K3s Connection String:${NC}"
     echo "    ${conn_string}"
     echo ""
+    echo -e "  ${CYAN}BharatRadar Database (flight_db):${NC}"
+    echo "    user=flight_db_user  password=${FLIGHT_DB_PASSWORD:-raga@098}"
+    echo ""
     echo -e "  ${CYAN}MinIO Rclone Config:${NC}"
     echo "    endpoint = http://${DB_LISTEN_IP}:9000"
     echo ""
@@ -623,7 +743,7 @@ role_shared_services_run() {
     require_root
 
     local install_failed=false
-    local phases=(config packages postgresql redis influxdb minio save)
+    local phases=(config packages postgresql redis influxdb minio flight_db_init save)
 
     show_resume_banner "${phases[@]}"
 
@@ -707,6 +827,12 @@ role_shared_services_run() {
         role_shared_services_install_minio || log_warn "MinIO installation skipped/failed"
         role_shared_services_configure_minio || log_warn "MinIO configuration skipped/failed"
         checkpoint_mark "minio"
+    fi
+
+    # Phase: flight_db_init (BharatRadar database schema and seed data)
+    if ! checkpoint_completed "flight_db_init"; then
+        role_shared_services_init_flight_db || log_warn "Flight DB initialization skipped/failed"
+        checkpoint_mark "flight_db_init"
     fi
 
     # Phase: save
