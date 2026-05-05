@@ -1,6 +1,6 @@
 # AGENTS.md - bharatradar/infra
 
-> **Versions:** Installer v5.3.1 | Docs v3.3.0 | API Image v5.0.0
+> **Versions:** Installer v5.7.0 | Docs v5.7.0 | API Image v5.7.0
 
 ## Quick Verification
 kustomize build manifests/default  # Build and preview final manifests
@@ -25,7 +25,7 @@ Services (manifests/default):
 - reapi/      REST API backend (readsb with --net-api-port=30152)
 - planes/     Public map ✅ running (ghcr.io/bharatradar/docker-tar1090-uuid)
 - mlat-map/   MLAT sync UI ✅ running (nginx proxies /api/0/mlat-server/)
-- api/        Main web API ✅ running v5.0.0 (ghcr.io/bharatradar/api:5.0.0)
+- api/        Main web API ✅ running v5.7.0 (ghcr.io/bharatradar/api:5.7.0)
 - history/    Historical data ✅ running (amd64 only, dummy rclone secret)
 - website/    Homepage
 - resources.yaml  Namespace, Services, Ingresses, NetworkPolicies
@@ -64,8 +64,8 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 - GHCR pull secret: `ghcr-secret` in `bharatradar` namespace (required for all deployments)
 - History has `nodeSelector: kubernetes.io/arch: amd64`
 
-## API (v5.0.0)
-- Image: `ghcr.io/bharatradar/api:5.0.0`
+## API (v5.7.0)
+- Image: `ghcr.io/bharatradar/api:5.7.0`
 - OpenAPI schema: 18 paths (4 v0 + 14 v2)
 - v2 endpoints: /v2/pia, /v2/mil, /v2/ladd, /v2/squawk/{squawk}, /v2/sqk/{squawk}, /v2/type/{aircraft_type}, /v2/reg/{registration}, /v2/registration/{registration}, /v2/hex/{icao_hex}, /v2/icao/{icao_hex}, /v2/callsign/{callsign}, /v2/point/{lat}/{lon}/{radius}, /v2/lat/{lat}/lon/{lon}/dist/{radius}, /v2/closest/{lat}/{lon}/{radius}
 - Path parameters work in Swagger UI "Try it out" mode
