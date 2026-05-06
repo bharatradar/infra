@@ -680,6 +680,150 @@ kubectl get pods -n bharatradar
 
 Full installer docs: [install.md](install.md)
 
+## Release Workflow
+
+Standard procedure for fixing issues, building new images, tagging, and redeploying to K3s.
+
+### Prerequisites
+
+- Docker with buildx multi-arch support
+- kubectl configured for local preview
+- SSH access to Hub (192.168.200.10) with sudo
+- Git tag version format: `vYYYY.MM.DD.XX` (e.g., `v2025.05.07.01`)
+
+### Step-by-Step
+
+#### 1. Fix the Issue
+
+Edit source code in `build/<component>/` or manifests in `manifests/default/`.
+
+#### 2. Build New Image
+
+```bash
+# Set version
+VERSION=v2025.05.07.01
+COMPONENT=telegram-bot  # or flight-tracker, ai-agents, schedule-downloader, etc.
+
+# Build multi-arch and push to GHCR
+cd /Users/Shared/bharatradar/infra
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t ghcr.io/bharatradar/${COMPONENT}:${VERSION} \
+  --label "org.opencontainers.image.source=https://github.com/bharatradar/infra" \
+  --label "org.opencontainers.image.version=${VERSION}" \
+  --push \
+  -f build/${COMPONENT}/Dockerfile \
+  build/${COMPONENT}/
+```
+
+#### 3. Update Manifest Image Tag
+
+Edit `manifests/default/<component>.yaml` and update the image reference:
+
+```yaml
+image: ghcr.io/bharatradar/telegram-bot:v2025.05.07.01
+```
+
+#### 4. Test Locally (Optional)
+
+```bash
+# Preview manifests before applying
+kustomize build manifests/default | less
+
+# Or validate against cluster dry-run
+kustomize build manifests/default | kubectl apply --dry-run=client -f -
+```
+
+#### 5. Commit and Tag
+
+```bash
+cd /Users/Shared/bharatradar/infra
+git add -A
+git commit -m "fix: description of what was fixed
+
+- Change 1
+- Change 2
+
+Images:
+- ghcr.io/bharatradar/${COMPONENT}:${VERSION}"
+
+# Create annotated tag
+git tag -a ${VERSION} -m "Release ${VERSION}: description of changes"
+```
+
+#### 6. Deploy to K3s
+
+```bash
+cd /Users/Shared/bharatradar/infra
+kustomize build manifests/default | \
+  sshpass -p 'raga@098' ssh \
+  -o StrictHostKeyChecking=no \
+  bharatradar@192.168.200.10 \
+  'sudo kubectl apply -f -'
+```
+
+#### 7. Verify Rollout
+
+```bash
+sshpass -p 'raga@098' ssh \
+  -o StrictHostKeyChecking=no \
+  bharatradar@192.168.200.10 \
+  'sudo kubectl get pods -n bharatradar -w'
+```
+
+#### 8. Push to Remote
+
+```bash
+git push origin main
+git push origin --tags
+```
+
+### Multi-Image Release
+
+If multiple images change in one release:
+
+```bash
+VERSION=v2025.05.07.01
+
+# Build all changed images
+for component in telegram-bot flight-tracker ai-agents; do
+  docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    -t ghcr.io/bharatradar/${component}:${VERSION} \
+    --push \
+    -f build/${component}/Dockerfile \
+    build/${component}/
+done
+
+# Update all manifest tags
+# Edit manifests/default/*.yaml
+
+# Commit, tag, deploy
+git add -A
+git commit -m "release ${VERSION}: update all custom images"
+git tag -a ${VERSION} -m "Release ${VERSION}: multi-image update"
+
+# Deploy
+kustomize build manifests/default | \
+  sshpass -p 'raga@098' ssh \
+  -o StrictHostKeyChecking=no \
+  bharatradar@192.168.200.10 \
+  'sudo kubectl apply -f -'
+```
+
+### Emergency Rollback
+
+```bash
+# Revert manifest to previous tag
+# Edit manifests/default/<component>.yaml
+
+# Or rollback deployment directly on K3s
+sshpass -p 'raga@098' ssh \
+  -o StrictHostKeyChecking=no \
+  bharatradar@192.168.200.10 \
+  'sudo kubectl rollout undo deployment/<component> -n bharatradar'
+```
+
 ## Where?
 
 - **GitHub:** https://github.com/bharatradar/infra
