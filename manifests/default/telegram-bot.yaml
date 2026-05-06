@@ -36,7 +36,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: bot
-          image: ghcr.io/bharatradar/telegram-bot:v1.0.36
+          image: ghcr.io/bharatradar/telegram-bot:v1.0.37
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
