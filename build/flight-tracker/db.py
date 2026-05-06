@@ -349,15 +349,37 @@ class AsyncDatabaseManager:
         try:
             async with self.pool.acquire() as conn:
                 await conn.executemany("""
-                    INSERT INTO flights_in_air (hexid, callsign, lat, lon, alt, speed, heading, last_seen)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() AT TIME ZONE 'UTC')
+                    INSERT INTO flights_in_air (hexid, callsign, lat, lon, alt, speed, heading, last_seen, origin_icao, dest_icao, origin_iata, dest_iata, origin_lat, origin_lon, dest_lat, dest_lon, callsign_iata)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() AT TIME ZONE 'UTC', $8, $9, $10, $11, $12, $13, $14, $15, $16)
                     ON CONFLICT (hexid) DO UPDATE 
                     SET callsign = EXCLUDED.callsign, lat = EXCLUDED.lat, lon = EXCLUDED.lon, 
                         alt = EXCLUDED.alt, speed = EXCLUDED.speed, heading = EXCLUDED.heading, 
-                        last_seen = NOW() AT TIME ZONE 'UTC'
+                        last_seen = NOW() AT TIME ZONE 'UTC',
+                        origin_icao = COALESCE(EXCLUDED.origin_icao, flights_in_air.origin_icao),
+                        dest_icao = COALESCE(EXCLUDED.dest_icao, flights_in_air.dest_icao),
+                        origin_iata = COALESCE(EXCLUDED.origin_iata, flights_in_air.origin_iata),
+                        dest_iata = COALESCE(EXCLUDED.dest_iata, flights_in_air.dest_iata),
+                        origin_lat = COALESCE(EXCLUDED.origin_lat, flights_in_air.origin_lat),
+                        origin_lon = COALESCE(EXCLUDED.origin_lon, flights_in_air.origin_lon),
+                        dest_lat = COALESCE(EXCLUDED.dest_lat, flights_in_air.dest_lat),
+                        dest_lon = COALESCE(EXCLUDED.dest_lon, flights_in_air.dest_lon),
+                        callsign_iata = COALESCE(EXCLUDED.callsign_iata, flights_in_air.callsign_iata)
                 """, flights_list)
         except Exception as e:
             logger.error(f"❌ [DB ERROR] bulk_upsert_flights_in_air failed: {e}")
+
+    async def update_flight_in_air_route(self, hex_id, callsign, origin_icao, dest_icao, origin_iata, dest_iata, origin_lat, origin_lon, dest_lat, dest_lon, callsign_iata):
+        """Update flights_in_air with route data (origin/destination, coords, iata)"""
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute("""
+                    UPDATE flights_in_air 
+                    SET origin_icao = $1, dest_icao = $2, origin_iata = $3, dest_iata = $4,
+                        origin_lat = $5, origin_lon = $6, dest_lat = $7, dest_lon = $8, callsign_iata = $9
+                    WHERE hexid = $10
+                """, origin_icao, dest_icao, origin_iata, dest_iata, origin_lat, origin_lon, dest_lat, dest_lon, callsign_iata, hex_id)
+        except Exception as e:
+            logger.warning(f"Failed to update flight route: {e}")
 
     async def cleanup_stale_flights(self):
         try:

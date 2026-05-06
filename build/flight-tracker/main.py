@@ -462,7 +462,8 @@ class FlightMonitor:
             heading = to_f(ac.get('track')) if ac.get('track') else 0.0
             
             if lat and lon:
-                valid_flights.append((hex_id, callsign, lat, lon, alt, speed, heading))
+                # Include empty route columns - will be populated by gap_filler later
+                valid_flights.append((hex_id, callsign, lat, lon, alt, speed, heading, None, None, None, None, None, None, None, None, None))
         
         logger.warning(f"⚠️ SYNC: processing {len(aircraft_list)} aircraft, valid={len(valid_flights)}, alt_samples={alt_values[:3]}")
         
@@ -683,6 +684,34 @@ class FlightMonitor:
                     if orig or dest:
                         await self.db.log_event(hex_id, raw_cs, "ENRICHMENT", f"Pre-fetch: {orig}->{dest}", origin=orig, destination=dest)
                         await self.db.update_enriched_route(hex_id, raw_cs, orig, dest)
+                        
+                        # Get airport coordinates and update flights_in_air
+                        if orig and dest:
+                            origin_lat, origin_lon = None, None
+                            dest_lat, dest_lon = None, None
+                            origin_iata, dest_iata = None, None
+                            callsign_iata = None
+                            
+                            # Get origin airport data from Config.TARGET_AIRPORTS
+                            if orig in Config.TARGET_AIRPORTS:
+                                ap_data = Config.TARGET_AIRPORTS[orig]
+                                origin_lat = float(ap_data.get('lat', 0)) if ap_data.get('lat') else None
+                                origin_lon = float(ap_data.get('lon', 0)) if ap_data.get('lon') else None
+                                origin_iata = ap_data.get('iata')
+                            # Get destination airport data from Config.TARGET_AIRPORTS
+                            if dest in Config.TARGET_AIRPORTS:
+                                ap_data = Config.TARGET_AIRPORTS[dest]
+                                dest_lat = float(ap_data.get('lat', 0)) if ap_data.get('lat') else None
+                                dest_lon = float(ap_data.get('lon', 0)) if ap_data.get('lon') else None
+                                dest_iata = ap_data.get('iata')
+                            
+                            # Update flights_in_air with route data
+                            await self.db.update_flight_in_air_route(
+                                hex_id, raw_cs, orig, dest, 
+                                origin_iata, dest_iata,
+                                origin_lat, origin_lon, dest_lat, dest_lon,
+                                callsign_iata
+                            )
                         
                         if orig:
                             await self.db.link_actual_flight_to_schedule(orig, 'DEPARTURES', raw_cs, hex_id, time.time(), route_airport=dest)
@@ -1216,7 +1245,39 @@ class FlightMonitor:
                 # 🌟 FIX: THE PRE-FLIGHT GUARD
                 # Ensures that a plane in pre_flight cannot fall into the airborne landing trap
                 if not is_on_ground_db and tracked_flight['status'] not in ['landed', 'grounded', 'pre_flight']:
-                    upsert_tuple = (hex_id, tracked_flight['callsign'], c_lat, c_lon, c_alt, c_speed, c_heading)
+                    # Get route data from tracked_flight if available
+                    orig = tracked_flight.get('origin')
+                    dest = tracked_flight.get('destination')
+                    orig_iata, dest_iata = None, None
+                    orig_lat, orig_lon = None, None
+                    dest_lat, dest_lon = None, None
+                    
+                    if orig and dest:
+                        # Look up airport data from Config.TARGET_AIRPORTS
+                        if orig in Config.TARGET_AIRPORTS:
+                            ap_data = Config.TARGET_AIRPORTS[orig]
+                            orig_iata = ap_data.get('iata')
+                            orig_lat = float(ap_data.get('lat', 0)) if ap_data.get('lat') else None
+                            orig_lon = float(ap_data.get('lon', 0)) if ap_data.get('lon') else None
+                        if dest in Config.TARGET_AIRPORTS:
+                            ap_data = Config.TARGET_AIRPORTS[dest]
+                            dest_iata = ap_data.get('iata')
+                            dest_lat = float(ap_data.get('lat', 0)) if ap_data.get('lon') else None
+                            dest_lon = float(ap_data.get('lon', 0)) if ap_data.get('lon') else None
+                    
+                    # Get callsign_iata from FR24 cache if available
+                    cs = tracked_flight['callsign']
+                    callsign_iata = None
+                    try:
+                        cached = await self.get_cached_route(cs)
+                        if cached:
+                            # Also check memory cache for IATA
+                            mem_entry = self.route_memory_cache.get(cs.upper())
+                            if mem_entry and len(mem_entry) > 2:
+                                callsign_iata = mem_entry[2]  # If stored
+                    except: pass
+                    
+                    upsert_tuple = (hex_id, tracked_flight['callsign'], c_lat, c_lon, c_alt, c_speed, c_heading, orig, dest, orig_iata, dest_iata, orig_lat, orig_lon, dest_lat, dest_lon, callsign_iata)
                 
                 if is_on_ground_db:
                     over_asphalt, active_rwy = self.check_runway_position(ap_icao, c_lat, c_lon, c_heading)
