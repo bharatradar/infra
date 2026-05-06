@@ -1,0 +1,147 @@
+# BharatRadar Flight Tracker K8s Manifest
+# Monitors aircraft data from multiple sources
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flight-tracker-config
+  namespace: bharatradar
+data:
+  # Feature Flags
+  DEBUG_MODE: "false"
+  USE_K3S_DATA_PRIMARY: "false"
+  FLIGHTAWARE_ROUTE_ENABLED: "true"
+  
+  # Polling Intervals
+  RADAR_FETCH_INTERVAL_SEC: "10"
+  GAP_FILLER_INTERVAL_SEC: "10"
+  JANITOR_INTERVAL_SEC: "900"
+  ENRICHMENT_FETCH_DELAY_SEC: "2"
+  WEBSOCKET_BROADCAST_INTERVAL_SEC: "1"
+  
+  # K3s Internal Data Sources
+  K3S_PLANES_DATA_URL: "http://planes-readsb.bharatradar.svc.cluster.local/data/aircraft.json"
+  K3S_REAPI_DATA_URL: "http://reapi-readsb.bharatradar.svc.cluster.local:30152"
+  
+  # External Data Sources
+  ADSB_EXCHANGE_BINCRAFT_URL: "https://globe.adsbexchange.com/re-api/?binCraft&zstd&box=9.337602,33.583193,60.875230,104.092506"
+  ADSB_ONE_AIRCRAFT_DATA_URL: "https://api.adsb.one/v2/point/21.1458/79.0882/1000"
+  RE_ADSB_LOL_AIRCRAFT_DATA_URL: "https://re-api.adsb.lol/?circle=21.1458,79.0882,1000"
+  ADSB_LOL_AIRCRAFT_DATA_URL: "https://api.adsb.lol/v2/point/21.1458/79.0882/150"
+  
+  # Static Data URLs
+  ROUTES_CSV_URL: "https://vrs-standing-data.adsb.lol/routes.csv"
+  AIRPORTS_CSV_URL: "https://vrs-standing-data.adsb.lol/airports.csv"
+  
+  # File Paths
+  AIRLINES_FILE: "/app/data/airlines.csv"
+  AIRPORTS_CSV_FILE: "/app/data/airports.csv"
+  
+  # InfluxDB
+  INFLUXDB_URL: "http://192.168.200.15:8086"
+  INFLUXDB_ORG: "Vellur"
+  INFLUXDB_BUCKET: "raga_flight_radar_db"
+  INFLUXDB_WRITE_INTERVAL_SEC: "5"
+  
+  # Redis
+  REDIS_HOST: "192.168.200.15"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_LIVE_FLIGHTS_KEY: "live_flights"
+  REDIS_LIVE_FLIGHTS_META_KEY: "live_flights_meta"
+  REDIS_FLIGHTS_TTL: "30"
+  
+  # Database
+  DB_HOST: "192.168.200.15"
+  DB_PORT: "5432"
+  DB_NAME: "flight_db"
+  DB_USER: "flight_db_user"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flight-tracker
+  namespace: bharatradar
+  labels:
+    app: flight-tracker
+    component: data-pipeline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flight-tracker
+  template:
+    metadata:
+      labels:
+        app: flight-tracker
+        component: data-pipeline
+    spec:
+      serviceAccountName: flight-tracker
+      imagePullSecrets:
+      - name: ghcr-secret
+      containers:
+      - name: tracker
+        image: ghcr.io/bharatradar/flight-tracker:v1.0.1
+        imagePullPolicy: IfNotPresent
+        envFrom:
+        - configMapRef:
+            name: flight-tracker-config
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: flight-db-credentials
+              key: password
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: password
+        - name: INFLUXDB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: influxdb-credentials
+              key: token
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flight-tracker
+  namespace: bharatradar
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: flight-tracker
+  namespace: bharatradar
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flight-tracker
+  namespace: bharatradar
+subjects:
+- kind: ServiceAccount
+  name: flight-tracker
+  namespace: bharatradar
+roleRef:
+  kind: Role
+  name: flight-tracker
+  apiGroup: rbac.authorization.k8s.io

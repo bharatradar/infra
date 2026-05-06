@@ -58,7 +58,7 @@ Examples:
     --frp-server 13.48.249.103 --frp-token "your-token"
 
   # Create feeder node
-  sudo $0 create --role feeder --hub-ip 192.168.200.145
+  sudo $0 create --role feeder --hub-ip 192.168.200.10
 
   # Show info
   sudo $0 info

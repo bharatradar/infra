@@ -12,7 +12,7 @@ Data flow: user → ingest → hub → planes
 ### Nodes
 | Node | IP | Role | OS | Arch |
 |------|----|------|----|------|
-| Hub | 192.168.200.145 | K3s server (MASTER) | Ubuntu 24.04 (Core i7) | amd64 |
+| Hub | 192.168.200.10 | K3s server (MASTER) | Ubuntu 24.04 (Core i7) | amd64 |
 | HA Server | 192.168.200.186 | K3s server (BACKUP) | Ubuntu 24.04 | amd64 |
 | br-aggrigator | 192.168.200.15 | K3s agent + Shared Services (PostgreSQL, Redis, InfluxDB, MinIO) | Debian 12 (Raspberry Pi) | arm64 |
 | Feeder Pi | 192.168.200.127 | RTL-SDR readsb + mlat-client (not K3s) | Raspberry Pi OS | arm64 |
@@ -28,6 +28,7 @@ Services (manifests/default):
 - api/        Main web API ✅ running v5.7.0 (ghcr.io/bharatradar/api:5.7.0)
 - history/    Historical data ✅ running (amd64 only, dummy rclone secret)
 - website/    Homepage
+- telegram-bot/  Telegram bot with LLM routing (groq + MCP tools)
 - resources.yaml  Namespace, Services, Ingresses, NetworkPolicies
 
 ## Conventions
@@ -80,7 +81,7 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 
 ## FRP
 - Server on AWS EC2 (13.48.249.103): frps
-- Client on Hub (192.168.200.145): frpc
+- Client on Hub (192.168.200.10): frpc
 - Proxies: TCP 30004/30005/31090 + HTTP/HTTPS for web + mlat-map
 
 ## Owner

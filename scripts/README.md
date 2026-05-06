@@ -14,7 +14,7 @@ Automated installation and management for the BharatRadar ADS-B/MLAT platform.
                                    │               │
                ┌─────────────────────────┐ ┌─────────────────────────┐
                │   HUB (K3s server)      │ │   HA SERVER (K3s)       │
-               │   192.168.200.145 (i7)  │ │   192.168.200.155 (i5)  │
+               │   192.168.200.10 (i7)  │ │   192.168.200.155 (i5)  │
                │   MASTER keepalived     │ │   BACKUP keepalived     │
                │   planes api mlat hub   │ │   joins same DB         │
                │   haproxy redis mlat-map│ │                         │

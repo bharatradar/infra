@@ -37,6 +37,7 @@ This auto-detects your SDR, installs readsb + mlat-client, and connects to `feed
 │       VIP: 192.168.200.150                  │
          │                                             │
          │  ingest  hub  planes  api  mlat  mlat-map   │
+         │  telegram-bot  flight-tracker  schedule-downloader
          │  external  reapi  history  website          │
          └──────────────┬──────────────────────────────┘
                         │ k3s join (shared PostgreSQL)

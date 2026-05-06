@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: telegram-bot
+  namespace: bharatradar
+  labels:
+    app: telegram-bot
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: telegram-bot
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telegram-bot
+  namespace: bharatradar
+  labels:
+    app: telegram-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: telegram-bot
+  template:
+    metadata:
+      labels:
+        app: telegram-bot
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: bot
+          image: ghcr.io/bharatradar/telegram-bot:v1.0.27
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: DB_HOST
+              value: "192.168.200.15"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "flight_db"
+            - name: DB_USER
+              value: "flight_db_user"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: flight-db-credentials
+                  key: password
+            - name: REDIS_HOST
+              value: "192.168.200.15"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: password
+            - name: BOT_ENGINE_MODE
+              value: "fast_router"
+            - name: TELEGRAM_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-bot-credentials
+                  key: telegram_token
+            - name: TELEGRAM_CHAT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-bot-credentials
+                  key: telegram_chat_id
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-bot-credentials
+                  key: groq_api_key
+            - name: MCP_SERVER_URL
+              value: "http://mcp-server.bharatradar.svc.cluster.local:8000"
+            - name: CLOUDFLARE_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-bot-credentials
+                  key: cloudflare_keys
+            - name: MCP_SERVER_URL
+              value: "http://mcp-server.bharatradar.svc.cluster.local:8000/sse"
+          resources:
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+            requests:
+              memory: "512Mi"
+              cpu: "250m"

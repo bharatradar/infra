@@ -11,4 +11,7 @@ resources:
 - history/default
 - website/default
 - resources.yaml
+- telegram-bot.yaml
+- flight-tracker.yaml
+- schedule-downloader-cronjob.yaml
 namespace: bharatradar

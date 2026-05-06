@@ -45,10 +45,11 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
                    v             v              v
          ┌─────────────────────────────────────────────┐
          │       PRIMARY HUB (Ubuntu i7)               │
-         │       192.168.200.145 (MASTER)              │
+         │       192.168.200.10 (MASTER)              │
          │       VIP: 192.168.200.150                  │
          │                                             │
          │  ingest  hub  planes  api  mlat  mlat-map   │
+         │  telegram-bot  flight-tracker  schedule-downloader
          │  external  reapi  history  website          │
          └──────────────┬──────────────────────────────┘
                         │ k3s join (shared PostgreSQL)
@@ -76,7 +77,7 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
 
 | Node | IP | Role | OS | Arch | K3s |
 |------|----|------|----|------|-----|
-| **Primary Hub** | 192.168.200.145 | K3s server (MASTER), all services | Ubuntu 24.04 | amd64 | Yes |
+| **Primary Hub** | 192.168.200.10 | K3s server (MASTER), all services | Ubuntu 24.04 | amd64 | Yes |
 | **HA Server** | 192.168.200.186 | K3s server (BACKUP), failover | Ubuntu 24.04 | amd64 | Yes |
 | **br-aggrigator** | 192.168.200.15 | K3s agent, shared services | Debian 12 (Pi) | arm64 | Yes |
 | **Feeder Pi** | 192.168.200.127 | RTL-SDR + readsb + mlat-client | Raspberry Pi OS | arm64 | No |
@@ -325,7 +326,7 @@ EOF
 ```bash
 cat > /tmp/worker.env << 'EOF'
 ROLE=worker
-HUB_IP=192.168.200.145
+HUB_IP=192.168.200.10
 K3S_TOKEN=K10xxxxxxxx::server:xxxxxxxx
 BASE_DOMAIN=bharatradar.com
 EOF
@@ -427,7 +428,7 @@ sudo ./bharatradar-install <role>
 **1. Get the K3s cluster token from the Primary Hub:**
 
 ```bash
-ssh user@192.168.200.145 'sudo cat /var/lib/rancher/k3s/server/node-token'
+ssh user@192.168.200.10 'sudo cat /var/lib/rancher/k3s/server/node-token'
 ```
 
 **2. Create the config file on the HA Server:**
@@ -442,7 +443,7 @@ DB_DBNAME=k3s
 DB_DBUSER=k3s
 DB_DBPASS=your-db-password
 K3S_CLUSTER_TOKEN=K10xxxxxxxx::server:xxxxxxxx
-PRIMARY_HUB_IP=192.168.200.145
+PRIMARY_HUB_IP=192.168.200.10
 KEEPALIVED_ENABLED=true
 KEEPALIVED_VIP=192.168.200.150
 KEEPALIVED_STATE=BACKUP
@@ -780,7 +781,7 @@ sudo cat /var/lib/rancher/k3s/server/node-token
 
 # On br-aggrigator Pi (192.168.200.15)
 curl -sfL https://get.k3s.io | \
-  K3S_URL=https://192.168.200.145:6443 \
+  K3S_URL=https://192.168.200.10:6443 \
   K3S_TOKEN=K10xxxxxxxxx \
   sh -
 
