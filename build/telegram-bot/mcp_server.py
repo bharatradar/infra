@@ -183,7 +183,10 @@ async def _get_unified_eta_and_dest(conn, target_cs, c_lat, c_lon, c_alt, c_spd)
     # 0. CHECK REDIS CACHE FIRST
     cached_origin, cached_dest = await _get_cached_route(conn, norm_cs)
     if cached_origin and cached_dest:
+        logger.info(f"🔍 ETA debug: cache hit - origin={cached_origin}, dest={cached_dest}")
         return None, cached_dest, cached_origin, False
+    
+    logger.info(f"🔍 ETA debug: no cache, calling FR24 for {norm_cs}")
     
     # 1. TRY FLIGHTRADAR24 (PRIMARY) - with rate limiting delay
     try:
@@ -237,12 +240,17 @@ async def _get_unified_eta_and_dest(conn, target_cs, c_lat, c_lon, c_alt, c_spd)
 
     if dest_code and not dest_lat:
         clean_dest = dest_code.strip().upper()
+        logger.info(f"🔍 ETA debug: dest_code={dest_code}, checking TARGET_AIRPORTS for {clean_dest}")
         for icao, ap_data in Config.TARGET_AIRPORTS.items():
             if icao == clean_dest or ap_data.get('iata', '') == clean_dest:
                 dest_lat, dest_lon = float(ap_data['lat']), float(ap_data['lon'])
+                logger.info(f"🔍 Found dest coordinates: {dest_lat}, {dest_lon}")
                 break
+        if not dest_lat:
+            logger.warning(f"🔍 dest_lat still None - TARGET_AIRPORTS doesn't have {clean_dest}")
 
     eta_mins = None
+    logger.info(f"🔍 ETA calc: dest_lat={dest_lat}, dest_lon={dest_lon}, c_spd={c_spd}")
     if dest_lat and dest_lon and c_spd > 0:
         dist_nm = calculate_haversine(c_lat, c_lon, dest_lat, dest_lon)
         live_mins = (dist_nm / c_spd) * 60
