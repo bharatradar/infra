@@ -11,7 +11,7 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 from fastmcp.server.lifespan import lifespan
 from config import Config
-from bot_router_mcp_client import CURRENT_CHAT_ID, CURRENT_SESSION_ID
+from bot_router_mcp_client import CURRENT_CHAT_ID, CURRENT_SESSION_ID, calculate_smart_eta
 
 # Import delay predictor for NLP delay queries
 import delay_predictor as dp_module
@@ -152,26 +152,30 @@ def resolve_to_icao(code):
 
 async def _get_cached_route(conn, callsign):
     if not REDIS_POOL:
-        return None, None
+        return None, None, None, None
     try:
         cache_key = f"route:{callsign.upper()}"
         cached = await REDIS_POOL.get(cache_key)
         if cached:
             import orjson
             data = orjson.loads(cached)
-            return data.get('origin'), data.get('dest')
+            return data.get('origin'), data.get('dest'), data.get('dest_lat'), data.get('dest_lon')
     except Exception as e:
         logger.warning(f"Cache read failed for {callsign}: {e}")
-    return None, None
+    return None, None, None, None
 
-async def _set_cached_route(conn, callsign, origin, dest):
+async def _set_cached_route(conn, callsign, origin, dest, dest_lat=None, dest_lon=None):
     if not REDIS_POOL or not origin or not dest:
         return
     try:
         import orjson
         import time
         cache_key = f"route:{callsign.upper()}"
-        cache_data = orjson.dumps({'origin': origin, 'dest': dest, 'cached_at': time.time()})
+        cache_data = orjson.dumps({
+            'origin': origin, 'dest': dest,
+            'dest_lat': dest_lat, 'dest_lon': dest_lon,
+            'cached_at': time.time()
+        })
         await REDIS_POOL.setex(cache_key, 86400, cache_data)  # 24hr TTL
     except Exception as e:
         logger.warning(f"Cache write failed for {callsign}: {e}")
@@ -180,85 +184,92 @@ async def _get_unified_eta_and_dest(conn, target_cs, c_lat, c_lon, c_alt, c_spd)
     norm_cs = await normalize_callsign(target_cs)
     dest_code, origin_code, dest_lat, dest_lon, dest_from_web = None, None, None, None, False
     
-    # 0. CHECK REDIS CACHE FIRST
-    cached_origin, cached_dest = await _get_cached_route(conn, norm_cs)
-    if cached_origin and cached_dest:
-        return None, cached_dest, cached_origin, False
-    
-    # 1. TRY FLIGHTRADAR24 (PRIMARY) - with rate limiting delay
-    try:
-        from utils import get_iata_from_icao_fr24
-        async with aiohttp.ClientSession() as session:
-            iata_code, iata_flight, operator = await get_iata_from_icao_fr24(norm_cs, session)
-            if iata_flight:
-                # Use IATA flight number for adsbdb lookup (adsbdb accepts both ICAO and IATA)
-                async with aiohttp.ClientSession() as adsb_session:
-                    async with adsb_session.get(f"https://api.adsbdb.com/v0/callsign/{iata_flight}", timeout=8) as r:
+    # 0. CHECK REDIS CACHE FIRST - must have coordinates to use
+    cached_origin, cached_dest, cached_dest_lat, cached_dest_lon = await _get_cached_route(conn, norm_cs)
+    if cached_origin and cached_dest and cached_dest_lat and cached_dest_lon:
+        # We have names + coordinates from cache → calculate ETA directly
+        dest_code = cached_dest
+        origin_code = cached_origin
+        dest_lat = cached_dest_lat
+        dest_lon = cached_dest_lon
+        dest_from_web = False
+        logger.info(f"🎯 Redis cache HIT with coords for {norm_cs}: {origin_code} -> {dest_code}")
+    else:
+        # Cache miss or no coordinates → proceed to API calls
+        if cached_origin and cached_dest:
+            logger.info(f"🔄 Redis has names but no coords for {norm_cs}, fetching from API...")
+        
+        # 1. TRY FLIGHTRADAR24 (PRIMARY) - with rate limiting delay
+        try:
+            from utils import get_iata_from_icao_fr24
+            async with aiohttp.ClientSession() as session:
+                iata_code, iata_flight, operator = await get_iata_from_icao_fr24(norm_cs, session)
+                if iata_flight:
+                    async with aiohttp.ClientSession() as adsb_session:
+                        async with adsb_session.get(f"https://api.adsbdb.com/v0/callsign/{iata_flight}", timeout=8) as r:
+                            if r.status == 200:
+                                d = (await r.json()).get("response", {}).get("flightroute", {})
+                                origin_code = resolve_to_icao(d.get("origin", {}).get("icao_code") or d.get("origin", {}).get("iata_code", ""))
+                                dest_code = resolve_to_icao(d.get("destination", {}).get("icao_code") or d.get("destination", {}).get("iata_code", ""))
+                                if origin_code and dest_code:
+                                    # Get coordinates from API response
+                                    if d.get("destination", {}).get("latitude"):
+                                        dest_lat = float(d["destination"]["latitude"])
+                                        dest_lon = float(d["destination"]["longitude"])
+                                    await _set_cached_route(conn, norm_cs, origin_code, dest_code, dest_lat, dest_lon)
+                                    logger.info(f"✈️ FR24→adsbdb resolved {norm_cs}: {origin_code} -> {dest_code}")
+        except Exception as e:
+            logger.warning(f"FR24 resolution failed for {norm_cs}: {e}")
+
+        # 2. FALLBACK: adsbdb with ICAO callsign
+        if not dest_code or not origin_code:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"https://api.adsbdb.com/v0/callsign/{norm_cs}", timeout=8) as r:
                         if r.status == 200:
                             d = (await r.json()).get("response", {}).get("flightroute", {})
                             origin_code = resolve_to_icao(d.get("origin", {}).get("icao_code") or d.get("origin", {}).get("iata_code", ""))
                             dest_code = resolve_to_icao(d.get("destination", {}).get("icao_code") or d.get("destination", {}).get("iata_code", ""))
+                            # Get coordinates from API
+                            if d.get("destination", {}).get("latitude"):
+                                dest_lat = float(d["destination"]["latitude"])
+                                dest_lon = float(d["destination"]["longitude"])
+                                dest_from_web = True
+                            # Cache with coordinates
                             if origin_code and dest_code:
-                                await _set_cached_route(conn, norm_cs, origin_code, dest_code)
-                                logger.info(f"✈️ FR24→adsbdb resolved {norm_cs} ({iata_flight}): {origin_code} -> {dest_code}")
-    except Exception as e:
-        logger.warning(f"FR24 resolution failed for {norm_cs}: {e}")
+                                await _set_cached_route(conn, norm_cs, origin_code, dest_code, dest_lat, dest_lon)
+            except: pass
 
-    # 2. FALLBACK: adsbdb with ICAO callsign
-    if not dest_code or not origin_code:
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"https://api.adsbdb.com/v0/callsign/{norm_cs}", timeout=8) as r:
-                    if r.status == 200:
-                        d = (await r.json()).get("response", {}).get("flightroute", {})
-                        origin_code = resolve_to_icao(d.get("origin", {}).get("icao_code") or d.get("origin", {}).get("iata_code", ""))
-                        dest_code = resolve_to_icao(d.get("destination", {}).get("icao_code") or d.get("destination", {}).get("iata_code", ""))
-                        # Cache successful response
-                        if origin_code and dest_code:
-                            await _set_cached_route(conn, norm_cs, origin_code, dest_code)
-                        if d.get("destination", {}).get("latitude"):
-                            dest_lat, dest_lon = float(d["destination"]["latitude"]), float(d["destination"]["longitude"])
-                            dest_from_web = True
-        except: pass
+        # 3. FALLBACK: flight_schedules table
+        if not dest_code or not origin_code:
+            sched = await conn.fetchrow("""
+                SELECT route_airport, airport_code, direction FROM flight_schedules 
+                WHERE (callsign = $1 OR flight_number = $1) 
+                AND scheduled_time >= NOW() - INTERVAL '12 hours' AND scheduled_time <= NOW() + INTERVAL '12 hours'
+                ORDER BY ABS(EXTRACT(EPOCH FROM (scheduled_time - NOW()))) ASC LIMIT 1
+            """, norm_cs)
+            if sched: 
+                if not dest_code: dest_code = resolve_to_icao(sched['airport_code'] if sched['direction'] == 'ARRIVALS' else sched['route_airport'])
+                if not origin_code: origin_code = resolve_to_icao(sched['route_airport'] if sched['direction'] == 'ARRIVALS' else sched['airport_code'])
+                # Note: flight_schedules doesn't have coordinates, so we'll look them up next
 
-    if not dest_code or not origin_code:
-        sched = await conn.fetchrow("""
-            SELECT route_airport, airport_code, direction FROM flight_schedules 
-            WHERE (callsign = $1 OR flight_number = $1) 
-            AND scheduled_time >= NOW() - INTERVAL '12 hours' AND scheduled_time <= NOW() + INTERVAL '12 hours'
-            ORDER BY ABS(EXTRACT(EPOCH FROM (scheduled_time - NOW()))) ASC LIMIT 1
-        """, norm_cs)
-        if sched: 
-            if not dest_code: dest_code = resolve_to_icao(sched['airport_code'] if sched['direction'] == 'ARRIVALS' else sched['route_airport'])
-            if not origin_code: origin_code = resolve_to_icao(sched['route_airport'] if sched['direction'] == 'ARRIVALS' else sched['airport_code'])
-            # Cache DB result if valid and nothing cached yet
-            if dest_code and origin_code:
-                await _set_cached_route(conn, norm_cs, origin_code, dest_code)
+        # 4. LOOK UP COORDINATES FROM Config.TARGET_AIRPORTS if missing
+        if dest_code and not dest_lat:
+            clean_dest = dest_code.strip().upper()
+            for icao, ap_data in Config.TARGET_AIRPORTS.items():
+                if icao == clean_dest or ap_data.get('iata', '') == clean_dest:
+                    dest_lat = float(ap_data['lat'])
+                    dest_lon = float(ap_data['lon'])
+                    break
+            
+            # Cache with coordinates (even if from Config, it's valid)
+            if origin_code and dest_code and dest_lat and dest_lon:
+                await _set_cached_route(conn, norm_cs, origin_code, dest_code, dest_lat, dest_lon)
 
-    if dest_code and not dest_lat:
-        clean_dest = dest_code.strip().upper()
-        for icao, ap_data in Config.TARGET_AIRPORTS.items():
-            if icao == clean_dest or ap_data.get('iata', '') == clean_dest:
-                dest_lat, dest_lon = float(ap_data['lat']), float(ap_data['lon'])
-                break
-
+    # CALCULATE ETA using smart altitude-based model
     eta_mins = None
     if dest_lat and dest_lon and c_spd > 0:
-        dist_nm = calculate_haversine(c_lat, c_lon, dest_lat, dest_lon)
-        live_mins = (dist_nm / c_spd) * 60
-        hist_buffer_mins = 15
-        if dest_code:
-            try:
-                avg_app_row = await conn.fetchrow("""
-                    SELECT AVG(EXTRACT(EPOCH FROM (a.timestamp - e.timestamp)))/60 as avg_mins 
-                    FROM arrivals_log a JOIN flight_events e ON a.hex_id = e.hex_id AND e.event_type = 'APPROACHING' AND e.airport = a.airport 
-                    WHERE a.airport = $1 AND a.timestamp > e.timestamp AND a.timestamp < e.timestamp + INTERVAL '1 hour'
-                """, dest_code.strip().upper())
-                if avg_app_row and avg_app_row['avg_mins']: hist_buffer_mins = max(5, min(45, int(avg_app_row['avg_mins'])))
-            except: pass
-        if dist_nm > 50: eta_mins = int(live_mins * 1.10) + hist_buffer_mins
-        elif dist_nm > 15: eta_mins = int(live_mins) + int(hist_buffer_mins * ((dist_nm - 15) / 35.0))
-        else: eta_mins = int(live_mins)
+        eta_mins = await calculate_smart_eta(c_lat, c_lon, c_alt, c_spd, dest_lat, dest_lon, dest_code, conn)
             
     return eta_mins, dest_code, origin_code, dest_from_web
 
@@ -328,9 +339,13 @@ async def _fetch_flight_status_logic(callsign_raw: str, depth: int = 0) -> str:
                     dest_from_web = True
                     logger.info(f"🔍 Using cached route from DB: {stored_origin_icao} -> {stored_dest_icao}")
                 else:
+                    # Fetch from API - this will update Redis cache with coordinates
                     eta_mins, dest_code, origin_code, dest_from_web = await _get_unified_eta_and_dest(conn, raw, lat, lon, alt, speed)
-                    if dest_code and (stored_dest_icao is None or stored_dest_lat is None):
+                    
+                    # If API returned coordinates, update DB with them
+                    if dest_code and dest_from_web:
                         try:
+                            # Re-fetch from API to get full coordinate data for DB update
                             async with aiohttp.ClientSession() as session:
                                 async with session.get(f"https://api.adsbdb.com/v0/callsign/{norm}", timeout=8) as r:
                                     if r.status == 200:
@@ -359,38 +374,25 @@ async def _fetch_flight_status_logic(callsign_raw: str, depth: int = 0) -> str:
                                                 clean_raw, clean_norm)
                                             logger.info(f"💾 Updated flights_in_air route: {new_origin_icao} -> {new_dest_icao}")
                                             
-                                            dest_code = new_dest_icao
-                                            origin_code = new_origin_icao
-                                            stored_dest_lat, stored_dest_lon = new_dest_lat, new_dest_lon
-                                            stored_origin_lat, stored_origin_lon = new_origin_lat, new_origin_lon
-                                            dest_from_web = True
+                                            # Use the newly fetched coordinates for ETA calc
+                                            stored_dest_lat = new_dest_lat
+                                            stored_dest_lon = new_dest_lon
+                                            stored_origin_lat = new_origin_lat
+                                            stored_origin_lon = new_origin_lon
                         except Exception as e:
-                            logger.warning(f"Route update failed: {e}")
+                            logger.warning(f"Route DB update failed: {e}")
+                    
+                    # If _get_unified_eta_and_dest returned coordinates (from cache or API),
+                    # use them directly if DB wasn't updated above
+                    if not stored_dest_lat and eta_mins:
+                        # eta_mins was calculated but DB wasn't updated - use for display
+                        pass
                 
                 if stored_dest_lat and stored_dest_lon and speed > 0:
-                    dest_lat, dest_lon = stored_dest_lat, stored_dest_lon
-                    origin_lat, origin_lon = stored_origin_lat, stored_origin_lon
-                    if not origin_lat:
-                        origin_lat, origin_lon = lat, lon
-                    dist_nm = calculate_haversine(lat, lon, dest_lat, dest_lon)
-                    live_mins = (dist_nm / speed) * 60
-                    hist_buffer_mins = 15
-                    if dest_code:
-                        try:
-                            avg_row = await conn.fetchrow("""
-                                SELECT AVG(EXTRACT(EPOCH FROM (a.timestamp - e.timestamp)))/60 as avg_mins 
-                                FROM arrivals_log a JOIN flight_events e ON a.hex_id = e.hex_id AND e.event_type = 'APPROACHING' AND e.airport = a.airport 
-                                WHERE a.airport = $1 AND a.timestamp > e.timestamp AND a.timestamp < e.timestamp + INTERVAL '1 hour'
-                            """, dest_code.strip().upper())
-                            if avg_row and avg_row['avg_mins']: 
-                                hist_buffer_mins = max(5, min(45, int(avg_row['avg_mins'])))
-                        except: pass
-                    if dist_nm > 50: 
-                        eta_mins = int(live_mins * 1.10) + hist_buffer_mins
-                    elif dist_nm > 15: 
-                        eta_mins = int(live_mins) + int(hist_buffer_mins * ((dist_nm - 15) / 35.0))
-                    else: 
-                        eta_mins = int(live_mins)
+                    eta_mins = await calculate_smart_eta(
+                        lat, lon, alt, speed,
+                        stored_dest_lat, stored_dest_lon, dest_code, conn
+                    )
                 
                 alt_str = f"{alt:,}ft" if alt > 0 else ("Data Pending (In-Air)" if speed > 50 else "0ft (Ground)")
                 display_origin = stored_origin_iata or origin_code or '???'
@@ -831,20 +833,13 @@ async def get_inbound_flights(airport_code: str, origin_airport: Optional[str] =
             
             msg = f"🛬 <b>Active Inbounds to {icao}{orig_str}: {len(rows)} aircraft</b>\n"
             
-            # 4. 🌟 NEW: Calculate ETAs in memory instantly without any DB or API calls!
+            # 4. Calculate ETAs using smart altitude-based model
             for r in rows: 
-                eta_mins = None
-                if dest_lat and dest_lon and r['speed'] and float(r['speed']) > 0:
-                    dist_nm = calculate_haversine(float(r['lat'] or 0), float(r['lon'] or 0), dest_lat, dest_lon)
-                    live_mins = (dist_nm / float(r['speed'])) * 60
-                    
-                    if dist_nm > 50:
-                        eta_mins = int(live_mins * 1.10) + hist_buffer_mins
-                    elif dist_nm > 15:
-                        buffer_multiplier = (dist_nm - 15) / 35.0
-                        eta_mins = int(live_mins) + int(hist_buffer_mins * buffer_multiplier)
-                    else:
-                        eta_mins = int(live_mins)
+                eta_mins = await calculate_smart_eta(
+                    float(r['lat'] or 0), float(r['lon'] or 0),
+                    float(r['alt'] or 0), float(r['speed'] or 0),
+                    dest_lat, dest_lon, icao, conn
+                )
 
                 eta_str = f" | ETA: ~{eta_mins}m" if eta_mins else ""
                 msg += f"• <b>{r['callsign']}</b> (From: {r['origin'] or 'UNK'}) | Alt: {r['alt']:,}ft{eta_str}\n"

@@ -824,6 +824,27 @@ sshpass -p 'raga@098' ssh \
   'sudo kubectl rollout undo deployment/<component> -n bharatradar'
 ```
 
+## Future Improvements
+
+### ETA Calculation: Option C (Hybrid Historical + Real-time)
+
+The current ETA model (Option B) uses altitude-based descent profiles + airport-specific historical buffers. This is a significant improvement over raw distance/speed, but there's a **Option C** that would add even more accuracy:
+
+**Option C: Hybrid Historical + Real-time**
+- Aircraft-type-specific descent profiles (737 vs A380 descent at different rates)
+- Real-time congestion factor (time-of-day traffic at destination airport)
+- ML-based delay prediction using 30+ days of historical approach data
+- Weather integration (headwinds/tailwinds affect ground speed)
+- Turnaround prediction for connecting flights
+
+**Requirements for Option C:**
+- 30+ days of `arrivals_log` + `flight_events` data per airport
+- Aircraft type mapping (from adsbdb or FR24)
+- Basic weather API integration
+- Simple regression model (can be rule-based initially)
+
+**Current Status:** Option B is deployed (v2025.05.07.05). Option C is documented here for future implementation when historical data volume supports it.
+
 ## Where?
 
 - **GitHub:** https://github.com/bharatradar/infra

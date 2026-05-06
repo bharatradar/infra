@@ -558,10 +558,22 @@ Examples:
 - "hello" -> {"function":"unsupported","parameters":{}}
 """
         
+        # Build tools schema text for prompt injection
+        tools_schema_text = "AVAILABLE TOOLS:\n"
+        for tool in FAST_ROUTER_TOOLS:
+            fn = tool["function"]
+            tools_schema_text += f"- {fn['name']}: {fn['description']}\n"
+            params = fn.get("parameters", {})
+            if params and params.get("properties"):
+                tools_schema_text += "  Parameters:\n"
+                for pname, pdesc in params["properties"].items():
+                    tools_schema_text += f"    - {pname}: {pdesc.get('description', 'string')}\n"
+        
         system_prompt = f"""You are an expert aviation AI assistant that routes natural English queries to the correct API tool.
 You MUST output ONLY valid JSON with no markdown, explanations, or extra text.
 JSON format: {{"function": "<tool_name>", "parameters": {{<param_key>: <param_value>}}}}
 
+{tools_schema_text}
 ROUTING RULES:
 1. "alert/notify/remind" → set_flight_alert
 2. "where/track/status" for a flight → get_flight_status
@@ -631,8 +643,7 @@ IMPORTANT: Output ONLY JSON function call like the examples above. DO NOT wrap i
                                     {"role": "user", "content": user_input}
                                 ],
                                 "max_tokens": 512,
-                                "temperature": 0.1,
-                                "response_format": {"type": "json_object"}
+                                "temperature": 0.1
                             },
                             headers={"Authorization": f"Bearer {Config.GROQ_API_KEY}", "Content-Type": "application/json"}
                         ) as resp:
@@ -716,9 +727,10 @@ IMPORTANT: Output ONLY JSON function call like the examples above. DO NOT wrap i
                 # Remap callsign_raw to callsign for delay prediction tools
                 if tc.get("function") == "get_delay_prediction" and "callsign_raw" in clean_params:
                     clean_params["callsign"] = clean_params.pop("callsign_raw")
-                    clean_params["callsign_raw"] = clean_params.pop("flight_callsign")
+                    if "flight_callsign" in clean_params:
+                        clean_params["callsign_raw"] = clean_params.pop("flight_callsign")
                 if "callsign" in clean_params and "callsign_raw" not in clean_params:
-                    clean_params["callsign_raw"] = clean_params.pop("callsign")
+                    clean_params["callsign_raw"] = clean_params["callsign"]
                 if "dest" in clean_params and "destination" not in clean_params:
                     clean_params["destination"] = clean_params.pop("dest")
                 if "src" in clean_params and "origin" not in clean_params:
@@ -873,89 +885,196 @@ async def resolve_watchdog_target(clean_cs: str):
         logger.error(f"resolve_watchdog_target error: {e}")
     return clean_cs
 
+import math
+
+def _haversine_nm(lat1, lon1, lat2, lon2):
+    """Calculate great circle distance in nautical miles."""
+    R = 3440.065
+    dLat = math.radians(lat2 - lat1)
+    dLon = math.radians(lon2 - lon1)
+    a = math.sin(dLat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dLon/2)**2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+async def calculate_smart_eta(lat, lon, alt, speed, dest_lat, dest_lon, dest_code=None, conn=None):
+    """
+    Calculate ETA using altitude-based descent profile + airport buffer (Option B).
+    
+    Physics-based model that accounts for:
+    - Descent time from current altitude (~1,800 ft/min)
+    - Speed reduction during approach phases
+    - Airport-specific historical approach buffer
+    - Distance-scaled buffer for close aircraft
+    
+    Future: Option C (Hybrid) adds aircraft-type profiles, congestion factors,
+    and ML-based predictions using 30+ days of historical data.
+    """
+    if lat is None or lon is None or dest_lat is None or dest_lon is None:
+        return None
+    
+    distance_nm = _haversine_nm(float(lat), float(lon), float(dest_lat), float(dest_lon))
+    
+    # Already at destination or on ground
+    if distance_nm < 1:
+        return 0
+    
+    c_alt = float(alt) if alt is not None else 0
+    c_spd = float(speed) if speed is not None else 0
+    
+    if c_spd <= 0:
+        return None
+    
+    # If on ground and close, it's landed
+    if c_alt < 500 and c_spd < 50 and distance_nm < 3:
+        return 0
+    
+    # 1. DESCENT TIME: Time to descend from current altitude
+    # Commercial jets descend at ~1,500-2,000 ft/min average
+    if c_alt > 1000:
+        descent_time_mins = (c_alt / 1800) * 60
+    else:
+        descent_time_mins = 0
+    
+    # 2. GROUND TIME: Time to cover distance at effective speed
+    # Speed varies by altitude phase:
+    # - Above 10,000ft: Cap at 280 kts (cruise/descent transition)
+    # - 3,000-10,000ft: Cap at 220 kts (approach phase)
+    # - 1,000-3,000ft: Cap at 180 kts (final approach)
+    # - Below 1,000ft: Floor at 140 kts (landing speed)
+    if c_alt > 10000:
+        effective_speed = min(c_spd, 280)
+    elif c_alt > 3000:
+        effective_speed = min(c_spd, 220)
+    elif c_alt > 1000:
+        effective_speed = min(c_spd, 180)
+    else:
+        effective_speed = max(c_spd, 140)
+    
+    ground_time_mins = (distance_nm / effective_speed) * 60
+    
+    # 3. BASE ETA = MAX of descent time vs ground time
+    # You can't arrive before you've descended to the runway
+    base_eta = max(descent_time_mins, ground_time_mins)
+    
+    # 4. AIRPORT-SPECIFIC APPROACH BUFFER
+    # Historical average from approach to touchdown for this airport
+    approach_buffer = 12  # default 12 minutes
+    if dest_code and conn:
+        try:
+            avg_app_row = await conn.fetchrow("""
+                SELECT AVG(EXTRACT(EPOCH FROM (a.timestamp - e.timestamp)))/60 as avg_mins 
+                FROM arrivals_log a 
+                JOIN flight_events e ON a.hex_id = e.hex_id 
+                    AND e.event_type = 'APPROACHING' 
+                    AND e.airport = a.airport 
+                WHERE a.airport = $1 
+                    AND a.timestamp > e.timestamp 
+                    AND a.timestamp < e.timestamp + INTERVAL '1 hour'
+                    AND a.timestamp > NOW() - INTERVAL '30 days'
+            """, dest_code.strip().upper())
+            if avg_app_row and avg_app_row['avg_mins']:
+                # Clamp between 5 and 30 minutes
+                approach_buffer = max(5, min(30, int(avg_app_row['avg_mins'])))
+        except Exception:
+            pass  # Use default buffer if DB query fails
+    
+    # 5. DISTANCE-BASED BUFFER SCALING
+    # Close flights need less buffer (already in final approach)
+    if distance_nm < 5:
+        approach_buffer = min(approach_buffer, 3)
+    elif distance_nm < 15:
+        approach_buffer = int(approach_buffer * (distance_nm / 15))
+    
+    total_eta = base_eta + approach_buffer
+    
+    return int(total_eta)
+
 async def calculate_watchdog_eta(target_cs: str):
-    """Calculate ETA and destination for a flight."""
-    import math
+    """Calculate ETA and destination for a flight using smart altitude-based model."""
     import aiohttp
     
     try:
         pool = await get_db_pool()
         async with pool.acquire() as conn:
             air = await conn.fetchrow("SELECT lat, lon, speed, alt FROM flights_in_air WHERE callsign = $1", target_cs.upper())
-            if not air or float(air.get('speed') or 0) <= 0:
+            if not air:
+                return None, None
+            
+            c_lat = float(air.get('lat') or 0)
+            c_lon = float(air.get('lon') or 0)
+            c_spd = float(air.get('speed') or 0)
+            c_alt = float(air.get('alt') or 0)
+            
+            if c_spd <= 0:
                 return None, None
             
             dest_code = None
+            dest_lat = None
+            dest_lon = None
             
-            # Try FlightRadar24 + adsbdb (primary)
+            # Try FlightRadar24 + adsbdb (primary) for destination coordinates
             try:
                 from utils import get_iata_from_icao_fr24
                 async with aiohttp.ClientSession() as session:
                     norm = await normalize_callsign(target_cs)
                     iata_code, iata_flight, operator = await get_iata_from_icao_fr24(norm, session)
                     if iata_flight:
-                        # Use IATA flight number for adsbdb
                         async with aiohttp.ClientSession() as adsb_session:
                             async with adsb_session.get(f"https://api.adsbdb.com/v0/callsign/{iata_flight}", timeout=3) as r:
                                 if r.status == 200:
                                     d = (await r.json()).get("response", {}).get("flightroute", {})
                                     dest_code = resolve_to_icao(d.get("destination", {}).get("icao_code") or d.get("destination", {}).get("iata_code", ""))
-                                    logger.info(f"✈️ FR24→adsbdb resolved {norm} ({iata_flight}) dest: {dest_code}")
                                     if d.get("destination", {}).get("latitude"):
                                         dest_lat = float(d["destination"]["latitude"])
                                         dest_lon = float(d["destination"]["longitude"])
-                                        c_lat, c_lon = float(air['lat']), float(air['lon'])
-                                        c_spd = float(air['speed'])
-                                        
-                                        # Inline haversine
-                                        R = 3440.065
-                                        dLat = math.radians(dest_lat - c_lat)
-                                        dLon = math.radians(dest_lon - c_lon)
-                                        a = math.sin(dLat/2)**2 + math.cos(math.radians(c_lat)) * math.cos(math.radians(dest_lat)) * math.sin(dLon/2)**2
-                                        dist_nm = R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-                                        
-                                        if c_spd > 0:
-                                            eta_mins = int((dist_nm / c_spd) * 60)
-                                            return eta_mins, dest_code
             except Exception as e:
                 logger.warning(f"FR24 resolve failed for {target_cs}: {e}")
             
             # Fallback: adsbdb with ICAO callsign
-            if not dest_code:
+            if not dest_lat or not dest_lon:
                 try:
                     async with aiohttp.ClientSession() as session:
                         norm = await normalize_callsign(target_cs)
                         async with session.get(f"https://api.adsbdb.com/v0/callsign/{norm}", timeout=3) as r:
                             if r.status == 200:
                                 d = (await r.json()).get("response", {}).get("flightroute", {})
-                                dest_code = resolve_to_icao(d.get("destination", {}).get("icao_code") or d.get("destination", {}).get("iata_code", ""))
+                                if not dest_code:
+                                    dest_code = resolve_to_icao(d.get("destination", {}).get("icao_code") or d.get("destination", {}).get("iata_code", ""))
                                 if d.get("destination", {}).get("latitude"):
                                     dest_lat = float(d["destination"]["latitude"])
                                     dest_lon = float(d["destination"]["longitude"])
-                                    c_lat, c_lon = float(air['lat']), float(air['lon'])
-                                    c_spd = float(air['speed'])
-                                    
-                                    # Inline haversine
-                                    R = 3440.065
-                                    dLat = math.radians(dest_lat - c_lat)
-                                    dLon = math.radians(dest_lon - c_lon)
-                                    a = math.sin(dLat/2)**2 + math.cos(math.radians(c_lat)) * math.cos(math.radians(dest_lat)) * math.sin(dLon/2)**2
-                                    dist_nm = R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-                                    
-                                    if c_spd > 0:
-                                        eta_mins = int((dist_nm / c_spd) * 60)
-                                        return eta_mins, dest_code
                 except: pass
             
+            # Fallback: look up coordinates from Config.TARGET_AIRPORTS
+            if dest_code and (not dest_lat or not dest_lon):
+                clean_dest = dest_code.strip().upper()
+                for icao, ap_data in Config.TARGET_AIRPORTS.items():
+                    if icao == clean_dest or ap_data.get('iata', '') == clean_dest:
+                        dest_lat = float(ap_data['lat'])
+                        dest_lon = float(ap_data['lon'])
+                        break
+            
             # Fallback to schedule
-            sched = await conn.fetchrow("""
-                SELECT route_airport, airport_code, direction FROM flight_schedules 
-                WHERE (callsign = $1 OR flight_number = $1) 
-                AND scheduled_time >= NOW() - INTERVAL '12 hours' AND scheduled_time <= NOW() + INTERVAL '12 hours'
-                ORDER BY ABS(EXTRACT(EPOCH FROM (scheduled_time - NOW()))) ASC LIMIT 1
-            """, target_cs.upper())
-            if sched:
-                dest_code = resolve_to_icao(sched['airport_code'] if sched['direction'] == 'ARRIVALS' else sched['route_airport'])
+            if not dest_code:
+                sched = await conn.fetchrow("""
+                    SELECT route_airport, airport_code, direction FROM flight_schedules 
+                    WHERE (callsign = $1 OR flight_number = $1) 
+                    AND scheduled_time >= NOW() - INTERVAL '12 hours' AND scheduled_time <= NOW() + INTERVAL '12 hours'
+                    ORDER BY ABS(EXTRACT(EPOCH FROM (scheduled_time - NOW()))) ASC LIMIT 1
+                """, target_cs.upper())
+                if sched:
+                    dest_code = resolve_to_icao(sched['airport_code'] if sched['direction'] == 'ARRIVALS' else sched['route_airport'])
+                    # Look up coordinates
+                    clean_dest = dest_code.strip().upper()
+                    for icao, ap_data in Config.TARGET_AIRPORTS.items():
+                        if icao == clean_dest or ap_data.get('iata', '') == clean_dest:
+                            dest_lat = float(ap_data['lat'])
+                            dest_lon = float(ap_data['lon'])
+                            break
+            
+            # Calculate ETA using smart model
+            if dest_lat and dest_lon:
+                eta_mins = await calculate_smart_eta(c_lat, c_lon, c_alt, c_spd, dest_lat, dest_lon, dest_code, conn)
+                return eta_mins, dest_code
             
             return None, dest_code
     except Exception as e:
