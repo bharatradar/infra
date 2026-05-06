@@ -10,6 +10,7 @@ resources:
 - api/default
 - history/default
 - website/default
+- telegram-bot
 - resources.yaml
 - telegram-bot.yaml
 - flight-tracker.yaml
