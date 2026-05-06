@@ -372,14 +372,15 @@ class AsyncDatabaseManager:
         """Update flights_in_air with route data (origin/destination, coords, iata)"""
         try:
             async with self.pool.acquire() as conn:
-                await conn.execute("""
+                result = await conn.execute("""
                     UPDATE flights_in_air 
                     SET origin_icao = $1, dest_icao = $2, origin_iata = $3, dest_iata = $4,
                         origin_lat = $5, origin_lon = $6, dest_lat = $7, dest_lon = $8, callsign_iata = $9
                     WHERE hexid = $10
                 """, origin_icao, dest_icao, origin_iata, dest_iata, origin_lat, origin_lon, dest_lat, dest_lon, callsign_iata, hex_id)
+                logger.info(f"💾 Updated flights_in_air route for {callsign} ({hex_id}): {origin_icao} -> {dest_icao} | Rows affected: {result}")
         except Exception as e:
-            logger.warning(f"Failed to update flight route: {e}")
+            logger.error(f"❌ Failed to update flight route for {callsign} ({hex_id}): {e}")
 
     async def cleanup_stale_flights(self):
         try:

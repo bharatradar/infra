@@ -683,10 +683,15 @@ class FlightMonitor:
                     orig, dest = await self.fetch_flight_details(hex_id, raw_cs)
                     if orig or dest:
                         await self.db.log_event(hex_id, raw_cs, "ENRICHMENT", f"Pre-fetch: {orig}->{dest}", origin=orig, destination=dest)
-                        await self.db.update_enriched_route(hex_id, raw_cs, orig, dest)
+                        try:
+                            await self.db.update_enriched_route(hex_id, raw_cs, orig, dest)
+                            logger.info(f"✅ update_enriched_route succeeded for {raw_cs}")
+                        except Exception as e:
+                            logger.error(f"❌ update_enriched_route failed for {raw_cs}: {e}")
                         
                         # Get airport coordinates and update flights_in_air
                         if orig and dest:
+                            logger.info(f"📝 orig and dest both present for {raw_cs}: {orig} -> {dest}")
                             origin_lat, origin_lon = None, None
                             dest_lat, dest_lon = None, None
                             origin_iata, dest_iata = None, None
@@ -706,6 +711,7 @@ class FlightMonitor:
                                 dest_iata = ap_data.get('iata')
                             
                             # Update flights_in_air with route data
+                            logger.info(f"📝 About to update flights_in_air for {raw_cs} ({hex_id}): {orig} -> {dest}")
                             await self.db.update_flight_in_air_route(
                                 hex_id, raw_cs, orig, dest, 
                                 origin_iata, dest_iata,
@@ -729,6 +735,57 @@ class FlightMonitor:
 
             except Exception as e: logger.error(f"Gap Filler/TTL Error: {e}")
             await asyncio.sleep(getattr(Config, 'GAP_FILLER_INTERVAL_SEC', 10))
+
+    async def route_enrichment_worker(self):
+        """Background worker to populate route data in flights_in_air table"""
+        logger.info("🗺️ Route Enrichment Worker Started")
+        while True:
+            try:
+                async with self.db.pool.acquire() as conn:
+                    # Find flights missing route data
+                    rows = await conn.fetch("""
+                        SELECT hexid, callsign FROM flights_in_air 
+                        WHERE origin_icao IS NULL 
+                        LIMIT 10
+                    """)
+                    
+                    for row in rows:
+                        hex_id, raw_cs = row['hexid'], row['callsign']
+                        try:
+                            orig, dest = await self.fetch_flight_details(hex_id, raw_cs)
+                            if orig and dest:
+                                origin_lat, origin_lon = None, None
+                                dest_lat, dest_lon = None, None
+                                origin_iata, dest_iata = None, None
+                                
+                                if orig in Config.TARGET_AIRPORTS:
+                                    ap_data = Config.TARGET_AIRPORTS[orig]
+                                    origin_lat = float(ap_data.get('lat', 0)) if ap_data.get('lat') else None
+                                    origin_lon = float(ap_data.get('lon', 0)) if ap_data.get('lon') else None
+                                    origin_iata = ap_data.get('iata')
+                                
+                                if dest in Config.TARGET_AIRPORTS:
+                                    ap_data = Config.TARGET_AIRPORTS[dest]
+                                    dest_lat = float(ap_data.get('lat', 0)) if ap_data.get('lat') else None
+                                    dest_lon = float(ap_data.get('lon', 0)) if ap_data.get('lon') else None
+                                    dest_iata = ap_data.get('iata')
+                                
+                                await self.db.update_flight_in_air_route(
+                                    hex_id, raw_cs, orig, dest,
+                                    origin_iata, dest_iata,
+                                    origin_lat, origin_lon, dest_lat, dest_lon,
+                                    None  # callsign_iata
+                                )
+                                logger.info(f"✅ Route enriched for {raw_cs}: {orig} -> {dest}")
+                        except Exception as e:
+                            logger.warning(f"Route enrichment failed for {raw_cs}: {e}")
+                        
+                        await asyncio.sleep(1)  # Rate limit
+                        
+            except Exception as e:
+                logger.error(f"Route Enrichment Error: {e}")
+            
+            await asyncio.sleep(30)  # Run every 30 seconds
 
     async def janitor_worker(self):
         logger.info(f"🧹 Background Janitor Service Active (Runs every {getattr(Config, 'JANITOR_INTERVAL_SEC', 900)}s)")
@@ -1660,6 +1717,7 @@ class FlightMonitor:
             tasks = [
                 asyncio.create_task(self.scheduled_data_updater()),
                 asyncio.create_task(self.gap_filler_worker()),
+                asyncio.create_task(self.route_enrichment_worker()),
                 asyncio.create_task(self.janitor_worker()),
                 asyncio.create_task(self.radar_producer()),
                 asyncio.create_task(self.radar_consumer()),
