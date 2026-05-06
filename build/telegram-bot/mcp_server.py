@@ -183,10 +183,7 @@ async def _get_unified_eta_and_dest(conn, target_cs, c_lat, c_lon, c_alt, c_spd)
     # 0. CHECK REDIS CACHE FIRST
     cached_origin, cached_dest = await _get_cached_route(conn, norm_cs)
     if cached_origin and cached_dest:
-        logger.info(f"🔍 ETA debug: cache hit - origin={cached_origin}, dest={cached_dest}")
         return None, cached_dest, cached_origin, False
-    
-    logger.info(f"🔍 ETA debug: no cache, calling FR24 for {norm_cs}")
     
     # 1. TRY FLIGHTRADAR24 (PRIMARY) - with rate limiting delay
     try:
@@ -240,17 +237,12 @@ async def _get_unified_eta_and_dest(conn, target_cs, c_lat, c_lon, c_alt, c_spd)
 
     if dest_code and not dest_lat:
         clean_dest = dest_code.strip().upper()
-        logger.info(f"🔍 ETA debug: dest_code={dest_code}, checking TARGET_AIRPORTS for {clean_dest}")
         for icao, ap_data in Config.TARGET_AIRPORTS.items():
             if icao == clean_dest or ap_data.get('iata', '') == clean_dest:
                 dest_lat, dest_lon = float(ap_data['lat']), float(ap_data['lon'])
-                logger.info(f"🔍 Found dest coordinates: {dest_lat}, {dest_lon}")
                 break
-        if not dest_lat:
-            logger.warning(f"🔍 dest_lat still None - TARGET_AIRPORTS doesn't have {clean_dest}")
 
     eta_mins = None
-    logger.info(f"🔍 ETA calc: dest_lat={dest_lat}, dest_lon={dest_lon}, c_spd={c_spd}")
     if dest_lat and dest_lon and c_spd > 0:
         dist_nm = calculate_haversine(c_lat, c_lon, dest_lat, dest_lon)
         live_mins = (dist_nm / c_spd) * 60
@@ -280,14 +272,38 @@ async def _fetch_flight_status_logic(callsign_raw: str, depth: int = 0) -> str:
     try:
         async with DB_POOL.acquire() as conn:
             air = await conn.fetchrow("""
-                SELECT hexid, lat, lon, alt, speed, heading 
+                SELECT hexid, lat, lon, alt, speed, heading, dest_icao, dest_iata, dest_lat, dest_lon, 
+                       origin_icao, origin_iata, origin_lat, origin_lon, callsign_iata
                 FROM flights_in_air 
                 WHERE callsign = $1 OR callsign = $2 
                 ORDER BY last_seen DESC LIMIT 1
             """, clean_raw, clean_norm)
 
+            stored_origin_icao = None
+            stored_dest_icao = None
+            stored_origin_iata = None
+            stored_dest_iata = None
+            stored_origin_lat = None
+            stored_origin_lon = None
+            stored_dest_lat = None
+            stored_dest_lon = None
+            stored_callsign_iata = None
+            route_from_db = False
+            
+            if air:
+                stored_origin_icao = air.get('origin_icao')
+                stored_dest_icao = air.get('dest_icao')
+                stored_origin_iata = air.get('origin_iata')
+                stored_dest_iata = air.get('dest_iata')
+                stored_origin_lat = air.get('origin_lat')
+                stored_origin_lon = air.get('origin_lon')
+                stored_dest_lat = air.get('dest_lat')
+                stored_dest_lon = air.get('dest_lon')
+                stored_callsign_iata = air.get('callsign_iata')
+                route_from_db = stored_dest_icao is not None and stored_dest_lat is not None
+
             live_from_web = False
-            if not air:
+            if not air or not route_from_db:
                 try:
                     async with aiohttp.ClientSession() as session:
                         async with session.get(f"https://api.adsb.lol/v2/callsign/{norm}", timeout=5) as r:
@@ -298,27 +314,104 @@ async def _fetch_flight_status_logic(callsign_raw: str, depth: int = 0) -> str:
                                     air = {'hexid': ac.get('hex', 'UNKNOWN'), 'lat': ac.get('lat', 0.0), 'lon': ac.get('lon', 0.0), 'alt': max(ac.get('alt_baro', 0) or 0, ac.get('alt_geom', 0) or 0), 'speed': ac.get('gs', 0) or 0, 'heading': ac.get('track', 0) or 0}
                                     live_from_web = True
                 except: pass
-
+            
             if air:
                 hexid = air.get('hexid', 'UNKNOWN')
                 lat, lon, speed, alt = float(air.get('lat') or 0.0), float(air.get('lon') or 0.0), int(air.get('speed') or 0), max(0, int(air.get('alt') or 0))
-                eta_mins, dest_code, origin_code, dest_from_web = await _get_unified_eta_and_dest(conn, raw, lat, lon, alt, speed)
+                
+                dest_code = stored_dest_icao
+                origin_code = stored_origin_icao
+                dest_from_web = False
+                eta_mins = None
+                
+                if route_from_db:
+                    dest_from_web = True
+                    logger.info(f"🔍 Using cached route from DB: {stored_origin_icao} -> {stored_dest_icao}")
+                else:
+                    eta_mins, dest_code, origin_code, dest_from_web = await _get_unified_eta_and_dest(conn, raw, lat, lon, alt, speed)
+                    if dest_code and (stored_dest_icao is None or stored_dest_lat is None):
+                        try:
+                            async with aiohttp.ClientSession() as session:
+                                async with session.get(f"https://api.adsbdb.com/v0/callsign/{norm}", timeout=8) as r:
+                                    if r.status == 200:
+                                        d = await r.json()
+                                        route_data = d.get("response", {}).get("flightroute", {})
+                                        if route_data:
+                                            o = route_data.get("origin", {})
+                                            dt = route_data.get("destination", {})
+                                            new_origin_icao = resolve_to_icao(o.get("icao_code") or o.get("iata_code", ""))
+                                            new_dest_icao = resolve_to_icao(dt.get("icao_code") or dt.get("iata_code", ""))
+                                            new_origin_iata = o.get("iata_code")
+                                            new_dest_iata = dt.get("iata_code")
+                                            new_origin_lat = o.get("latitude")
+                                            new_origin_lon = o.get("longitude")
+                                            new_dest_lat = dt.get("latitude")
+                                            new_dest_lon = dt.get("longitude")
+                                            new_callsign_iata = d.get("response", {}).get("callsign_iata")
+                                            
+                                            await conn.execute("""
+                                                UPDATE flights_in_air 
+                                                SET origin_icao = $1, dest_icao = $2, origin_iata = $3, dest_iata = $4,
+                                                    origin_lat = $5, origin_lon = $6, dest_lat = $7, dest_lon = $8, callsign_iata = $9
+                                                WHERE (callsign = $10 OR callsign = $11)
+                                            """, new_origin_icao, new_dest_icao, new_origin_iata, new_dest_iata,
+                                                new_origin_lat, new_origin_lon, new_dest_lat, new_dest_lon, new_callsign_iata,
+                                                clean_raw, clean_norm)
+                                            logger.info(f"💾 Updated flights_in_air route: {new_origin_icao} -> {new_dest_icao}")
+                                            
+                                            dest_code = new_dest_icao
+                                            origin_code = new_origin_icao
+                                            stored_dest_lat, stored_dest_lon = new_dest_lat, new_dest_lon
+                                            stored_origin_lat, stored_origin_lon = new_origin_lat, new_origin_lon
+                                            dest_from_web = True
+                        except Exception as e:
+                            logger.warning(f"Route update failed: {e}")
+                
+                if stored_dest_lat and stored_dest_lon and speed > 0:
+                    dest_lat, dest_lon = stored_dest_lat, stored_dest_lon
+                    origin_lat, origin_lon = stored_origin_lat, stored_origin_lon
+                    if not origin_lat:
+                        origin_lat, origin_lon = lat, lon
+                    dist_nm = calculate_haversine(lat, lon, dest_lat, dest_lon)
+                    live_mins = (dist_nm / speed) * 60
+                    hist_buffer_mins = 15
+                    if dest_code:
+                        try:
+                            avg_row = await conn.fetchrow("""
+                                SELECT AVG(EXTRACT(EPOCH FROM (a.timestamp - e.timestamp)))/60 as avg_mins 
+                                FROM arrivals_log a JOIN flight_events e ON a.hex_id = e.hex_id AND e.event_type = 'APPROACHING' AND e.airport = a.airport 
+                                WHERE a.airport = $1 AND a.timestamp > e.timestamp AND a.timestamp < e.timestamp + INTERVAL '1 hour'
+                            """, dest_code.strip().upper())
+                            if avg_row and avg_row['avg_mins']: 
+                                hist_buffer_mins = max(5, min(45, int(avg_row['avg_mins'])))
+                        except: pass
+                    if dist_nm > 50: 
+                        eta_mins = int(live_mins * 1.10) + hist_buffer_mins
+                    elif dist_nm > 15: 
+                        eta_mins = int(live_mins) + int(hist_buffer_mins * ((dist_nm - 15) / 35.0))
+                    else: 
+                        eta_mins = int(live_mins)
                 
                 alt_str = f"{alt:,}ft" if alt > 0 else ("Data Pending (In-Air)" if speed > 50 else "0ft (Ground)")
-                m = f"🛰️ <b>Callsign:</b> {raw} | <b>Hex ID:</b> {hexid}\n"
+                display_origin = stored_origin_iata or origin_code or '???'
+                display_dest = stored_dest_iata or dest_code or '???'
+                
+                m = f"🛰️ <b>Callsign:</b> {raw}"
+                if stored_callsign_iata: m += f" ({stored_callsign_iata})"
+                m += f" | <b>Hex ID:</b> {hexid}\n"
                 if lat != 0.0: m += f"📍 <code>{lat:.4f}, {lon:.4f}</code> | 📏 {alt_str}\n"
                 m += f"🚀 {speed}kts | 🧭 {air.get('heading') or 0}°\n"
-                if live_from_web: m += f"🌍 <i>(Live telemetry fetched from Global Network - out of local range)</i>\n"
-                if origin_code or dest_code: m += f"🏁 <b>Route:</b> {origin_code or '???'} ➔ {dest_code or '???'}\n"
+                if live_from_web: m += f"🌍 <i>(Live from Global Network - out of local range)</i>\n"
+                if display_origin or display_dest: m += f"🏁 <b>Route:</b> {display_origin} ➔ {display_dest}\n"
                 
                 if eta_mins is not None:
                     if eta_mins > 300: m += f"⏳ <b>ETA:</b> Calculating...\n"
                     else:
                         hrs, mins = eta_mins // 60, eta_mins % 60
                         eta_str = f"~{hrs}h {mins}m" if hrs > 0 else f"~{mins}m"
-                        m += f"⏳ <b>ETA:</b> {eta_str} <i>(🌐 Dest {dest_code.strip().upper()} fetched from web)</i>\n" if dest_from_web else f"⏳ <b>ETA:</b> {eta_str}\n"
+                        m += f"⏳ <b>ETA:</b> {eta_str}\n"
                 else:
-                    m += f"⏳ <b>ETA:</b> Unknown (Destination coordinates not filed)\n"
+                    m += f"⏳ <b>ETA:</b> Unknown\n"
                 return m + f"🔗 <a href='https://adsb.lol/?icao={hexid}'>Track on ADSB.lol</a>"
 
             # Check Ground Ops / History Fallbacks
