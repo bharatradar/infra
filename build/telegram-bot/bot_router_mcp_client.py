@@ -540,7 +540,7 @@ Examples:
 - "track 6E712" -> {"function":"get_flight_status","parameters":{"callsign_raw":"6E712"}}
 - "flights Pune to Jaipur" -> {"function":"get_route_status_board","parameters":{"origin":"Pune","destination":"Jaipur"}}
 - "incoming to Goa" -> {"function":"get_inbound_flights","parameters":{"airport_code":"Goa"}}
-- "alert when JAI773 lands" -> {"function":"set_flight_alert","parameters":{"callsign":"JAI773","alert_type":"LANDING","threshold_mins":30}}
+- "alert when JAI773 lands" -> {"function":"set_flight_alert","parameters":{"callsign":"JAI773","alert_type":"LANDING","threshold_mins":0}}
 - "turnaround at DEL" -> {"function":"get_airport_turnarounds","parameters":{"airport_code":"DEL"}}
 - "Air India at BLR" -> {"function":"get_airport_turnarounds","parameters":{"airport_code":"BLR","airline_code":"Air India"}}
 - "delays at Trivandrum" -> {"function":"get_airport_anomalies","parameters":{"airport_code":"Trivandrum"}}
