@@ -237,7 +237,7 @@ class Config:
     OLLAMA_API_KEY = _env("OLLAMA_API_KEY", "ollama")
 
  
-    # ==========================================
+# ==========================================
     # 🌟 NEW: WEB PUSH NOTIFICATIONS (VAPID)
     # ==========================================
     ENABLE_WEB_NOTIFICATIONS = _env("ENABLE_WEB_NOTIFICATIONS", "true").lower() == "true"
@@ -245,11 +245,10 @@ class Config:
     # ⚠️ To generate your real keys, run this in your terminal:
     # 1. pip install pywebpush cryptography
     # 2. vapid --gen
-
-    VAPID_PUBLIC_KEY = _env("VAPID_PUBLIC_KEY")
-    VAPID_PRIVATE_KEY = _env("VAPID_PRIVATE_KEY")
+    VAPID_PUBLIC_KEY = _env("VAPID_PUBLIC_KEY", "BCpydN873EY24vGAR1huUpKxXSjoBsatt0k0jPtvS7q3lVqaeC9DytkaGvURofJw0ubR0M39uhk8U3_NfrHaYyc")
+    VAPID_PRIVATE_KEY = _env("VAPID_PRIVATE_KEY", "X0P_PuBAcMnS3IgI7RiYDou0R0w8t8WWmnh3rfg_gEo")
     VAPID_CLAIMS = {
-        "sub": _env("VAPID_EMAIL", "mailto:admin@example.com") # Push servers require an admin email
+        "sub": _env("VAPID_EMAIL", "mailto:raghavan@vellur.in")
     }
 
 
