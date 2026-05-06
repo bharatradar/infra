@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install pywebpush for web push notifications
 RUN pip install --no-cache-dir pywebpush cryptography
 
-COPY bot.py config.py bot_router_mcp_client.py core_ai_pipeline.py mcp_server.py delay_predictor.py watchdog.py start.sh /app/
+COPY bot.py config.py bot_router_mcp_client.py core_ai_pipeline.py mcp_server.py delay_predictor.py watchdog.py start.sh utils.py /app/
 RUN mkdir -p /app/logs
 RUN chmod +x /app/start.sh
 
