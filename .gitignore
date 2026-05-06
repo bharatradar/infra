@@ -6,4 +6,6 @@ database.env
 *.pem
 *.key
 kubeconfig
+__pycache__/
+*.pyc
 
