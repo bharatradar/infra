@@ -11,25 +11,10 @@ spec:
       - name: nginx-conf
         configMap:
           name: history-nginx-conf
-      - name: rclone-config
-        secret:
-          secretName: bharatradar-rclone
-      - name: rclone-emptydir
-        emptyDir: {}
       - name: bharatradar-history
         emptyDir: {}
       - name: remote-mount
         emptyDir: {}
-      initContainers:
-      - name: rclone-config
-        image: busybox
-        command: ["sh", "-ce", "cp /rclone-ro/rclone.conf /config/rclone.conf"]
-        volumeMounts:
-        - name: rclone-config
-          mountPath: /rclone-ro/rclone.conf
-          subPath: rclone.conf
-        - name: rclone-emptydir
-          mountPath: /config
       containers:
       - name: history
         image: ghcr.io/bharatradar/history:latest
@@ -75,41 +60,8 @@ spec:
           limits:
             cpu: 1
             memory: 256Mi
-      - name: rclone-sync
-        image: rclone/rclone
-        command: ["/bin/sh", "-c", "while true; do rclone -v move  /in bharatradar:history; sleep 10; done"]
-        volumeMounts:
-        - name: rclone-emptydir
-          mountPath: /config/rclone/
-        - name: bharatradar-history
-          mountPath: /in
-      - name: rclone-mount
-        image: rclone/rclone
-        securityContext:
-          privileged: true
-          capabilities:
-            add:
-            - SYS_ADMIN
-        args:
-        - -v
-        - mount
-        - "bharatradar:history"
-        - /bharatradar/bharatradar
-        - --config=/config/rclone.conf
-        - --allow-non-empty
-        - --allow-other
-        - --poll-interval=9s
-        - --dir-cache-time=9999h
-        lifecycle:
-          preStop:
-            exec:
-              command: ["/bin/sh", "-c", "fusermount -uz /bharatradar"]
-        volumeMounts:
-        - name: rclone-emptydir
-          mountPath: /config
-        - name: remote-mount
-          mountPath: /bharatradar
-          mountPropagation: Bidirectional
+      # rclone-sync and rclone-mount removed - no cloud storage backend configured
+      # History API writes to local emptyDir; nginx serves empty mount
 ---
 kind: Service
 apiVersion: v1

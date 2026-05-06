@@ -10,7 +10,7 @@ spec:
       containers:
       - name: api
         image: ghcr.io/bharatradar/api:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         envFrom:
         - configMapRef:
             name: api-salts

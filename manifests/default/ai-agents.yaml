@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: telegram-bot
+  name: ai-agents
   namespace: bharatradar
   labels:
-    app: telegram-bot
+    app: ai-agents
 spec:
   type: ClusterIP
   ports:
@@ -13,30 +13,30 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app: telegram-bot
+    app: ai-agents
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: telegram-bot
+  name: ai-agents
   namespace: bharatradar
   labels:
-    app: telegram-bot
+    app: ai-agents
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: telegram-bot
+      app: ai-agents
   template:
     metadata:
       labels:
-        app: telegram-bot
+        app: ai-agents
     spec:
       imagePullSecrets:
         - name: ghcr-secret
       containers:
-        - name: bot
-          image: ghcr.io/bharatradar/telegram-bot:v2025.05.06.01
+        - name: agents
+          image: ghcr.io/bharatradar/ai-agents:v2025.05.06.04
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -81,8 +81,6 @@ spec:
                 secretKeyRef:
                   name: telegram-bot-credentials
                   key: groq_api_key
-            - name: MCP_SERVER_URL
-              value: "http://mcp-server.bharatradar.svc.cluster.local:8000"
             - name: CLOUDFLARE_KEYS
               valueFrom:
                 secretKeyRef:

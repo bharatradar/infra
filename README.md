@@ -96,11 +96,50 @@ Hub Cluster:
 | **planes-readsb** | `ghcr.io/bharatradar/docker-tar1090-uuid` | bharatradar | 80, 30152 | Public tar1090 map with UUID tracking |
 | **mlat-mlat-server** | `ghcr.io/bharatradar/mlat-server` | bharatradar | 31090, 30104, 150 | MLAT processing |
 | **mlat-map** | `ghcr.io/bharatradar/mlat-server-sync-map` | bharatradar | 80 | MLAT coverage map (nginx proxies API) |
-| **reapi-readsb** | `ghcr.io/bharatradar/readsb` | bharatradar | 30152 | REST API data feed (v2 endpoints) |
+| **reapi-readsb** | `ghcr.io/bharatradar/readsb` | bharatradar | 30152, 80 | REST API data feed (v2 endpoints) |
 | **external-readsb** | `ghcr.io/bharatradar/readsb` | bharatradar | 30004 | External feeds (cnvr.io) |
 | **api** | `ghcr.io/bharatradar/api` | bharatradar | 8080, 80 | Main web API (patched for MY_DOMAIN) |
 | **history** | `ghcr.io/bharatradar/history` | bharatradar | 8080, 80 | Historical data (amd64 only) |
 | **website** | `ghcr.io/bharatradar/website` | bharatradar | 80 | Homepage |
+
+## Cluster Credentials
+
+> **Warning:** Credentials are stored locally on the Hub node at `/root/bharatradar-secrets.yaml`. Do not commit secrets to GitHub — push protection will block them.
+
+### Required Secrets
+
+| Secret | Keys Required |
+|--------|--------------|
+| `ghcr-secret` | docker-username, docker-password (GitHub PAT) |
+| `flight-db-credentials` | password |
+| `redis-credentials` | password |
+| `telegram-bot-credentials` | telegram_token, telegram_chat_id, groq_api_key, cloudflare_keys |
+| `influxdb-credentials` | token |
+| `bharatradar-rclone` | rclone.conf (optional, for history cloud sync) |
+
+### Create Secrets on K3s
+
+```bash
+# Example: create all secrets after namespace deletion/recovery
+kubectl create secret docker-registry ghcr-secret \
+  --docker-server=ghcr.io --docker-username=<GH_USER> \
+  --docker-password=<GH_PAT> --docker-email=<EMAIL> -n bharatradar
+
+kubectl create secret generic flight-db-credentials \
+  --from-literal=password=<DB_PASSWORD> -n bharatradar
+
+kubectl create secret generic redis-credentials \
+  --from-literal=password=<REDIS_PASSWORD> -n bharatradar
+
+kubectl create secret generic telegram-bot-credentials \
+  --from-literal=telegram_token=<TOKEN> \
+  --from-literal=telegram_chat_id=<CHAT_ID> \
+  --from-literal=groq_api_key=<GROQ_KEY> \
+  --from-literal=cloudflare_keys=<JSON> -n bharatradar
+
+kubectl create secret generic influxdb-credentials \
+  --from-literal=token=<INFLUX_TOKEN> -n bharatradar
+```
 
 ### Shared Services (192.168.200.15)
 
