@@ -271,18 +271,83 @@ The MLAT map shows `"peers": {}` when there is only one feeder. This is normal �
 
 ## How?
 
+### Choose Your Setup Type
+
+BharatRadar supports two deployment architectures. Choose the one that matches your situation:
+
+---
+
+#### Option A: WITH FRP (Tunnel) - Recommended for Home Labs
+
+**Use this if:**
+- Your K3s cluster is behind a home router/firewall (NAT)
+- You want to expose services to the internet through a cloud server
+- You have an AWS EC2 or cloud VPS with a public IP
+
+**Architecture:**
+```
+Internet ──► AWS EC2 (FRP + nginx) ──► Home Router ──► K3s Cluster (Hub)
+                    │                                      │
+                    └─── tunnel ───────────────────────────┘
+```
+
+**What FRP does:** Fast Reverse Proxy (FRP) creates a tunnel from your cloud server to your home K3s cluster. External traffic hits the cloud server, gets tunneled through to your home.
+
+---
+
+#### Option B: WITHOUT FRP - Direct Public IP
+
+**Use this if:**
+- Your server has a direct public IP address (not behind NAT)
+- You're hosting on a cloud VPS/datacenter with public networking
+- You want simpler setup with no tunnel
+
+**Architecture:**
+```
+Internet ──► Your Server (Public IP) ──► K3s Cluster
+              (direct access)
+```
+
+**What changes:** Skip the FRP server. Use nginx directly on your server with Traefik or ingress.
+
+---
+
 ### Prerequisites - What You Need Before Starting
 
+#### For Option A (WITH FRP):
 | Item | Specification | Why |
 |------|---------------|-----|
-| **Shared Services Node** | Raspberry Pi 4+ or any Linux machine, 4GB+ RAM, 32GB+ SDD/SSD, Debian 12 or Raspberry Pi OS | Runs PostgreSQL, Redis, InfluxDB, MinIO |
-| **AWS EC2 (or cloud VPS)** | Ubuntu 22.04+, 2GB+ RAM, public IP, ports 80/443/7000/30004/31090 open | Runs FRP server + nginx for tunneling |
-| **Primary Hub** | Ubuntu 24.04, amd64 (Intel/AMD CPU), 4GB+ RAM, 50GB+ storage | K3s server, runs all ADS-B/MLAT services |
+| **Shared Services Node** | Raspberry Pi 4+ or any Linux machine, 4GB+ RAM, 32GB+ storage, Debian 12 or Raspberry Pi OS | Runs PostgreSQL, Redis, InfluxDB, MinIO |
+| **Cloud Server (AWS/VPS)** | Ubuntu 22.04+, 2GB+ RAM, **public IP**, ports 80/443/7000/30004/31090 open | Runs FRP server + nginx for tunneling |
+| **Primary Hub** | Ubuntu 24.04, amd64, 4GB+ RAM, 50GB+ storage, behind NAT/router | K3s server, runs all ADS-B/MLAT services |
 | **HA Server** (optional) | Same as Primary Hub | Backup K3s server for failover |
-| **Feeder Pi** | Raspberry Pi 3B+ or newer, RTL-SDR dongle, Raspberry Pi OS | Sends ADS-B data to your server |
-| **Domain** | Cloudflare account with A records pointing to your AWS IP | DNS for all subdomains |
+| **Feeder Pi** | Raspberry Pi 3B+, RTL-SDR dongle, Raspberry Pi OS | Sends ADS-B data |
+| **Domain** | Cloudflare with A records pointing to cloud server IP | DNS |
+
+#### For Option B (WITHOUT FRP):
+| Item | Specification | Why |
+|------|---------------|-----|
+| **Shared Services Node** | Raspberry Pi 4+ or any Linux machine, 4GB+ RAM, 32GB+ storage, Debian 12 or Raspberry Pi OS | Runs PostgreSQL, Redis, InfluxDB, MinIO |
+| **Primary Hub** | Ubuntu 24.04, amd64, 4GB+ RAM, 50GB+ storage, **with direct public IP** | K3s server + nginx for SSL termination |
+| **HA Server** (optional) | Same as Primary Hub with public IP | Backup K3s server |
+| **Feeder Pi** | Raspberry Pi 3B+, RTL-SDR dongle, Raspberry Pi OS | Sends ADS-B data |
+| **Domain** | Cloudflare with A records pointing to server's public IP | DNS |
+
+---
 
 ### Exact Install Order (DO NOT SKIP)
+
+> **CRITICAL: You must install in this exact order. Each step provides credentials needed for the next.**
+
+**Option A (WITH FRP):**
+```
+Step 1: DNS ──► Step 2: Shared Services ──► Step 3: FRP Server (AWS) ──► Step 4: Hub ──► Step 5: Feeder
+```
+
+**Option B (WITHOUT FRP):**
+```
+Step 1: DNS ──► Step 2: Shared Services ──► Step 3: Hub (direct) ──► Step 4: Feeder
+```
 
 > **CRITICAL: You must install in this exact order. Each step provides credentials needed for the next.**
 
@@ -295,6 +360,12 @@ Step 4: Primary Hub ─────────► Step 5: HA Server (optional) 
 ```
 
 ### Step-by-Step Instructions
+
+> **IMPORTANT:** Choose either Option A OR Option B below. Do not mix steps from both.
+
+---
+
+## Option A: WITH FRP (Tunnel to Cloud Server)
 
 #### Step 1: DNS Records (Cloudflare)
 
@@ -564,7 +635,125 @@ sudo certbot certonly --cert-name bharatradar.com \
 # Reload nginx
 ```
 
-### Step 4: Primary Hub (K3s Server)
+---
+
+## Option B: WITHOUT FRP (Direct Public IP)
+
+**Skip Steps 3 and 4 below if using Option B.** Go directly to:
+
+### Step 3 (Option B): Primary Hub with Direct Public IP
+
+**What this does:** Installs K3s, nginx (for SSL termination), Keepalived for failover, and deploys all services. No FRP tunnel needed because your server has a direct public IP.
+
+**You need these before starting:**
+- Credentials from Step 2 (PostgreSQL, Redis, MinIO)
+- Your server's public IP address
+
+**On your server with public IP, create `/tmp/hub.env`:**
+```bash
+cat > /tmp/hub.env << 'EOF'
+ROLE=hub
+BASE_DOMAIN=bharatradar.com
+READSB_LAT=18.480718   # Your latitude
+READSB_LON=73.898235   # Your longitude
+TIMEZONE=Asia/Kolkata
+REDIS_HOST=192.168.200.15
+REDIS_PORT=6379
+REDIS_PASSWORD=<REDIS_PASSWORD_FROM_STEP_2>
+GHCR_USERNAME=your-github-username
+GHCR_PASSWORD=your-github-pat-with-packages-read-scope
+USE_EXTERNAL_DB=true
+DB_HOST=192.168.200.15
+DB_PORT=5432
+DB_DBNAME=k3s
+DB_DBUSER=k3s
+DB_DBPASS=<DB_PASSWORD_FROM_STEP_2>
+MINIO_ENDPOINT=192.168.200.15:9000
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=<MINIO_PASSWORD_FROM_STEP_2>
+FRP_ENABLED=false
+KEEPALIVED_ENABLED=true
+KEEPALIVED_VIP=<YOUR_PUBLIC_IP>
+EOF
+```
+
+**Key differences from Option A:**
+- `FRP_ENABLED=false` - No tunnel
+- `KEEPALIVED_VIP` = your public IP (or use a different internal VIP if behind internal load balancer)
+- You'll need to configure nginx/Traefik to listen on public ports directly
+
+**Install:**
+```bash
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/hub.env hub
+```
+
+**After installation, configure nginx on this server to handle SSL:**
+
+```bash
+# Install nginx and certbot
+sudo apt update && sudo apt install -y nginx certbot python3-certbot-nginx
+
+# Get SSL certificate
+sudo certbot --nginx -d bharatradar.com \
+  -d map.bharatradar.com \
+  -d api.bharatradar.com \
+  -d mlat.bharatradar.com \
+  -d history.bharatradar.com \
+  -d my.bharatradar.com \
+  -d feed.bharatradar.com \
+  -d cortex.bharatradar.com \
+  --non-interactive --agree-tos -m admin@your-domain.com
+```
+
+Then configure nginx to proxy to K3s Traefik. Edit `/etc/nginx/sites-available/bharatradar`:
+
+```nginx
+# HTTP to HTTPS redirect
+server {
+    listen 80;
+    server_name bharatradar.com *.bharatradar.com;
+    return 301 https://$host$request_uri;
+}
+
+# HTTPS proxy to K3s
+server {
+    listen 443 ssl http2;
+    server_name bharatradar.com map.bharatradar.com api.bharatradar.com mlat.bharatradar.com history.bharatradar.com my.bharatradar.com feed.bharatradar.com cortex.bharatradar.com;
+    
+    ssl_certificate /etc/letsencrypt/live/bharatradar.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bharatradar.com/privkey.pem;
+    
+    client_max_body_size 100M;
+    
+    location / {
+        proxy_pass http://127.0.0.1:80;  # Traefik HTTP port
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# Direct ports for ADS-B/MLAT (no proxy)
+server {
+    listen 30004;
+    proxy_pass http://127.0.0.1:30004;
+}
+
+server {
+    listen 31090;
+    proxy_pass http://127.0.0.1:31090;
+}
+```
+
+```bash
+sudo ln -sf /etc/nginx/sites-available/bharatradar /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+---
+
+### Step 4: Primary Hub (K3s Server) [Option A - WITH FRP]
 
 **What this does:** Installs K3s Kubernetes cluster, Keepalived for virtual IP failover, FRP client for tunneling, and deploys all ADS-B/MLAT services.
 
