@@ -28,6 +28,7 @@ Services (manifests/default):
 - api/        Main web API ✅ running v5.7.0 (ghcr.io/bharatradar/api:5.7.0)
 - history/    Historical data ✅ running (amd64 only, dummy rclone secret)
 - website/    Homepage
+- command-center/webapp  Command Center web app ✅ running v2026.05.07.06
 - telegram-bot/  Telegram bot with LLM routing (groq + MCP tools)
 - resources.yaml  Namespace, Services, Ingresses, NetworkPolicies
 
@@ -51,6 +52,7 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 | `bharatradar/mlat-server` | adsblol/mlat-server | `master` | `ghcr.io/bharatradar/mlat-server` | amd64 |
 | `bharatradar/mlat-server-sync-map` | adsblol/mlat-server-sync-map | `master` | `ghcr.io/bharatradar/mlat-server-sync-map` | amd64 |
 | `bharatradar/api` | adsblol/api | `main` | `ghcr.io/bharatradar/api` | amd64 |
+| `bharatradar/webapp` | local build | — | `ghcr.io/bharatradar/webapp` | amd64, arm64 |
 | `bharatradar/history` | adsblol/history | `main` | `ghcr.io/bharatradar/history` | amd64 |
 | `bharatradar/website` | adsblol/website | `main` | `ghcr.io/bharatradar/website` | amd64, arm64 |
 

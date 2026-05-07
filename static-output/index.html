@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BharatRadar — India's Open ADS-B Network</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <header>
+        <nav>
+            <div class="logo">
+                <svg viewBox="0 0 48 48" width="36" height="36">
+                    <circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" stroke-width="2"/>
+                    <path d="M24 8 L26 18 L36 12 L28 22 L38 24 L28 26 L36 36 L26 30 L24 40 L22 30 L12 36 L20 26 L10 24 L20 22 L12 12 L22 18 Z" fill="currentColor"/>
+                </svg>
+                <span>BharatRadar</span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="https://map.bharatradar.com">Map</a></li>
+                <li><a href="https://api.bharatradar.com">API</a></li>
+                <li><a href="https://mlat.bharatradar.com">MLAT Map</a></li>
+                <li><a href="https://bharatradar.com/command_center">Command Center</a></li>
+                <li><a href="/docs/">Docs</a></li>
+                <li><a href="/docs/get-started/become-a-feeder/">Feed</a></li>
+                <li><a href="https://github.com/bharatradar">GitHub</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="hero-live-stats">
+                <a href="https://map.bharatradar.com" class="live-stat" title="View on Live Map">
+                    <span class="live-stat-value js-aircraft-count">—</span>
+                    <span class="live-stat-label">Live Aircraft</span>
+                </a>
+                <span class="live-stat-divider"></span>
+                <a href="https://mlat.bharatradar.com" class="live-stat" title="View on MLAT Map">
+                    <span class="live-stat-value js-feeder-count">—</span>
+                    <span class="live-stat-label">Active Feeders</span>
+                </a>
+            </div>
+            <h1>India's Open ADS-B Flight Tracking Network</h1>
+            <p>Community-powered, open-source aircraft tracking across India. All data is free and open for everyone.</p>
+            <div class="hero-buttons">
+                <a href="https://map.bharatradar.com" class="btn btn-primary">View Live Map</a>
+                <a href="/docs/get-started/become-a-feeder/" class="btn btn-secondary">Become a Feeder</a>
+            </div>
+        </section>
+
+        <section class="features">
+            <div class="feature-card">
+                <h3>Live Map</h3>
+                <p>Track aircraft in real-time across India. See position, altitude, speed, and more for every plane.</p>
+                <a href="https://map.bharatradar.com">Open Map &rarr;</a>
+            </div>
+            <div class="feature-card">
+                <h3>Open API</h3>
+                <p>Access live and historical flight data through our REST API. Free to use, no authentication required.</p>
+                <a href="https://api.bharatradar.com">Explore API &rarr;</a>
+            </div>
+            <div class="feature-card">
+                <h3>MLAT Coverage</h3>
+                <p>Multilateration lets us track non-ADS-B equipped aircraft using multiple receiver stations.</p>
+                <a href="https://mlat.bharatradar.com">View MLAT Map &rarr;</a>
+            </div>
+            <div class="feature-card">
+                <h3>Command Center</h3>
+                <p>Access the command center for flight status, alerts, and operational dashboards.</p>
+                <a href="https://bharatradar.com/command_center">Open Command Center &rarr;</a>
+            </div>
+        </section>
+
+        <section id="become-feeder" class="feeder">
+            <h2>Become a Feeder</h2>
+            <p>Help expand coverage by setting up your own ADS-B receiver. All you need is a cheap RTL-SDR dongle and a Raspberry Pi.</p>
+            <div class="steps">
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <h3>Get Hardware</h3>
+                    <p>Raspberry Pi (any model) + RTL-SDR dongle (RTL2832U based). Total cost under ₹3,000.</p>
+                </div>
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <h3>Flash the Image</h3>
+                    <p>Download our pre-built image with readsb and mlat-client pre-configured. Just flash and boot.</p>
+                </div>
+                <div class="step">
+                    <span class="step-number">3</span>
+                    <h3>Point to the Sky</h3>
+                    <p>Connect your antenna, connect to <code>feed.bharatradar.com</code>, and you're done.</p>
+                </div>
+            </div>
+            <a href="/docs/get-started/become-a-feeder/" class="btn btn-secondary">Setup Guide</a>
+        </section>
+
+        <section class="stats">
+            <div class="stat-item">
+                <span class="stat-number js-aircraft-count">—</span>
+                <span class="stat-label">Live Aircraft</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number js-feeder-count">—</span>
+                <span class="stat-label">Active Feeders</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">100%</span>
+                <span class="stat-label">Open Source</span>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>Built by the community, for the community. All data is free and open.</p>
+        <p class="links">
+            <a href="https://github.com/bharatradar">GitHub</a>
+            <a href="https://map.bharatradar.com">Map</a>
+            <a href="https://api.bharatradar.com">API</a>
+        </p>
+    </footer>
+
+    <script>
+        (async function fetchStats() {
+            try {
+                const res = await fetch('https://api.bharatradar.com/0/me', { signal: AbortSignal.timeout(4000) });
+                const data = await res.json();
+                if (data.global && data.global.aircraft) {
+                    document.querySelectorAll('.js-aircraft-count').forEach(el => { el.textContent = data.global.aircraft; });
+                }
+                if (data.global && data.global.beast) {
+                    document.querySelectorAll('.js-feeder-count').forEach(el => { el.textContent = data.global.beast; });
+                }
+            } catch (e) {}
+            setTimeout(fetchStats, 5000);
+        })();
+    </script>
+</body>
+</html>

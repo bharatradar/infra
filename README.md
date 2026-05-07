@@ -845,6 +845,124 @@ The current ETA model (Option B) uses altitude-based descent profiles + airport-
 
 **Current Status:** Option B is deployed (v2025.05.07.05). Option C is documented here for future implementation when historical data volume supports it.
 
+## Command Center (Webapp) Auth
+
+This section documents how to set up Google OAuth authentication for the Command Center.
+
+### Prerequisites
+
+- Google Cloud Project with OAuth 2.0 enabled
+- OAuth consent screen configured
+- Credentials created (OAuth 2.0 Client ID)
+
+### Configuration Steps
+
+#### 1. Create Google OAuth Credentials
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Navigate to **APIs & Services** → **Credentials**
+3. Click **Create Credentials** → **OAuth client ID**
+4. Application type: **Web application**
+5. Name: `bharatradar-webapp`
+6. Add **Authorized JavaScript origins**:
+   - `https://bharatradar.com`
+   - `https://bharat-radar.vellur.in` (legacy)
+7. Add **Authorized redirect URIs**:
+   - `https://bharatradar.com/command_center/auth/callback`
+   - `https://bharatradar.com/auth/callback`
+   - `https://bharat-radar.vellur.in/auth/callback` (legacy)
+8. Click **Create**
+9. Copy the **Client ID** and **Client secret**
+
+#### 2. Create K8s Secret (on Hub server)
+
+The OAuth credentials are stored as a Kubernetes Secret to avoid committing secrets to git:
+
+```bash
+# Create the secret (run on K3s server)
+kubectl create secret generic google-oauth-credentials \
+  --namespace=bharatradar \
+  --from-literal=GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com \
+  --from-literal=GOOGLE_CLIENT_SECRET=your-client-secret \
+  --type=Opaque
+```
+
+#### 3. Update Webapp Deployment
+
+The deployment references the secret via `envFrom`:
+
+```yaml
+envFrom:
+  - secretRef:
+      name: google-oauth-credentials
+```
+
+Also set the redirect URI via env var:
+
+```yaml
+- name: GOOGLE_REDIRECT_URI
+  value: "https://bharatradar.com/command_center/auth/callback"
+```
+
+#### 4. Example: Deploy/Update Webapp
+
+```bash
+# SSH to hub server
+ssh bharatradar@192.168.200.10
+
+# Apply the manifest
+sudo kubectl apply -f manifests/default/webapp.yaml
+
+# Restart to pick up changes
+sudo kubectl rollout restart deployment/webapp -n bharatradar
+
+# Verify it's running
+sudo kubectl get pods -n bharatradar -l app=webapp
+```
+
+#### 5. Test Authentication
+
+1. Visit: `https://bharatradar.com/command_center/auth/google`
+2. You should be redirected to Google login
+3. After login, you'll be redirected to Command Center dashboard
+
+### Troubleshooting
+
+**Error: redirect_uri_mismatch**
+
+This means the redirect URI in Google Cloud Console doesn't match what's being sent by the app.
+
+- Verify the redirect URI in Google Console is exactly: `https://bharatradar.com/command_center/auth/callback`
+- Wait 5 minutes for Google Console changes to propagate
+- Clear browser cache or use incognito window
+
+**Error: Access blocked: This app's request is invalid**
+
+- The client ID may be restricted to specific domains
+- Go to Google Console → OAuth consent screen → Test users
+- Or make the app public (requires verification for sensitive scopes)
+
+### GitHub Push Protection
+
+When committing K8s manifests, never include actual secret values. The push will be blocked.
+
+**Correct approach:**
+- Use `envFrom` to reference a K8s Secret
+- Create the Secret via CLI (not in YAML)
+- Or use external secrets operator (not covered here)
+
+```yaml
+# WRONG - will block git push
+env:
+  - name: GOOGLE_CLIENT_SECRET
+    value: "GOCSPX-xxx"
+
+# CORRECT - loads from secret
+envFrom:
+  - secretRef:
+      name: google-oauth-credentials
+```
+
 ## Where?
 
 - **GitHub:** https://github.com/bharatradar/infra

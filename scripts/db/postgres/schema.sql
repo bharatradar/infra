@@ -151,15 +151,17 @@ CREATE INDEX IF NOT EXISTS idx_flight_schedules_callsign ON flight_schedules(cal
 -- API Users
 CREATE TABLE IF NOT EXISTS api_users (
     id SERIAL PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) NOT NULL,
     name VARCHAR(255),
+    callsign VARCHAR(20),
     google_id VARCHAR(255),
     tier VARCHAR(20) DEFAULT 'free',
     contributor_status VARCHAR(20) DEFAULT 'STANDARD',
     contributor_since TIMESTAMP,
     contributor_changed_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (email)
 );
 CREATE INDEX IF NOT EXISTS idx_api_users_email ON api_users(email);
 CREATE INDEX IF NOT EXISTS idx_api_users_contributor ON api_users(contributor_status);
