@@ -24,7 +24,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: downloader
-        image: ghcr.io/bharatradar/schedule-downloader:v2025.05.07.07
+        image: ghcr.io/bharatradar/schedule-downloader:v2026.05.08.09
         imagePullPolicy: IfNotPresent
         command: ["python", "-u", "route_schedule_downloader.py"]
         args: ["--manual"]

@@ -7,7 +7,7 @@ spec:
     spec:
       containers:
       - name: readsb
-        image: ghcr.io/bharatradar/docker-tar1090-uuid:latest
+        image: ghcr.io/bharatradar/docker-tar1090-uuid:v2026.05.08.09
         # Removing health checks that might be killing the pod too early
         livenessProbe: null
         readinessProbe: null

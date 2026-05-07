@@ -18,7 +18,7 @@ spec:
         volumeMounts:
         - name: run
           mountPath: /run/readsb
-        image: ghcr.io/bharatradar/readsb:latest
+        image: ghcr.io/bharatradar/readsb:v2026.05.08.09
         resources:
           limits:
             cpu: "1"
