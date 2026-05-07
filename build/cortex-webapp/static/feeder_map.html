@@ -19,24 +19,28 @@
 </head>
 <body class="bg-gray-900 text-white">
     <!-- Header -->
-    <div class="bg-gray-800 border-b border-gray-700 px-4 py-3">
-        <div class="container mx-auto flex justify-between items-center">
-            <div class="flex items-center gap-4">
-                <a href="/profile" class="text-gray-400 hover:text-white">
-                    <i class="fas fa-arrow-left"></i>
-                </a>
-                <h1 class="text-xl font-bold">🗺️ Feeder Coverage Map</h1>
-            </div>
+    <div class="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-6">
+        <div class="flex items-center gap-4">
+            <a href="/profile" class="text-gray-400 hover:text-white"><i class="fas fa-arrow-left"></i></a>
             <div class="flex items-center gap-3">
-                <span class="text-sm text-gray-400" id="feeder-count">Loading...</span>
-                <select id="tier-filter" class="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-sm text-white">
-                    <option value="">All Tiers</option>
-                    <option value="PLATINUM">Platinum</option>
-                    <option value="GOLD">Gold</option>
-                    <option value="SILVER">Silver</option>
-                    <option value="BRONZE">Bronze</option>
-                </select>
+                <div class="relative flex h-3 w-3">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-full w-full bg-blue-500"></span>
+                </div>
+                <a href="https://bharatradar.com" class="text-xl font-black tracking-widest uppercase bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent hover:opacity-80 transition">
+                    BharatRadar <span class="text-gray-400 text-sm font-normal">| Global Coverage</span>
+                </a>
             </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <span class="text-sm text-gray-400" id="feeder-count">Loading...</span>
+            <select id="tier-filter" class="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-sm text-white">
+                <option value="">All Tiers</option>
+                <option value="PLATINUM">Platinum</option>
+                <option value="GOLD">Gold</option>
+                <option value="SILVER">Silver</option>
+                <option value="BRONZE">Bronze</option>
+            </select>
         </div>
     </div>
 
