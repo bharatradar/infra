@@ -37,7 +37,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: webapp
-          image: ghcr.io/bharatradar/webapp:v2025.05.07.08
+          image: ghcr.io/bharatradar/webapp:v2025.05.07.10
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8081
@@ -52,7 +52,7 @@ spec:
             - name: DB_USER
               value: "flight_db_user"
             - name: DB_PASSWORD
-              value: "postgres_password"
+              value: "flight_db_password"
             - name: REDIS_HOST
               value: "192.168.200.15"
             - name: REDIS_PORT
