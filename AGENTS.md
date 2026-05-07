@@ -146,3 +146,116 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 - **Cleanup: Remove haproxy references**: The old haproxy deployment was removed from the architecture but some docs still mention it.
   - Audit all docs and remove stale haproxy references
   - Update architecture diagrams to show direct LoadBalancer services instead
+
+## Adding a New Subdomain (e.g., cortex.bharatradar.com)
+
+When adding a new web service that needs its own subdomain, you need to configure THREE things:
+
+### 1. DNS (Cloudflare)
+Add an A record pointing to your public server IP:
+```
+cortex.bharatradar.com → 13.48.249.103
+```
+
+### 2. SSL Certificate (Let's Encrypt via Certbot)
+On the **public-facing server** (AWS EC2 or wherever frps/nginx runs):
+```bash
+# Install certificate
+sudo certbot --nginx -d cortex.bharatradar.com --non-interactive --agree-tos --email your-email@example.com
+
+# Auto-renewal is set up by certbot
+```
+
+### 3. nginx Configuration
+On the **public-facing server**, add a server block:
+
+```nginx
+server {
+    listen 80;
+    server_name cortex.bharatradar.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name cortex.bharatradar.com;
+
+    ssl_certificate /etc/letsencrypt/live/cortex.bharatradar.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cortex.bharatradar.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;  # FRP vhost HTTP port
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Enable and reload:
+```bash
+sudo ln -sf /etc/nginx/sites-available/cortex /etc/nginx/sites-enabled/cortex
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### 4. FRP Tunnel (frpc.toml on local server)
+On the **local K3s server** (Hub at 192.168.200.10), add to `/etc/frpc.toml`:
+```toml
+# In the [[proxies]] section with the web-ui proxy, add the domain:
+customDomains = [
+    "map.bharatradar.com",
+    "mlat.bharatradar.com",
+    # ... other domains ...
+    "cortex.bharatradar.com"  # <-- ADD HERE
+]
+```
+
+Then restart frpc:
+```bash
+sudo systemctl restart frpc
+```
+
+### 5. K3s Ingress
+Create a Kubernetes Ingress in your manifests:
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cortex-webapp
+  namespace: bharatradar
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: cortex.bharatradar.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: cortex-webapp
+                port:
+                  number: 8081
+```
+
+Apply it:
+```bash
+kubectl apply -f manifests/default/cortex-webapp/ingress.yaml
+```
+
+### Summary Checklist
+- [ ] DNS A record added to Cloudflare
+- [ ] SSL certificate issued via certbot
+- [ ] nginx server block configured
+- [ ] Domain added to frpc.toml customDomains
+- [ ] K3s Ingress created
+- [ ] Service deployed and running in K3s
+
+### Troubleshooting
+- **ERR_CERT_COMMON_NAME_INVALID**: SSL cert doesn't include the subdomain. Re-run certbot.
+- **404 from nginx**: frpc.toml doesn't have the domain in customDomains.
+- **404 from K3s**: Ingress host doesn't match, or service name/port is wrong.
+- **Connection refused**: frpc isn't running, or K3s service isn't exposing the right port.
