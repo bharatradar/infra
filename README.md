@@ -2,7 +2,7 @@
 
 BharatRadar ADS-B/MLAT aggregator platform. Aggregates [ADS-B](https://github.com/wiedehopf/readsb) & [MLAT](https://github.com/wiedehopf/mlat-server) data from multiple feeders and serves a public map interface.
 
-> **Version:** 6.0.0
+> **Version:** 7.0.0
 > **GitHub:** https://github.com/bharatradar/infra
 
 ## Why?
