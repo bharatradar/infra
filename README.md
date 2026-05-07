@@ -2,7 +2,7 @@
 
 BharatRadar ADS-B/MLAT aggregator platform. Aggregates [ADS-B](https://github.com/wiedehopf/readsb) & [MLAT](https://github.com/wiedehopf/mlat-server) data from multiple feeders and serves a public map interface.
 
-> **Version:** 5.7.0
+> **Version:** 6.0.0
 > **GitHub:** https://github.com/bharatradar/infra
 
 ## Why?
@@ -271,20 +271,68 @@ The MLAT map shows `"peers": {}` when there is only one feeder. This is normal �
 
 ## How?
 
-### Prerequisites
+### Prerequisites - What You Need Before Starting
 
-1. **Shared Services Node** — Debian 12 or Raspberry Pi OS (br-aggrigator Pi at 192.168.200.15), for PostgreSQL, Redis, InfluxDB, MinIO
-2. **AWS EC2 Server** (or any cloud VPS) with public IP — runs FRP server + nginx reverse proxy
-3. **Primary Hub** — Ubuntu 24.04, amd64, internet access
-4. **HA Server** (optional) — Ubuntu 24.04, amd64, same network as Primary
-5. **Feeder Pi** — Raspberry Pi OS, arm64, RTL-SDR dongle
-6. **Cloudflare DNS** — A records pointing to AWS EC2 IP for all subdomains
+| Item | Specification | Why |
+|------|---------------|-----|
+| **Shared Services Node** | Raspberry Pi 4+ or any Linux machine, 4GB+ RAM, 32GB+ SDD/SSD, Debian 12 or Raspberry Pi OS | Runs PostgreSQL, Redis, InfluxDB, MinIO |
+| **AWS EC2 (or cloud VPS)** | Ubuntu 22.04+, 2GB+ RAM, public IP, ports 80/443/7000/30004/31090 open | Runs FRP server + nginx for tunneling |
+| **Primary Hub** | Ubuntu 24.04, amd64 (Intel/AMD CPU), 4GB+ RAM, 50GB+ storage | K3s server, runs all ADS-B/MLAT services |
+| **HA Server** (optional) | Same as Primary Hub | Backup K3s server for failover |
+| **Feeder Pi** | Raspberry Pi 3B+ or newer, RTL-SDR dongle, Raspberry Pi OS | Sends ADS-B data to your server |
+| **Domain** | Cloudflare account with A records pointing to your AWS IP | DNS for all subdomains |
 
-### Install Order
+### Exact Install Order (DO NOT SKIP)
 
-> **Important:** Shared services must be set up FIRST. The Primary Hub needs the PostgreSQL connection string from shared services.
+> **CRITICAL: You must install in this exact order. Each step provides credentials needed for the next.**
 
-#### Step 0: DNS Records (Manual)
+```
+Step 1: DNS Setup ──────────► Step 2: Shared Services ──────► Step 3: AWS FRP Server
+(Cloudflare)                    (br-aggrigator Pi)                (AWS EC2)
+
+Step 4: Primary Hub ─────────► Step 5: HA Server (optional) ──► Step 6: Feeder Pi
+(K3s cluster)                     (backup node)                    (data feed)
+```
+
+### Step-by-Step Instructions
+
+#### Step 1: DNS Records (Cloudflare)
+
+1. **Log in to Cloudflare** and select your domain
+2. **Create these A records** (replace `<AWS_IP>` with your AWS EC2 public IP):
+
+| Type | Name | Value | Proxy (Cloudflare) |
+|------|------|-------|-------------------|
+| A | bharatradar.com | `<AWS_IP>` | Proxied (orange) |
+| A | map.bharatradar.com | `<AWS_IP>` | Proxied |
+| A | api.bharatradar.com | `<AWS_IP>` | Proxied |
+| A | mlat.bharatradar.com | `<AWS_IP>` | Proxied |
+| A | history.bharatradar.com | `<AWS_IP>` | Proxied |
+| A | my.bharatradar.com | `<AWS_IP>` | Proxied |
+| A | feed.bharatradar.com | `<AWS_IP>` | **DNS only** (grey cloud) |
+| A | cortex.bharatradar.com | `<AWS_IP>` | Proxied |
+
+> **IMPORTANT:** `feed.bharatradar.com` MUST be DNS only (grey cloud). Cloudflare proxy blocks raw TCP connections needed for ADS-B beast feeds.
+
+#### Step 2: Shared Services (br-aggrigator Pi — 192.168.200.15)
+
+**What this does:** Installs PostgreSQL (database), Redis (caching), InfluxDB (metrics), and MinIO (file storage) on a Raspberry Pi or any Linux machine.
+
+**Run this on your Shared Services node:**
+```bash
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
+```
+
+**When it finishes, SAVE these credentials shown on screen:**
+- PostgreSQL host, port, username, password, database name
+- Redis host and password
+- MinIO endpoint, access key, and secret key
+
+**You'll need these for Step 4 (Primary Hub).**
+
+For manual database setup or re-initialization, see [scripts/db/README.md](scripts/db/README.md).
+
+#### Manual Database Reset
 
 Create these A records in your DNS provider (Cloudflare recommended). Replace `<AWS_IP>` with your FRP server's public IP.
 
@@ -349,19 +397,25 @@ PGPASSWORD='raga@098' psql -h localhost -U flight_db_user -d flight_db -f seed-r
 
 See [scripts/db/README.md](scripts/db/README.md) for full documentation.
 
-### AWS Server Setup (FRP + nginx + Certbot)
+### Step 3: AWS FRP Server Setup (AWS EC2)
 
-#### 1. Install FRP Server
+**What this does:** Sets up the FRP (Fast Reverse Proxy) server that tunnels traffic from feeders and web visitors to your local K3s cluster. Also sets up nginx for SSL/TLS.
+
+**Run these commands on your AWS EC2 instance:**
+
+#### 3.1 Install FRP Server
 ```bash
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- frp-server
 ```
 
-#### 2. Install nginx
+**SAVE the FRP token shown on screen** — you'll need it for the Hub (Step 4).
+
+#### 3.2 Install nginx (if not already installed by FRP script)
 ```bash
 sudo apt update && sudo apt install -y nginx
 ```
 
-#### 3. Install Certbot and Obtain Certificates
+#### 3.3 Install Certbot and Obtain SSL Certificates
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
 
@@ -510,46 +564,58 @@ sudo certbot certonly --cert-name bharatradar.com \
 # Reload nginx
 ```
 
-### Cluster Setup
+### Step 4: Primary Hub (K3s Server)
 
-#### Step 2: Primary Hub
+**What this does:** Installs K3s Kubernetes cluster, Keepalived for virtual IP failover, FRP client for tunneling, and deploys all ADS-B/MLAT services.
 
-Create `/tmp/hub.env`:
+**You need these before starting:**
+- Credentials from Step 2 (PostgreSQL, Redis, MinIO)
+- FRP token from Step 3
+
+**On the Primary Hub node (192.168.200.10), create `/tmp/hub.env`:**
 ```bash
 cat > /tmp/hub.env << 'EOF'
 ROLE=hub
 BASE_DOMAIN=bharatradar.com
-READSB_LAT=18.480718
-READSB_LON=73.898235
+READSB_LAT=18.480718   # Your latitude (Pune = 18.480718)
+READSB_LON=73.898235   # Your longitude
 TIMEZONE=Asia/Kolkata
 REDIS_HOST=192.168.200.15
 REDIS_PORT=6379
-REDIS_PASSWORD=<from-shared-services>
+REDIS_PASSWORD=<REDIS_PASSWORD_FROM_STEP_2>
 GHCR_USERNAME=your-github-username
-GHCR_PASSWORD=your-github-pat
+GHCR_PASSWORD=your-github-pat-with-packages-read-scope
 USE_EXTERNAL_DB=true
 DB_HOST=192.168.200.15
 DB_PORT=5432
 DB_DBNAME=k3s
 DB_DBUSER=k3s
-DB_DBPASS=<from-shared-services>
+DB_DBPASS=<DB_PASSWORD_FROM_STEP_2>
 MINIO_ENDPOINT=192.168.200.15:9000
 MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=<from-shared-services>
+MINIO_ROOT_PASSWORD=<MINIO_PASSWORD_FROM_STEP_2>
 FRP_ENABLED=true
-FRP_SERVER=13.48.249.103
-FRP_TOKEN=<from-frp-server>
+FRP_SERVER=<YOUR_AWS_PUBLIC_IP>
+FRP_TOKEN=<FRP_TOKEN_FROM_STEP_3>
 KEEPALIVED_ENABLED=true
 KEEPALIVED_VIP=192.168.200.150
 EOF
 ```
 
-Install:
+**Install:**
 ```bash
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/hub.env hub
 ```
 
-#### Step 3: HA Server (Optional but Recommended)
+**After installation, verify:**
+```bash
+sudo kubectl get pods -n bharatradar
+sudo kubectl get nodes
+```
+
+#### Step 5: HA Server (Optional - for failover)
+
+**What this does:** Adds a second K3s server that takes over if the Primary fails. Keeps the virtual IP (192.168.200.150) alive.
 Create `/tmp/ha.env`:
 ```bash
 cat > /tmp/ha.env << 'EOF'
@@ -574,18 +640,31 @@ Install:
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/ha.env ha-server
 ```
 
-#### Step 4: Feeder Pi
+#### Step 6: Feeder Pi (Data Source)
 
-**Recommended** — standalone one-line installer (auto-detects SDR, handles existing software):
+**What this does:** Installs readsb (ADS-B receiver) and mlat-client on a Raspberry Pi with RTL-SDR dongle. Sends flight data to your server via the FRP tunnel.
 
+**On your Raspberry Pi with RTL-SDR dongle:**
+
+**Recommended - Standalone one-line installer (auto-detects SDR):**
 ```bash
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-feeder | sudo bash
 ```
 
-**Alternative** — via main installer:
-
+**Alternative - via main installer:**
 ```bash
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- feeder
+```
+
+**The installer will prompt for:**
+- Your latitude/longitude (antenna location)
+- Feeder name (appears on MLAT map)
+- SDR device selection (usually auto-detected)
+
+**After installation, verify:**
+```bash
+sudo systemctl status readsb
+sudo journalctl -u readsb --since "1 minute" | grep "hex:"
 ```
 
 ### Post-Install Verification
