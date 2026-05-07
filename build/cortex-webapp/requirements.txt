@@ -1,0 +1,16 @@
+aiohttp==3.9.3
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+redis
+fastapi
+uvicorn
+influxdb-client
+pydantic
+python-jose
+cryptography
+requests
+beautifulsoup4
+python-dotenv
+aiofiles
+mcp
+orjson

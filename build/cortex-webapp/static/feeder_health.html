@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feeder Health | Bharat Radar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .status-active { color: #23c074; }
+        .status-activated { color: #fbbf24; }
+        .status-pending { color: #f97316; }
+        .status-inactive { color: #ef4444; }
+        .dot-active { background: #23c074; box-shadow: 0 0 8px #23c074; }
+        .dot-activated { background: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
+        .dot-pending { background: #f97316; }
+        .dot-inactive { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+        .timeline-bar { height: 24px; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-6">
+        <div class="flex items-center gap-4">
+            <a href="/profile" class="text-gray-400 hover:text-white"><i class="fas fa-arrow-left"></i></a>
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center"><i class="fas fa-radar text-sm"></i></div>
+                <span class="font-bold text-lg">Bharat Radar</span>
+            </div>
+        </div>
+        <div id="page-title" class="text-lg font-bold">Feeder Health</div>
+        <a href="/logout" class="text-gray-400 hover:text-white" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
+    </div>
+
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+        <!-- Summary Cards (always shown) -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-gray-800 rounded-lg p-6 text-center">
+                <div id="count-active" class="text-3xl font-bold status-active">-</div>
+                <div class="text-sm text-gray-400">Active</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-6 text-center">
+                <div id="count-activated" class="text-3xl font-bold status-activated">-</div>
+                <div class="text-sm text-gray-400">Activated</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-6 text-center">
+                <div id="count-inactive" class="text-3xl font-bold status-inactive">-</div>
+                <div class="text-sm text-gray-400">Inactive</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-6 text-center">
+                <div id="count-pending" class="text-3xl font-bold status-pending">-</div>
+                <div class="text-sm text-gray-400">Pending</div>
+            </div>
+        </div>
+
+        <!-- Single Feeder View -->
+        <div id="single-view" class="hidden">
+            <div class="bg-gray-800 rounded-lg p-6 mb-8">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 id="single-name" class="text-2xl font-bold">Station Name</h2>
+                        <p id="single-status" class="text-lg font-bold status-pending">Status</p>
+                    </div>
+                    <a id="single-dashboard-link" href="#" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded transition">
+                        <i class="fas fa-chart-line mr-2"></i>Dashboard
+                    </a>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-gray-700 rounded p-4 text-center">
+                        <div id="single-last-seen" class="text-2xl font-bold text-blue-400">-</div>
+                        <div class="text-xs text-gray-400">Last Seen</div>
+                    </div>
+                    <div class="bg-gray-700 rounded p-4 text-center">
+                        <div id="single-active-hours" class="text-2xl font-bold text-green-400">-</div>
+                        <div class="text-xs text-gray-400">Total Active Hours</div>
+                    </div>
+                    <div class="bg-gray-700 rounded p-4 text-center">
+                        <div id="single-notify" class="text-2xl font-bold text-purple-400">-</div>
+                        <div class="text-xs text-gray-400">Notify After (hrs)</div>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <h4 class="font-bold mb-2">Last 24h Status Timeline</h4>
+                    <p class="text-sm text-gray-400">Green = ACTIVE, Yellow = ACTIVATED, Orange = PENDING, Red = INACTIVE</p>
+                </div>
+                <div id="single-timeline" class="flex gap-1 h-8"></div>
+            </div>
+        </div>
+
+        <!-- Network-wide View -->
+        <div id="network-view">
+            <div class="bg-gray-800 rounded-lg p-6">
+                <h2 class="text-2xl font-bold mb-4">All Stations</h2>
+                <div id="stations-table-container"><div class="text-gray-400 text-center py-8">Loading...</div></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        const feederId = new URLSearchParams(window.location.search).get('id');
+
+        async function init() {
+            if (feederId) {
+                document.getElementById('single-view').classList.remove('hidden');
+                document.getElementById('network-view').classList.add('hidden');
+                document.getElementById('page-title').textContent = 'Station Health';
+                document.getElementById('single-dashboard-link').href = `/feeders/account/${feederId}`;
+                await Promise.all([loadNetworkSummary(), loadSingleFeeder()]);
+            } else {
+                document.getElementById('single-view').classList.add('hidden');
+                document.getElementById('network-view').classList.remove('hidden');
+                document.getElementById('page-title').textContent = 'Network Health';
+                await loadNetworkSummary();
+                await loadNetworkTable();
+            }
+        }
+
+        async function loadNetworkSummary() {
+            try {
+                const res = await fetch(`${API_BASE}/feeders/health`);
+                const data = await res.json();
+                document.getElementById('count-active').textContent = data.active || 0;
+                document.getElementById('count-activated').textContent = data.activated || 0;
+                document.getElementById('count-inactive').textContent = data.inactive || 0;
+                document.getElementById('count-pending').textContent = data.pending || 0;
+                return data.stations || [];
+            } catch (e) {
+                console.error('Network summary error:', e);
+                return [];
+            }
+        }
+
+        async function loadSingleFeeder() {
+            try {
+                const res = await fetch(`${API_BASE}/feeders/${feederId}/health`);
+                const data = await res.json();
+                if (data.error) {
+                    document.getElementById('single-view').innerHTML = `<div class="text-red-400 text-center py-8">${data.error}</div>`;
+                    return;
+                }
+                document.getElementById('single-name').textContent = data.name;
+                const statusEl = document.getElementById('single-status');
+                statusEl.textContent = data.status;
+                statusEl.className = `text-lg font-bold status-${data.status.toLowerCase()}`;
+
+                let lastSeenText = 'Never';
+                if (data.minutes_since_last_seen !== null) {
+                    const m = data.minutes_since_last_seen;
+                    lastSeenText = m < 1 ? 'Just now' : m < 60 ? `${Math.round(m)}m ago` : `${Math.round(m/60)}h ago`;
+                }
+                document.getElementById('single-last-seen').textContent = lastSeenText;
+                document.getElementById('single-active-hours').textContent = data.total_active_hours || 0;
+                document.getElementById('single-notify').textContent = data.notify_after_hours || 0;
+
+                // Mock timeline (since we don't have historical data yet)
+                renderTimeline(data.status);
+            } catch (e) {
+                console.error('Single feeder error:', e);
+            }
+        }
+
+        function renderTimeline(currentStatus) {
+            const container = document.getElementById('single-timeline');
+            const statuses = ['ACTIVE', 'ACTIVE', 'ACTIVE', 'INACTIVE', 'ACTIVE', 'ACTIVE', 'ACTIVATED', 'ACTIVE', 'ACTIVE', 'ACTIVE', 'ACTIVE', 'INACTIVE'];
+            // In real implementation, this would come from a history endpoint
+            container.innerHTML = statuses.map(s => {
+                const color = s === 'ACTIVE' ? '#23c074' : s === 'ACTIVATED' ? '#fbbf24' : s === 'INACTIVE' ? '#ef4444' : '#f97316';
+                return `<div class="flex-1 rounded" style="background:${color};opacity:0.8" title="${s}"></div>`;
+            }).join('');
+        }
+
+        async function loadNetworkTable() {
+            try {
+                const res = await fetch(`${API_BASE}/feeders/health`);
+                const data = await res.json();
+                const stations = data.stations || [];
+                const container = document.getElementById('stations-table-container');
+                if (stations.length === 0) {
+                    container.innerHTML = '<div class="text-gray-400 text-center py-8">No stations registered.</div>';
+                    return;
+                }
+                container.innerHTML = `<table class="w-full">
+                    <thead><tr class="text-left text-xs uppercase text-gray-500 border-b border-gray-700">
+                        <th class="py-3 px-4">Status</th><th class="py-3 px-4">Name</th><th class="py-3 px-4">Last Seen</th><th class="py-3 px-4">Active Hours</th><th class="py-3 px-4">Actions</th>
+                    </tr></thead>
+                    <tbody>${stations.map(s => renderNetworkRow(s)).join('')}</tbody>
+                </table>`;
+            } catch (e) {
+                console.error('Network table error:', e);
+            }
+        }
+
+        function renderNetworkRow(s) {
+            const dotClass = `dot-${s.status.toLowerCase()}`;
+            let lastSeenText = 'Never';
+            if (s.last_seen_at) {
+                const diff = (Date.now() - new Date(s.last_seen_at).getTime()) / 60000;
+                lastSeenText = diff < 1 ? 'Just now' : diff < 60 ? `${Math.round(diff)}m ago` : `${Math.round(diff/60)}h ago`;
+            }
+            return `<tr class="border-b border-gray-700 hover:bg-gray-700/50">
+                <td class="py-3 px-4"><span class="inline-block w-2 h-2 rounded-full ${dotClass} mr-2"></span><span class="status-${s.status.toLowerCase()}">${s.status}</span></td>
+                <td class="py-3 px-4 font-bold">${s.display_name || s.name}</td>
+                <td class="py-3 px-4 text-gray-400">${lastSeenText}</td>
+                <td class="py-3 px-4 text-green-400 font-bold">${s.total_active_hours || 0}</td>
+                <td class="py-3 px-4"><div class="flex gap-2"><a href="/feeders/health?id=${s.id}" class="text-yellow-400 hover:text-yellow-300 text-sm" title="Health"><i class="fas fa-heartbeat"></i></a><a href="/feeders/account/${s.id}" class="text-green-400 hover:text-green-300 text-sm" title="Dashboard"><i class="fas fa-chart-line"></i></a></div></td>
+            </tr>`;
+        }
+
+        init();
+    </script>
+</body>
+</html>

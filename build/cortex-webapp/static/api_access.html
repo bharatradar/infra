@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Access | Bharat Radar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background: #111827; }
+        .sidebar { background: #0f172a; border-right: 1px solid #1e293b; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: #9ca3af; text-decoration: none; transition: all 0.2s; border-left: 3px solid transparent; }
+        .nav-item:hover { background: rgba(35,192,116,0.1); color: #fff; }
+        .nav-item.active { background: rgba(35,192,116,0.15); color: #23c074; border-left-color: #23c074; }
+        .nav-section { padding: 16px 16px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; font-weight: 600; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; }
+        .card-header { background: #0f172a; border-bottom: 1px solid #334155; padding: 16px 20px; }
+        .card-header h3 { color: #e2e8f0; font-weight: 600; font-size: 16px; margin: 0; }
+        .badge { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .badge-free { background: #4b5563; color: #fff; }
+        .badge-bronze { background: linear-gradient(135deg, #fed7aa, #f97316); color: #1f2937; }
+        .badge-silver { background: linear-gradient(135deg, #e5e7eb, #9ca3af); color: #1f2937; }
+        .badge-gold { background: linear-gradient(135deg, #fef3c7, #fbbf24); color: #1f2937; }
+        .badge-platinum { background: linear-gradient(135deg, #e5e7eb, #6b7280); color: #1f2937; }
+        .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 6px; font-weight: 500; font-size: 14px; cursor: pointer; transition: all 0.2s; border: none; }
+        .btn-primary { background: #23c074; color: #fff; }
+        .btn-primary:hover { background: #16a34a; }
+        .btn-sm { padding: 8px 12px; font-size: 13px; }
+        .api-key { background: #0f172a; padding: 12px; border-radius: 6px; font-family: monospace; word-break: break-all; color: #23c074; }
+        code { background: #0f172a; padding: 2px 6px; border-radius: 4px; color: #23c074; font-family: monospace; }
+        .endpoint { background: #0f172a; padding: 14px; margin-bottom: 10px; border-radius: 6px; border-left: 3px solid #23c074; }
+        .method { padding: 3px 8px; border-radius: 4px; font-weight: 600; font-size: 11px; }
+        .method-get { background: rgba(73,204,144,0.15); color: #49cc90; }
+        .method-post { background: rgba(97,175,254,0.15); color: #61affe; }
+        pre { background: #0f172a; padding: 14px; border-radius: 6px; overflow-x: auto; }
+        pre code { background: none; padding: 0; color: #e2e8f0; }
+        .tab-btn { padding: 10px 16px; color: #9ca3af; cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab-btn:hover { color: #fff; }
+        .tab-btn.active { color: #23c074; border-bottom-color: #23c074; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <!-- Header -->
+    <header class="fixed top-0 left-0 right-0 h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 z-50">
+        <div class="flex items-center gap-3">
+            <a href="/dashboard" class="text-gray-400 hover:text-white text-lg"><i class="fas fa-arrow-left"></i></a>
+            <div class="flex items-center gap-2">
+                <div class="relative w-3 h-3">
+                    <span class="animate-ping absolute w-full h-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span class="relative w-full h-full rounded-full bg-blue-500"></span>
+                </div>
+                <h1 class="text-lg font-black tracking-wide uppercase text-blue-400">Raga Radar <span class="text-gray-400 text-sm font-normal">| API Access</span></h1>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <a href="/profile" class="text-gray-400 hover:text-white text-sm">Profile</a>
+            <a href="/logout" class="text-gray-400 hover:text-white"><i class="fas fa-sign-out-alt"></i></a>
+        </div>
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="fixed top-16 left-0 w-64 h-screen sidebar overflow-y-auto">
+        <nav class="py-4">
+            <div class="nav-section">Resources</div>
+            <a href="/docs" target="_blank" class="nav-item">
+                <i class="fas fa-book w-5 text-center"></i><span>API Docs</span>
+            </a>
+            <a href="/api-access" class="nav-item active">
+                <i class="fas fa-key w-5 text-center"></i><span>API Access</span>
+            </a>
+            
+            <div class="nav-section">Personal</div>
+            <a href="/profile" class="nav-item">
+                <i class="fas fa-user w-5 text-center"></i><span>Account</span>
+            </a>
+            
+            <div class="nav-section">Network</div>
+            <a href="/feeders" class="nav-item">
+                <i class="fas fa-satellite-dish w-5 text-center"></i><span>My Feeders</span>
+            </a>
+            <a href="/dashboard" class="nav-item">
+                <i class="fas fa-plane w-5 text-center"></i><span>Flight Radar</span>
+            </a>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="ml-64 mt-16 p-6 bg-gray-900 min-h-screen">
+        <h1 class="text-2xl font-bold mb-6 text-white"><i class="fas fa-key text-green-500 mr-2"></i>API Access & Documentation</h1>
+
+        <!-- User Status Cards -->
+        <div class="grid md:grid-cols-2 gap-6 mb-6">
+            <div class="card">
+                <div class="card-header flex justify-between items-center">
+                    <h3 class="font-semibold">Your API Status</h3>
+                    <span class="badge badge-free" id="userTier">FREE</span>
+                </div>
+                <div class="p-5">
+                    <div class="mb-4">
+                        <label class="text-sm text-gray-400 block mb-2">API Key</label>
+                        <div class="api-key" id="apiKeyDisplay">No API key generated</div>
+                    </div>
+                    <button onclick="generateApiKey()" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Generate New API Key
+                    </button>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="font-semibold"><i class="fas fa-chart-line text-green-500 mr-2"></i>Your Usage</h3>
+                </div>
+                <div class="p-5">
+                    <div class="grid grid-cols-2 gap-4 text-center mb-4">
+                        <div>
+                            <div class="text-2xl font-bold text-white" id="requestsPerMin">0</div>
+                            <div class="text-sm text-gray-400">Requests/min</div>
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold text-white" id="requestsPerDay">0</div>
+                            <div class="text-sm text-gray-400">Requests/day</div>
+                        </div>
+                    </div>
+                    <div class="border-t border-gray-700 pt-4">
+                        <div class="flex justify-between text-sm text-gray-400 mb-1">
+                            <span>Limit/min:</span><span id="limitPerMin">5</span>
+                        </div>
+                        <div class="flex justify-between text-sm text-gray-400">
+                            <span>Limit/day:</span><span id="limitPerDay">100</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Rate Limits -->
+        <div class="card mb-6">
+            <div class="card-header">
+                <h3 class="font-semibold"><i class="fas fa-layer-group text-green-500 mr-2"></i>Membership Tiers</h3>
+            </div>
+            <div class="p-5 overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="text-gray-400 text-sm uppercase border-b border-gray-700">
+                            <th class="py-3 px-4">Tier</th>
+                            <th class="py-3 px-4">Req/min</th>
+                            <th class="py-3 px-4">Req/day</th>
+                            <th class="py-3 px-4">Access</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-gray-300">
+                        <tr class="border-b border-gray-800"><td class="py-3 px-4"><span class="badge badge-free">FREE</span></td><td class="py-3 px-4">5</td><td class="py-3 px-4">100</td><td class="py-3 px-4 text-gray-500">Basic only</td></tr>
+                        <tr class="border-b border-gray-800"><td class="py-3 px-4"><span class="badge badge-bronze">BRONZE</span></td><td class="py-3 px-4">100</td><td class="py-3 px-4">1,000</td><td class="py-3 px-4 text-gray-500">All endpoints</td></tr>
+                        <tr class="border-b border-gray-800"><td class="py-3 px-4"><span class="badge badge-silver">SILVER</span></td><td class="py-3 px-4">500</td><td class="py-3 px-4">10,000</td><td class="py-3 px-4 text-gray-500">+ Historical</td></tr>
+                        <tr class="border-b border-gray-800"><td class="py-3 px-4"><span class="badge badge-gold">GOLD</span></td><td class="py-3 px-4">2,000</td><td class="py-3 px-4">50,000</td><td class="py-3 px-4 text-gray-500">+ Real-time</td></tr>
+                        <tr><td class="py-3 px-4"><span class="badge badge-platinum">PLATINUM</span></td><td class="py-3 px-4">10,000</td><td class="py-3 px-4">Unlimited</td><td class="py-3 px-4 text-gray-500">Full access</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- API Endpoints -->
+        <div class="card mb-6">
+            <div class="card-header flex justify-between items-center">
+                <h3 class="font-semibold"><i class="fas fa-code text-green-500 mr-2"></i>Available APIs</h3>
+                <a href="/docs" target="_blank" class="btn btn-primary btn-sm">
+                    <i class="fas fa-external-link-alt"></i> Interactive Docs
+                </a>
+            </div>
+            <div class="p-5">
+                <p class="text-gray-400 mb-4">Base URL: <code>https://api.bharat-radar.vellur.in</code></p>
+                
+                <div class="endpoint">
+                    <div class="flex items-center mb-2">
+                        <span class="method method-get">GET</span>
+                        <code>/api/v1/flights</code>
+                    </div>
+                    <div class="text-sm text-gray-500">Query: airport, limit, country</div>
+                </div>
+                <div class="endpoint">
+                    <div class="flex items-center mb-2">
+                        <span class="method method-get">GET</span>
+                        <code>/api/v1/airports</code>
+                    </div>
+                    <div class="text-sm text-gray-500">List airports</div>
+                </div>
+                <div class="endpoint">
+                    <div class="flex items-center mb-2">
+                        <span class="method method-get">GET</span>
+                        <code>/api/v1/history/arrivals</code>
+                    </div>
+                    <div class="text-sm text-gray-500">Historical data (Silver+)</div>
+                </div>
+                <div class="endpoint">
+                    <div class="flex items-center mb-2">
+                        <span class="method method-get">GET</span>
+                        <code>/api/v1/delay/predict</code>
+                    </div>
+                    <div class="text-sm text-gray-500">Predict delays</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Code Examples -->
+        <div class="card mb-6">
+            <div class="card-header">
+                <h3 class="font-semibold"><i class="fas fa-code text-green-500 mr-2"></i>Code Examples</h3>
+            </div>
+            <div class="p-5">
+                <div class="flex gap-2 mb-4 border-b border-gray-700">
+                    <button class="tab-btn active" onclick="showTab('curl',event)">cURL</button>
+                    <button class="tab-btn" onclick="showTab('python',event)">Python</button>
+                    <button class="tab-btn" onclick="showTab('js',event)">JavaScript</button>
+                </div>
+                <div id="tab-curl">
+                    <pre><code>curl -X GET "https://api.bharat-radar.vellur.in/api/v1/flights?airport=VIDP" -H "X-API-Key: br_your_key"</code></pre>
+                </div>
+                <div id="tab-python" class="hidden">
+                    <pre><code>import requests
+url = "https://api.bharat-radar.vellur.in/api/v1/flights"
+headers = {"X-API-Key": "br_your_key"}
+print(requests.get(url, headers=headers, params={"airport": "VIDP"}).json())</code></pre>
+                </div>
+                <div id="tab-js" class="hidden">
+                    <pre><code>fetch('https://api.bharat-radar.vellur.in/api/v1/flights?airport=VIDP', 
+  {headers: {'X-API-Key': 'br_your_key'}})
+.then(r => r.json()).then(console.log)</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- For Feeders -->
+        <div class="card mb-6" style="background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.3);">
+            <div class="p-5">
+                <h3 class="font-semibold mb-3 text-blue-400"><i class="fas fa-satellite-dish mr-2"></i>For Feeders: Use Station UUID</h3>
+                <p class="text-gray-400 text-sm">Use <code>X-Feeder-UUID</code> header instead of API key for automatic tier upgrades based on message volume.</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="card text-center">
+            <div class="p-5">
+                <p class="text-gray-400 mb-4">Test all APIs interactively</p>
+                <a href="/docs" target="_blank" class="btn btn-primary">
+                    <i class="fas fa-flask"></i> Open API Documentation
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function showTab(tab, e) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+            ['curl','python','js'].forEach(t => document.getElementById('tab-'+t).classList.add('hidden'));
+            document.getElementById('tab-'+tab).classList.remove('hidden');
+        }
+
+        let currentApiKey = null;
+
+        async function checkAuth() {
+            try {
+                const r = await fetch('/api/auth/me');
+                if (!r.ok) { window.location.href = '/login'; return; }
+                const user = await r.json();
+                const tier = (user.tier || 'free').toLowerCase();
+                document.getElementById('userTier').className = 'badge badge-' + tier;
+                document.getElementById('userTier').textContent = (user.tier || 'free').toUpperCase();
+                loadApiKeys();
+                loadUsage();
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadApiKeys() {
+            try {
+                const r = await fetch('/api/keys');
+                if (!r.ok) return;
+                const data = await r.json();
+                if (data.api_keys && data.api_keys.length > 0) {
+                    const key = data.api_keys[0];
+                    document.getElementById('apiKeyDisplay').innerHTML = '<span class="text-gray-500 text-sm">Key saved in database</span>';
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadUsage() {
+            const r = await fetch('/api/auth/me');
+            if (r.ok) {
+                const user = await r.json();
+                const tier = (user.tier || 'free').toLowerCase();
+                const limits = { free: { min: 5, day: 100 }, bronze: { min: 100, day: 1000 }, silver: { min: 500, day: 10000 }, gold: { min: 2000, day: 50000 }, platinum: { min: 10000, day: 'Unlimited' } };
+                const l = limits[tier] || limits.free;
+                document.getElementById('limitPerMin').textContent = l.min;
+                document.getElementById('limitPerDay').textContent = l.day;
+            }
+        }
+
+        async function generateApiKey(event) {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            try {
+                const r = await fetch('/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: 'My API Key' }) });
+                const data = await r.json();
+                if (data.api_key) {
+                    document.getElementById('apiKeyDisplay').innerHTML = data.api_key;
+                    alert('API Key generated! Save it securely: ' + data.api_key);
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) { console.error(e); alert('Failed to generate key'); }
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-plus"></i> Generate New API Key';
+        }
+
+        checkAuth();
+    </script>
+</body>
+</html>
