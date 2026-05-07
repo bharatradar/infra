@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Raga Radar AI</title>
+    <title>BharatRadar AI</title>
     <style>
         /* --- General Layout --- */
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0b0e14; color: #e0e0e0; display: flex; flex-direction: column; height: 100vh; margin: 0; }
@@ -38,7 +38,7 @@
 </head>
 <body>
     <div id="chat-box">
-        <div class="msg bot">✈️ <b>Raga Radar:</b> System ready. How can I help with your flight routing today?</div>
+        <div class="msg bot">✈️ <b>BharatRadar:</b> System ready. How can I help with your flight routing today?</div>
     </div>
     
     <div id="input-area">
@@ -100,7 +100,7 @@
         function appendMessage(content, side) {
             const msgDiv = document.createElement('div');
             msgDiv.className = `msg ${side}`;
-            msgDiv.innerHTML = side === 'bot' ? `✈️ <b>Raga Radar:</b><br>${content}` : content;
+            msgDiv.innerHTML = side === 'bot' ? `✈️ <b>BharatRadar:</b><br>${content}` : content;
             chatBox.appendChild(msgDiv);
             chatBox.scrollTop = chatBox.scrollHeight;
         }
