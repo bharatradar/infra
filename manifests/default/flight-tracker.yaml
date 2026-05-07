@@ -81,8 +81,8 @@ spec:
       - name: ghcr-secret
       containers:
       - name: tracker
-          image: ghcr.io/bharatradar/flight-tracker:v2026.05.08.09
-        imagePullPolicy: IfNotPresent
+        image: ghcr.io/bharatradar/flight-tracker:v2026.05.08.10
+        imagePullPolicy: Always
         envFrom:
         - configMapRef:
             name: flight-tracker-config

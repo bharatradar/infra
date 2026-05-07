@@ -44,8 +44,8 @@ spec:
         - name: ghcr-secret
       containers:
         - name: mcp
-          image: ghcr.io/bharatradar/mcp-server:v2026.05.08.09
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/bharatradar/mcp-server:v2026.05.08.10
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
               name: http
