@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Community Feeder Network - Bharat Radar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .tier-platinum { background: linear-gradient(135deg, #e5e7eb 0%, #9ca3af 50%, #e5e7eb 100%); }
+        .tier-gold { background: linear-gradient(135deg, #fef3c7 0%, #fbbf24 50%, #f59e0b 100%); }
+        .tier-silver { background: linear-gradient(135deg, #f3f4f6 0%, #d1d5db 50%, #9ca3af 100%); }
+        .tier-bronze { background: linear-gradient(135deg, #ffedd5 0%, #fdba74 50%, #ea580c 100%); }
+        .feeder-card { transition: all 0.3s ease; }
+        .feeder-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-8">
+            <a href="/command_center/dashboard" class="text-gray-400 hover:text-white text-xl">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <div class="text-center flex-1">
+                <h1 class="text-4xl font-bold mb-2">🛰️ Community Feeder Network</h1>
+                <p class="text-gray-400">Recognizing and rewarding ADS-B contributors across South Asia</p>
+            </div>
+            <a href="/command_center/feeders/map" class="bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 rounded transition" title="Coverage Map">
+                <i class="fas fa-globe mr-2"></i>Map
+            </a>
+        </div>
+
+        <!-- Tier Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="tier-platinum rounded-lg p-6 text-center text-gray-800">
+                <i class="fas fa-crown text-3xl mb-2"></i>
+                <h3 class="font-bold text-lg">Platinum</h3>
+                <p class="text-sm">100K+ msgs/day</p>
+                <div id="platinum-count" class="text-2xl font-bold mt-2">-</div>
+            </div>
+            <div class="tier-gold rounded-lg p-6 text-center text-gray-800">
+                <i class="fas fa-medal text-3xl mb-2"></i>
+                <h3 class="font-bold text-lg">Gold</h3>
+                <p class="text-sm">50K+ msgs/day</p>
+                <div id="gold-count" class="text-2xl font-bold mt-2">-</div>
+            </div>
+            <div class="tier-silver rounded-lg p-6 text-center text-gray-800">
+                <i class="fas fa-award text-3xl mb-2"></i>
+                <h3 class="font-bold text-lg">Silver</h3>
+                <p class="text-sm">10K+ msgs/day</p>
+                <div id="silver-count" class="text-2xl font-bold mt-2">-</div>
+            </div>
+            <div class="tier-bronze rounded-lg p-6 text-center text-gray-800">
+                <i class="fas fa-star text-3xl mb-2"></i>
+                <h3 class="font-bold text-lg">Bronze</h3>
+                <p class="text-sm">1K+ msgs/day</p>
+                <div id="bronze-count" class="text-2xl font-bold mt-2">-</div>
+            </div>
+        </div>
+
+        <!-- System Stats -->
+        <div class="bg-gray-800 rounded-lg p-6 mb-8">
+            <h2 class="text-2xl font-bold mb-4">📊 Network Statistics (7 days)</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="text-center">
+                    <div id="active-feeders" class="text-3xl font-bold text-blue-400">-</div>
+                    <div class="text-gray-400">Active Feeders</div>
+                </div>
+                <div class="text-center">
+                    <div id="total-messages" class="text-3xl font-bold text-green-400">-</div>
+                    <div class="text-gray-400">Total Messages</div>
+                </div>
+                <div class="text-center">
+                    <div id="total-aircraft" class="text-3xl font-bold text-yellow-400">-</div>
+                    <div class="text-gray-400">Aircraft Tracked</div>
+                </div>
+                <div class="text-center">
+                    <div id="avg-uptime" class="text-3xl font-bold text-purple-400">-</div>
+                    <div class="text-gray-400">Avg Uptime (hrs)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- My Station Dashboard (requires auth) -->
+        <div id="my-station-section" class="bg-gray-800 rounded-lg p-6 mb-8 hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">🛰️ My Stations</h2>
+                <select id="station-selector" class="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-white hidden">
+                </select>
+            </div>
+
+            <div id="station-details" class="hidden">
+                <!-- Station Header with Edit button -->
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center gap-4">
+                        <div id="station-tier-badge" class="px-4 py-2 rounded font-bold text-gray-800">BRONZE</div>
+                        <div>
+                            <h3 id="station-name-display" class="text-xl font-bold">Station Name</h3>
+                            <p id="station-location-display" class="text-gray-400">Location</p>
+                        </div>
+                    </div>
+                    <button id="edit-station-btn" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded transition" title="Edit this station">
+                        <i class="fas fa-pen mr-2"></i>Edit Station
+                    </button>
+                </div>
+
+                <!-- Edit Station Form (hidden by default) -->
+                <div id="station-edit-form" class="hidden bg-gray-700 rounded-lg p-4 mb-6">
+                    <h4 class="font-bold mb-3 text-yellow-400">Editing Station <span id="edit-station-id"></span></h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="md:col-span-2">
+                            <label class="block text-sm text-gray-400 mb-1">Station ID (UUID)</label>
+                            <input type="text" id="edit-uuid" placeholder="Paste from /etc/bharat-radar-id" class="bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white w-full">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">Location</label>
+                            <input type="text" id="edit-location" placeholder="City/Area" class="bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white w-full">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">Latitude</label>
+                            <input type="number" id="edit-lat" step="any" placeholder="Latitude" class="bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white w-full">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">Longitude</label>
+                            <input type="number" id="edit-lon" step="any" placeholder="Longitude" class="bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white w-full">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">Antenna Type</label>
+                            <select id="edit-antenna" class="bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white w-full">
+                                <option value="">Select...</option>
+                                <option value="Outdoor">Outdoor</option>
+                                <option value="Indoor">Indoor</option>
+                                <option value="Attic">Attic</option>
+                                <option value="DIY">DIY / Custom</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-1">Receiver Type</label>
+                            <select id="edit-receiver" class="bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white w-full">
+                                <option value="">Select...</option>
+                                <option value="RTL-SDR">RTL-SDR</option>
+                                <option value="Airspy">Airspy</option>
+                                <option value="HackRF">HackRF</option>
+                                <option value="Raspberry Pi">Raspberry Pi (built-in)</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex gap-3 mt-4">
+                        <button id="save-edit-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded transition">
+                            <i class="fas fa-save mr-2"></i>Save Changes
+                        </button>
+                        <button id="cancel-edit-btn" class="bg-gray-600 hover:bg-gray-500 text-white py-2 px-4 rounded transition">
+                            Cancel
+                        </button>
+                    </div>
+                    <div id="edit-result" class="mt-2 hidden"></div>
+                </div>
+
+                <!-- Live Stats -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-gray-700 rounded p-4 text-center">
+                        <div id="live-aircraft-count" class="text-3xl font-bold text-blue-400">-</div>
+                        <div class="text-sm text-gray-400">Aircraft</div>
+                    </div>
+                    <div class="bg-gray-700 rounded p-4 text-center">
+                        <div id="live-unique-count" class="text-3xl font-bold text-green-400">-</div>
+                        <div class="text-sm text-gray-400">Unique</div>
+                    </div>
+                    <div class="bg-gray-700 rounded p-4 text-center">
+                        <div id="live-messages-count" class="text-3xl font-bold text-yellow-400">-</div>
+                        <div class="text-sm text-gray-400">Messages</div>
+                    </div>
+                    <div class="bg-gray-700 rounded p-4 text-center">
+                        <div id="live-range-display" class="text-3xl font-bold text-purple-400">-</div>
+                        <div class="text-sm text-gray-400">Max Range (km)</div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex gap-4 mb-6">
+                    <a id="tar1090-link" href="#" target="_blank" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded transition opacity-50 cursor-not-allowed">
+                        <i class="fas fa-satellite-dish mr-2"></i>Open Live Map
+                    </a>
+                    <button id="refresh-stats-btn" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition">
+                        <i class="fas fa-sync-alt mr-2"></i>Refresh
+                    </button>
+                </div>
+
+                <div class="text-xs text-gray-500">Auto-refreshes every 5 seconds</div>
+            </div>
+
+            <div id="no-station-msg" class="text-center text-gray-400 hidden">
+                <p class="mb-4">You haven't registered any stations yet.</p>
+                <button onclick="showRegisterTab()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition">
+                    Register a Station
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="flex gap-4 mb-6 border-b border-gray-700">
+            <button id="tab-leaderboard" class="px-4 py-2 text-blue-400 border-b-2 border-blue-400 font-bold" onclick="switchTab('leaderboard')">
+                🏆 Leaderboard
+            </button>
+            <button id="tab-my-station" class="px-4 py-2 text-gray-400 hover:text-white hidden" onclick="switchTab('my-station')">
+                🛰️ My Station
+            </button>
+            <button id="tab-register" class="px-4 py-2 text-gray-400 hover:text-white" onclick="switchTab('register')">
+                📝 Register
+            </button>
+        </div>
+
+        <!-- Registration Form -->
+        <div id="register-section" class="bg-gray-800 rounded-lg p-6 mb-8 hidden">
+            <h2 class="text-2xl font-bold mb-4">📝 Register Your Feeder</h2>
+            <p class="text-gray-400 mb-4">Only station hardware details needed. Your name and callsign come from your <a href="/command_center/profile" class="text-blue-400 underline">Profile</a>.</p>
+            <form id="feeder-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input type="text" id="reg-station-uuid" placeholder="Station ID (from /etc/bharat-radar-id)" class="bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white md:col-span-2">
+                <input type="text" id="reg-location" placeholder="Location (City/Area)" class="bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white">
+                <button type="button" id="reg-geo-btn" class="bg-gray-600 hover:bg-gray-500 text-white py-2 px-4 rounded transition">
+                    <i class="fas fa-location-arrow mr-2"></i>Use My Location
+                </button>
+                <input type="number" id="reg-lat" placeholder="Latitude" step="any" class="bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white">
+                <input type="number" id="reg-lon" placeholder="Longitude" step="any" class="bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white">
+                <select id="reg-antenna" class="bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white">
+                    <option value="">Antenna Type</option>
+                    <option value="Outdoor">Outdoor</option>
+                    <option value="Indoor">Indoor</option>
+                    <option value="Attic">Attic</option>
+                    <option value="DIY">DIY / Custom</option>
+                </select>
+                <select id="reg-receiver" class="bg-gray-700 border border-gray-600 rounded px-4 py-2 text-white">
+                    <option value="">Receiver Type</option>
+                    <option value="RTL-SDR">RTL-SDR</option>
+                    <option value="Airspy">Airspy</option>
+                    <option value="HackRF">HackRF</option>
+                    <option value="Raspberry Pi">Raspberry Pi (built-in)</option>
+                    <option value="Other">Other</option>
+                </select>
+                <button type="submit" class="md:col-span-2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition">
+                    Register Feeder
+                </button>
+            </form>
+            <div id="reg-result" class="mt-4 hidden"></div>
+        </div>
+
+        <!-- Leaderboard -->
+        <div class="bg-gray-800 rounded-lg p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">🏆 Feeder Leaderboard</h2>
+                <select id="tier-filter" class="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-white">
+                    <option value="">All Tiers</option>
+                    <option value="PLATINUM">Platinum</option>
+                    <option value="GOLD">Gold</option>
+                    <option value="SILVER">Silver</option>
+                    <option value="BRONZE">Bronze</option>
+                </select>
+            </div>
+            <div id="leaderboard" class="space-y-3">
+                <div class="text-center text-gray-400">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Coverage Gaps -->
+        <div class="bg-gray-800 rounded-lg p-6 mt-8">
+            <h2 class="text-2xl font-bold mb-4">🗺️ Coverage Gaps</h2>
+            <p class="text-gray-400 mb-4">Help us identify areas that need better ADS-B coverage</p>
+            <div id="coverage-gaps" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="text-center text-gray-400">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/command_center/api';
+
+        // Format numbers
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        // Tab switching
+        let currentTab = 'leaderboard';
+        let myStations = [];
+        let selectedStation = null;
+        let statsInterval = null;
+
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // Update tab buttons
+            document.querySelectorAll('[id^="tab-"]').forEach(btn => {
+                btn.classList.remove('text-blue-400', 'border-b-2', 'border-blue-400', 'font-bold');
+                btn.classList.add('text-gray-400');
+            });
+            document.getElementById(`tab-${tab}`).classList.add('text-blue-400', 'border-b-2', 'border-blue-400', 'font-bold');
+            document.getElementById(`tab-${tab}`).classList.remove('text-gray-400');
+            
+            // Show/hide sections
+            document.getElementById('leaderboard').parentElement.classList.toggle('hidden', tab !== 'leaderboard');
+            document.getElementById('my-station-section').classList.toggle('hidden', tab !== 'my-station');
+            document.getElementById('register-section').classList.toggle('hidden', tab !== 'register');
+            
+            if (tab === 'my-station') {
+                loadMyStations();
+            }
+        }
+
+        function showRegisterTab() {
+            switchTab('register');
+        }
+
+        // Load my stations
+        async function loadMyStations() {
+            try {
+                const res = await fetch(`${API_BASE}/feeders/my-stations?_=${Date.now()}`);
+                
+                if (res.status === 401) {
+                    // Not logged in
+                    document.getElementById('my-station-section').innerHTML = `
+                        <div class="text-center text-gray-400">
+                            <p class="mb-4">Please log in to view your stations.</p>
+                            <a href="/command_center/login" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition">
+                                Log In
+                            </a>
+                        </div>
+                    `;
+                    document.getElementById('my-station-section').classList.remove('hidden');
+                    return;
+                }
+                
+                const data = await res.json();
+                myStations = data.stations || [];
+                
+                const selector = document.getElementById('station-selector');
+                const details = document.getElementById('station-details');
+                const noStation = document.getElementById('no-station-msg');
+
+                if (myStations.length === 0) {
+                    details.classList.add('hidden');
+                    noStation.classList.remove('hidden');
+                    selector.classList.add('hidden');
+                    return;
+                }
+
+                noStation.classList.add('hidden');
+                details.classList.remove('hidden');
+                
+                // Populate selector if multiple stations
+                if (myStations.length > 1) {
+                    selector.classList.remove('hidden');
+                    selector.innerHTML = myStations.map((s, i) => 
+                        `<option value="${i}">${s.name}</option>`
+                    ).join('');
+                } else {
+                    selector.classList.add('hidden');
+                }
+                
+                // Select first station
+                selectStation(0);
+                
+            } catch (e) {
+                console.error('My stations error:', e);
+            }
+        }
+
+        function selectStation(index) {
+            selectedStation = myStations[index];
+
+            document.getElementById('station-name-display').textContent = selectedStation.name;
+            document.getElementById('station-location-display').textContent = selectedStation.location || 'No location set';
+
+            // Set tier badge
+            const badge = document.getElementById('station-tier-badge');
+            badge.textContent = selectedStation.tier;
+            badge.className = `px-4 py-2 rounded font-bold text-gray-800 tier-${selectedStation.tier.toLowerCase()}`;
+
+            // Set tar1090 link - opens proxied view in new tab (UUID never exposed)
+            const mapLink = document.getElementById('tar1090-link');
+            mapLink.href = `${API_BASE}/feeders/${selectedStation.id}/map`;
+            mapLink.classList.remove('opacity-50', 'cursor-not-allowed');
+
+            // Hide edit form when switching stations
+            document.getElementById('station-edit-form').classList.add('hidden');
+
+            // Load stats
+            loadStationStats();
+
+            // Start auto-refresh
+            if (statsInterval) clearInterval(statsInterval);
+            statsInterval = setInterval(loadStationStats, 5000);
+        }
+
+        // Edit station button
+        document.getElementById('edit-station-btn').addEventListener('click', () => {
+            if (!selectedStation) return;
+            const form = document.getElementById('station-edit-form');
+            form.classList.remove('hidden');
+            document.getElementById('edit-station-id').textContent = selectedStation.name;
+            // Pre-fill form (leave UUID empty for security)
+            document.getElementById('edit-uuid').value = '';
+            document.getElementById('edit-location').value = selectedStation.location || '';
+            document.getElementById('edit-lat').value = selectedStation.lat || '';
+            document.getElementById('edit-lon').value = selectedStation.lon || '';
+            document.getElementById('edit-antenna').value = selectedStation.antenna_type || '';
+            document.getElementById('edit-receiver').value = selectedStation.receiver_type || '';
+        });
+
+        document.getElementById('cancel-edit-btn').addEventListener('click', () => {
+            document.getElementById('station-edit-form').classList.add('hidden');
+            document.getElementById('edit-result').classList.add('hidden');
+        });
+
+        document.getElementById('save-edit-btn').addEventListener('click', async () => {
+            if (!selectedStation) return;
+            const resultDiv = document.getElementById('edit-result');
+            resultDiv.classList.remove('hidden');
+            resultDiv.innerHTML = '<div class="text-yellow-400">Saving...</div>';
+
+            const payload = {};
+            const uuid = document.getElementById('edit-uuid').value.trim();
+            if (uuid) payload.station_uuid = uuid;
+            const loc = document.getElementById('edit-location').value.trim();
+            if (loc) payload.location = loc;
+            const lat = document.getElementById('edit-lat').value;
+            if (lat) payload.lat = parseFloat(lat);
+            const lon = document.getElementById('edit-lon').value;
+            if (lon) payload.lon = parseFloat(lon);
+            const ant = document.getElementById('edit-antenna').value;
+            if (ant) payload.antenna_type = ant;
+            const rec = document.getElementById('edit-receiver').value;
+            if (rec) payload.receiver_type = rec;
+
+            if (Object.keys(payload).length === 0) {
+                resultDiv.innerHTML = '<div class="text-red-400">Nothing to save.</div>';
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/feeders/${selectedStation.id}/update`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    resultDiv.innerHTML = '<div class="text-green-400"><i class="fas fa-check-circle"></i> Saved!</div>';
+                    // Refresh station data
+                    await loadMyStations();
+                    setTimeout(() => {
+                        document.getElementById('station-edit-form').classList.add('hidden');
+                        resultDiv.classList.add('hidden');
+                    }, 1500);
+                } else {
+                    resultDiv.innerHTML = `<div class="text-red-400">${data.message || 'Save failed'}</div>`;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `<div class="text-red-400">Error: ${e.message}</div>`;
+            }
+        });
+
+        async function loadStationStats() {
+            if (!selectedStation) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/feeders/${selectedStation.id}/stats`);
+                const data = await res.json();
+                
+                if (data.error) {
+                    console.error('Stats error:', data.error);
+                    return;
+                }
+                
+                document.getElementById('live-aircraft-count').textContent = data.aircraft_count || 0;
+                document.getElementById('live-unique-count').textContent = data.unique_aircraft || 0;
+                document.getElementById('live-messages-count').textContent = formatNumber(data.messages_count || 0);
+                document.getElementById('live-range-display').textContent = (data.max_range_km || 0).toFixed(1);
+                
+            } catch (e) {
+                console.error('Load stats error:', e);
+            }
+        }
+
+        // Refresh button
+        document.getElementById('refresh-stats-btn').addEventListener('click', loadStationStats);
+
+        // Station selector change
+        document.getElementById('station-selector').addEventListener('change', (e) => {
+            selectStation(parseInt(e.target.value));
+        });
+
+        // Check auth and show My Station tab
+        async function checkAuth() {
+            try {
+                const res = await fetch(`${API_BASE}/feeders/my-stations?_=${Date.now()}`);
+                if (res.status === 200) {
+                    document.getElementById('tab-my-station').classList.remove('hidden');
+                }
+            } catch (e) {
+                // Not authenticated
+            }
+        }
+
+        // Load tier summary
+        async function loadTierSummary() {
+            try {
+                const res = await fetch(`${API_BASE}/feeders/tiers/summary`);
+                const data = await res.json();
+                
+                // Reset counts
+                document.getElementById('platinum-count').textContent = '0';
+                document.getElementById('gold-count').textContent = '0';
+                document.getElementById('silver-count').textContent = '0';
+                document.getElementById('bronze-count').textContent = '0';
+                
+                // Set counts
+                data.tiers.forEach(t => {
+                    const el = document.getElementById(`${t.tier.toLowerCase()}-count`);
+                    if (el) el.textContent = t.count;
+                });
+            } catch (e) {
+                console.error('Tier summary error:', e);
+            }
+        }
+
+        // Load system stats
+        async function loadSystemStats() {
+            try {
+                document.getElementById('active-feeders').textContent = '-';
+                document.getElementById('total-messages').textContent = '-';
+                document.getElementById('total-aircraft').textContent = '-';
+                document.getElementById('avg-uptime').textContent = '-';
+            } catch (e) {
+                console.error('System stats error:', e);
+            }
+        }
+
+        // Load leaderboard
+        async function loadLeaderboard(tier = '') {
+            try {
+                const url = tier 
+                    ? `${API_BASE}/feeders/leaderboard?tier=${tier}&limit=50`
+                    : `${API_BASE}/feeders/leaderboard?limit=50`;
+                
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                const container = document.getElementById('leaderboard');
+                
+                if (!data.feeders || data.feeders.length === 0) {
+                    container.innerHTML = '<div class="text-center text-gray-400">No feeders registered yet. Be the first!</div>';
+                    return;
+                }
+                
+                container.innerHTML = data.feeders.map((f, i) => `
+                    <div class="feeder-card bg-gray-700 rounded-lg p-4 flex items-center gap-4">
+                        <div class="text-2xl font-bold text-gray-400 w-8">${i + 1}</div>
+                        <div class="tier-${f.tier.toLowerCase()} w-12 h-12 rounded-full flex items-center justify-center">
+                            <i class="fas fa-satellite-dish text-gray-800"></i>
+                        </div>
+                        <div class="flex-1">
+                            <a href="/command_center/feeders/account/${f.id}" class="font-bold text-lg hover:text-blue-400 transition">${f.display_name || f.name}</a>
+                            <div class="text-sm text-gray-400">
+                                ${f.location || 'Unknown location'}
+                                ${f.verified ? '<span class="text-green-400 ml-2"><i class="fas fa-check-circle"></i> Verified</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold text-blue-400">${formatNumber(f.total_messages || 0)}</div>
+                            <div class="text-xs text-gray-400">messages</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold text-green-400">${f.total_aircraft || 0}</div>
+                            <div class="text-xs text-gray-400">aircraft</div>
+                        </div>
+                        <div class="px-3 py-1 rounded text-xs font-bold ${f.tier === 'PLATINUM' ? 'bg-gray-300 text-gray-800' : f.tier === 'GOLD' ? 'bg-yellow-400 text-gray-800' : f.tier === 'SILVER' ? 'bg-gray-300 text-gray-800' : 'bg-orange-400 text-gray-800'}">
+                            ${f.tier}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Leaderboard error:', e);
+                document.getElementById('leaderboard').innerHTML = '<div class="text-center text-gray-400">Error loading leaderboard</div>';
+            }
+        }
+
+        // Load coverage gaps
+        async function loadCoverageGaps() {
+            try {
+                const res = await fetch(`${API_BASE}/feeders/coverage/gaps`);
+                const data = await res.json();
+                
+                const container = document.getElementById('coverage-gaps');
+                
+                if (!data.gaps || data.gaps.length === 0) {
+                    container.innerHTML = '<div class="text-center text-gray-400 md:col-span-3">No coverage gaps reported yet.</div>';
+                    return;
+                }
+                
+                container.innerHTML = data.gaps.map(g => `
+                    <div class="bg-gray-700 rounded-lg p-4">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="font-bold">${g.region || 'Unknown Region'}</h3>
+                            <span class="px-2 py-1 rounded text-xs ${g.priority === 'HIGH' ? 'bg-red-600' : g.priority === 'MEDIUM' ? 'bg-yellow-600' : 'bg-blue-600'}">${g.priority}</span>
+                        </div>
+                        <div class="text-sm text-gray-400 mb-2">
+                            <i class="fas fa-map-marker-alt mr-1"></i> ${g.lat?.toFixed(2) || '?'}, ${g.lon?.toFixed(2) || '?'}
+                        </div>
+                        <div class="text-sm text-gray-400 mb-2">
+                            <i class="fas fa-circle mr-1"></i> ${g.radius_km}km radius
+                        </div>
+                        <p class="text-sm text-gray-300">${g.notes || 'No notes'}</p>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Coverage gaps error:', e);
+            }
+        }
+
+        // Handle registration
+        document.getElementById('feeder-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const resultDiv = document.getElementById('reg-result');
+            resultDiv.classList.remove('hidden');
+            resultDiv.innerHTML = '<div class="text-yellow-400">Registering...</div>';
+            
+            const feeder = {
+                station_uuid: document.getElementById('reg-station-uuid').value || null,
+                location: document.getElementById('reg-location').value || null,
+                lat: document.getElementById('reg-lat').value ? parseFloat(document.getElementById('reg-lat').value) : null,
+                lon: document.getElementById('reg-lon').value ? parseFloat(document.getElementById('reg-lon').value) : null,
+                antenna_type: document.getElementById('reg-antenna').value || null,
+                receiver_type: document.getElementById('reg-receiver').value || null
+            };
+            
+            try {
+                const res = await fetch(`${API_BASE}/feeders/register`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(feeder)
+                });
+                
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    resultDiv.innerHTML = `<div class="text-green-400"><i class="fas fa-check-circle"></i> ${data.message}</div>`;
+                    document.getElementById('feeder-form').reset();
+                    loadLeaderboard();
+                    loadTierSummary();
+                    checkAuth(); // Refresh auth state
+                } else {
+                    resultDiv.innerHTML = `<div class="text-red-400"><i class="fas fa-exclamation-circle"></i> ${data.message}</div>`;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `<div class="text-red-400">Error: ${e.message}</div>`;
+            }
+        });
+
+        // Geolocation prefill
+        document.getElementById('reg-geo-btn').addEventListener('click', () => {
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser.');
+                return;
+            }
+            const btn = document.getElementById('reg-geo-btn');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Locating...';
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    document.getElementById('reg-lat').value = pos.coords.latitude.toFixed(6);
+                    document.getElementById('reg-lon').value = pos.coords.longitude.toFixed(6);
+                    btn.innerHTML = '<i class="fas fa-check mr-2"></i>Location Set';
+                    setTimeout(() => btn.innerHTML = '<i class="fas fa-location-arrow mr-2"></i>Use My Location', 2000);
+                },
+                (err) => {
+                    alert('Location error: ' + err.message);
+                    btn.innerHTML = '<i class="fas fa-location-arrow mr-2"></i>Use My Location';
+                },
+                { enableHighAccuracy: true, timeout: 10000 }
+            );
+        });
+
+        // Tier filter
+        document.getElementById('tier-filter').addEventListener('change', (e) => {
+            loadLeaderboard(e.target.value);
+        });
+
+        // Initial load
+        checkAuth();
+        loadTierSummary();
+        loadSystemStats();
+        loadLeaderboard();
+        loadCoverageGaps();
+    </script>
+</body>
+</html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feeder Dashboard | Bharat Radar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .tier-platinum { background: linear-gradient(135deg, #e5e7eb 0%, #9ca3af 50%, #e5e7eb 100%); }
+        .tier-gold { background: linear-gradient(135deg, #fef3c7 0%, #fbbf24 50%, #f59e0b 100%); }
+        .tier-silver { background: linear-gradient(135deg, #f3f4f6 0%, #d1d5db 50%, #9ca3af 100%); }
+        .tier-bronze { background: linear-gradient(135deg, #ffedd5 0%, #fdba74 50%, #ea580c 100%); }
+        .status-active { color: #23c074; }
+        .status-activated { color: #fbbf24; }
+        .status-pending { color: #f97316; }
+        .status-inactive { color: #ef4444; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-8">
+            <div class="flex items-center gap-4">
+                <a href="/command_center/profile" class="text-gray-400 hover:text-white text-xl">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <div>
+                    <h1 id="station-name" class="text-3xl font-bold">Loading...</h1>
+                    <p id="station-location" class="text-gray-400">Loading...</p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <a id="live-map-link" href="#" target="_blank" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition">
+                    <i class="fas fa-satellite-dish mr-2"></i>Live Map
+                </a>
+                <a id="health-link" href="#" class="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-4 rounded transition">
+                    <i class="fas fa-heartbeat mr-2"></i>Health
+                </a>
+                <a href="/command_center/feeders/map" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition">
+                    <i class="fas fa-globe mr-2"></i>Coverage Map
+                </a>
+            </div>
+        </div>
+
+        <!-- Tier Badge & Quick Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div id="tier-card" class="tier-bronze rounded-lg p-6 text-center text-gray-800">
+                <i class="fas fa-medal text-3xl mb-2"></i>
+                <h3 class="font-bold text-lg">BRONZE</h3>
+                <p class="text-sm">Current Tier</p>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-6 text-center">
+                <div id="stat-messages" class="text-3xl font-bold text-blue-400">-</div>
+                <div class="text-sm text-gray-400">Total Messages</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-6 text-center">
+                <div id="stat-aircraft" class="text-3xl font-bold text-green-400">-</div>
+                <div class="text-sm text-gray-400">Aircraft Tracked</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-6 text-center">
+                <div id="stat-range" class="text-3xl font-bold text-purple-400">-</div>
+                <div class="text-sm text-gray-400">Max Range (km)</div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-gray-800 rounded-lg p-6">
+                <h3 class="text-lg font-bold mb-4">📊 Messages (Last 30 Days)</h3>
+                <canvas id="messages-chart" height="200"></canvas>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-6">
+                <h3 class="text-lg font-bold mb-4">✈️ Aircraft Seen (Last 30 Days)</h3>
+                <canvas id="aircraft-chart" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- Health Status Card -->
+        <div class="bg-gray-800 rounded-lg p-6 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold">🩺 Station Health</h3>
+                <a href="/command_center/feeders/health" id="detailed-health-link" class="text-yellow-400 text-sm hover:underline">View Detailed Health →</a>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-gray-700 rounded p-4 text-center">
+                    <div id="health-status" class="text-3xl font-bold status-pending">-</div>
+                    <div class="text-sm text-gray-400">Status</div>
+                </div>
+                <div class="bg-gray-700 rounded p-4 text-center">
+                    <div id="health-last-seen" class="text-3xl font-bold text-blue-400">-</div>
+                    <div class="text-sm text-gray-400">Last Seen</div>
+                </div>
+                <div class="bg-gray-700 rounded p-4 text-center">
+                    <div id="health-active-hours" class="text-3xl font-bold text-green-400">-</div>
+                    <div class="text-sm text-gray-400">Active Hours</div>
+                </div>
+                <div class="bg-gray-700 rounded p-4 text-center">
+                    <div id="health-uptime" class="text-3xl font-bold text-purple-400">-</div>
+                    <div class="text-sm text-gray-400">Uptime %</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification Settings -->
+        <div class="bg-gray-800 rounded-lg p-6 mb-8">
+            <h3 class="text-lg font-bold mb-4">🔔 Notification Settings</h3>
+            <p class="text-gray-400 text-sm mb-4">Get alerted when your feeder goes offline.</p>
+            <div class="flex items-center gap-4">
+                <label class="text-sm text-gray-300">Notify me if my feeder is down for</label>
+                <input type="number" id="notify-hours" min="0" max="72" value="0" class="w-20 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-center">
+                <span class="text-sm text-gray-400">hours</span>
+                <button onclick="saveNotifySettings()" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded transition">
+                    <i class="fas fa-save mr-2"></i>Save
+                </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Set to 0 to disable notifications.</p>
+            <div id="notify-result" class="mt-3 hidden"></div>
+        </div>
+
+        <!-- Range Chart -->
+        <div class="bg-gray-800 rounded-lg p-6 mb-8">
+            <h3 class="text-lg font-bold mb-4">📡 Max Detection Range (km)</h3>
+            <canvas id="range-chart" height="100"></canvas>
+        </div>
+
+        <!-- Peers Section -->
+        <div class="bg-gray-800 rounded-lg p-6 mb-8">
+            <h3 class="text-lg font-bold mb-4">👥 Nearby Feeders (within 500 km)</h3>
+            <div id="peers-list" class="space-y-2">
+                <div class="text-gray-400">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Achievements -->
+        <div class="bg-gray-800 rounded-lg p-6">
+            <h3 class="text-lg font-bold mb-4">🏆 Achievements</h3>
+            <div id="achievements-list" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="text-gray-400 col-span-full">Coming soon...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/command_center/api';
+        const feederId = new URLSearchParams(window.location.search).get('id') ||
+                         window.location.pathname.split('/').pop();
+
+        let charts = {};
+
+        async function loadDashboard() {
+            await Promise.all([
+                loadStationInfo(),
+                loadLiveStats(),
+                loadHistory(),
+                loadPeers(),
+                loadHealth()
+            ]);
+            // Auto-refresh live stats every 5 seconds
+            setInterval(loadLiveStats, 5000);
+        }
+
+        async function loadStationInfo() {
+            try {
+                // Get from my-stations or leaderboard
+                const res = await fetch(`${API_BASE}/feeders/my-stations`);
+                const data = await res.json();
+                const station = (data.stations || []).find(s => s.id == feederId);
+                if (station) {
+                    document.getElementById('station-name').textContent = station.name;
+                    document.getElementById('station-location').textContent = station.location || 'Unknown location';
+
+                    // Set tier card
+                    const tierCard = document.getElementById('tier-card');
+                    tierCard.className = `tier-${station.tier.toLowerCase()} rounded-lg p-6 text-center text-gray-800`;
+                    tierCard.innerHTML = `
+                        <i class="fas fa-medal text-3xl mb-2"></i>
+                        <h3 class="font-bold text-lg">${station.tier}</h3>
+                        <p class="text-sm">Current Tier</p>
+                    `;
+
+                    // Live map link
+                    document.getElementById('live-map-link').href =
+                        `${API_BASE}/feeders/${feederId}/map`;
+                    document.getElementById('health-link').href =
+                        `/command_center/feeders/health?id=${feederId}`;
+                    document.getElementById('detailed-health-link').href =
+                        `/command_center/feeders/health?id=${feederId}`;
+                }
+            } catch (e) {
+                console.error('Station info error:', e);
+            }
+        }
+
+        async function loadHealth() {
+            try {
+                const res = await fetch(`${API_BASE}/feeders/${feederId}/health`);
+                const data = await res.json();
+                if (data.error) return;
+
+                const statusEl = document.getElementById('health-status');
+                statusEl.textContent = data.status;
+                statusEl.className = `text-3xl font-bold status-${data.status.toLowerCase()}`;
+
+                let lastSeenText = 'Never';
+                if (data.minutes_since_last_seen !== null) {
+                    const m = data.minutes_since_last_seen;
+                    lastSeenText = m < 1 ? 'Just now' : m < 60 ? `${Math.round(m)}m ago` : `${Math.round(m/60)}h ago`;
+                }
+                document.getElementById('health-last-seen').textContent = lastSeenText;
+                document.getElementById('health-active-hours').textContent = data.total_active_hours || 0;
+
+                // Simple uptime estimate: active hours vs total age in hours
+                // We'll approximate since we don't have exact registration time here
+                document.getElementById('health-uptime').textContent = '-';
+
+                document.getElementById('notify-hours').value = data.notify_after_hours || 0;
+            } catch (e) {
+                console.error('Health load error:', e);
+            }
+        }
+
+        async function saveNotifySettings() {
+            const resultDiv = document.getElementById('notify-result');
+            resultDiv.classList.remove('hidden');
+            resultDiv.innerHTML = '<div class="text-yellow-400">Saving...</div>';
+            try {
+                const hours = parseInt(document.getElementById('notify-hours').value) || 0;
+                const res = await fetch(`${API_BASE}/feeders/${feederId}/settings`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({notify_after_hours: hours})
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    resultDiv.innerHTML = '<div class="text-green-400">Saved!</div>';
+                } else {
+                    resultDiv.innerHTML = `<div class="text-red-400">${data.message}</div>`;
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `<div class="text-red-400">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function loadLiveStats() {
+            try {
+                const res = await fetch(`${API_BASE}/feeders/${feederId}/stats`);
+                const data = await res.json();
+                if (data.error) return;
+
+                document.getElementById('stat-messages').textContent = formatNumber(data.messages_count || 0);
+                document.getElementById('stat-aircraft').textContent = data.aircraft_count || 0;
+                document.getElementById('stat-range').textContent = (data.max_range_km || 0).toFixed(1);
+            } catch (e) {
+                console.error('Live stats error:', e);
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const res = await fetch(`${API_BASE}/feeders/${feederId}/history?days=30`);
+                const data = await res.json();
+                const history = data.history || [];
+
+                if (history.length === 0) {
+                    // No historical data yet — show placeholder message on charts
+                    ['messages-chart', 'aircraft-chart', 'range-chart'].forEach(id => {
+                        const canvas = document.getElementById(id);
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.fillStyle = '#9ca3af';
+                        ctx.font = '14px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('No historical data yet — stats will appear as data is collected', canvas.width / 2, canvas.height / 2);
+                    });
+                    return;
+                }
+
+                const labels = history.map(h => h.stat_date?.slice(5) || ''); // MM-DD
+                const messages = history.map(h => h.messages_count || 0);
+                const aircraft = history.map(h => h.aircraft_count || 0);
+                const ranges = history.map(h => h.max_range_km || 0);
+
+                createChart('messages-chart', labels, messages, 'Messages', '#60a5fa');
+                createChart('aircraft-chart', labels, aircraft, 'Aircraft', '#4ade80');
+                createChart('range-chart', labels, ranges, 'Range (km)', '#c084fc');
+            } catch (e) {
+                console.error('History load error:', e);
+            }
+        }
+
+        function createChart(canvasId, labels, data, label, color) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            if (charts[canvasId]) charts[canvasId].destroy();
+
+            charts[canvasId] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        borderColor: color,
+                        backgroundColor: color + '33',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#9ca3af', maxTicksLimit: 8 },
+                            grid: { color: '#374151' }
+                        },
+                        y: {
+                            ticks: { color: '#9ca3af' },
+                            grid: { color: '#374151' }
+                        }
+                    }
+                }
+            });
+        }
+
+        async function loadPeers() {
+            try {
+                const res = await fetch(`${API_BASE}/feeders/${feederId}/peers`);
+                const data = await res.json();
+                const peers = data.peers || [];
+                const container = document.getElementById('peers-list');
+
+                if (peers.length === 0) {
+                    container.innerHTML = '<div class="text-gray-400">No nearby feeders found.</div>';
+                    return;
+                }
+
+                container.innerHTML = peers.map(p => `
+                    <div class="flex justify-between items-center bg-gray-700 rounded p-3">
+                        <div>
+                            <span class="font-bold">${p.display_name}</span>
+                            <span class="text-xs text-gray-400 ml-2">${p.location || ''}</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm text-yellow-400">${p.tier}</span>
+                            <span class="text-sm text-gray-400">${p.distance_km} km</span>
+                            <a href="/command_center/feeders/account/${p.id}" class="text-blue-400 text-sm hover:underline">View →</a>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('Peers load error:', e);
+            }
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>
