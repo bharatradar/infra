@@ -179,20 +179,45 @@ USE_EXTERNAL_DB=true
     echo ""
     prompt_input "Groq API key (leave empty to skip)" "" GPT_API_KEY
     
-    # Cloudflare AI Analytics Keys (optional)
+    # Cloudflare AI Analytics Keys (dynamic - add as many as needed)
     echo ""
     log_step "Cloudflare AI Analytics Configuration (Optional)"
     echo ""
     echo "  Add your Cloudflare AI Web Analytics keys for tracking."
     echo "  Get them from: https://www.cloudflare.com/products/analytics/"
-    echo "  Leave empty to skip."
     echo ""
-    prompt_input "Cloudflare AI key 1 (first key ID)" "" CF_KEY_1_ID
-    prompt_input "Cloudflare AI key 1 token" "" CF_KEY_1_TOKEN
-    prompt_input "Cloudflare AI key 2 (second key ID)" "" CF_KEY_2_ID
-    prompt_input "Cloudflare AI key 2 token" "" CF_KEY_2_TOKEN
-    prompt_input "Cloudflare AI key 3 (third key ID)" "" CF_KEY_3_ID
-    prompt_input "Cloudflare AI key 3 token" "" CF_KEY_3_TOKEN
+    
+    CF_KEYS_JSON="["
+    local add_more=true
+    local key_count=0
+    
+    while [ "$add_more" = true ]; do
+        if prompt_confirm "Add a Cloudflare AI key?"; then
+            key_count=$((key_count + 1))
+            echo ""
+            echo "  Key #${key_count}:"
+            local key_id key_token
+            prompt_input "  Key ID (from Cloudflare dashboard)" "" key_id
+            prompt_input "  Key token" "" key_token
+            
+            if [ -n "$key_id" ] && [ -n "$key_token" ]; then
+                if [ "$CF_KEYS_JSON" = "[" ]; then
+                    CF_KEYS_JSON="${CF_KEYS_JSON}{\"id\": \"${key_id}\", \"token\": \"${key_token}\"}"
+                else
+                    CF_KEYS_JSON="${CF_KEYS_JSON}, {\"id\": \"${key_id}\", \"token\": \"${key_token}\"}"
+                fi
+                log_success "Added Cloudflare AI key #${key_count}"
+            fi
+        else
+            add_more=false
+        fi
+    done
+    
+    CF_KEYS_JSON="${CF_KEYS_JSON}]"
+    
+    if [ "$CF_KEYS_JSON" != "[]" ]; then
+        log_info "Added ${key_count} Cloudflare AI key(s)"
+    fi
     
     echo ""
     log_step "FRP Tunnel (Optional)"
@@ -605,15 +630,10 @@ role_hub_create_secrets() {
     fi
 
     # Cloudflare AI Analytics credentials secret
-    if [ -n "${CF_KEY_1_ID:-}" ]; then
+    if [ "$CF_KEYS_JSON" != "[]" ]; then
         if ! kubectl get secret cloudflare-credentials -n bharatradar &>/dev/null; then
             kubectl create secret generic cloudflare-credentials \
-                --from-literal=key1_id="${CF_KEY_1_ID}" \
-                --from-literal=key1_token="${CF_KEY_1_TOKEN}" \
-                --from-literal=key2_id="${CF_KEY_2_ID:-}" \
-                --from-literal=key2_token="${CF_KEY_2_TOKEN:-}" \
-                --from-literal=key3_id="${CF_KEY_3_ID:-}" \
-                --from-literal=key3_token="${CF_KEY_3_TOKEN:-}" \
+                --from-literal=keys="$CF_KEYS_JSON" \
                 -n bharatradar 2>/dev/null || true
             log_success "Cloudflare AI credentials secret created"
         fi
@@ -1182,15 +1202,7 @@ role_hub_run() {
         save_config_value "TELEGRAM_BOT_TOKEN" "${TELEGRAM_BOT_TOKEN:-}"
         save_config_value "TELEGRAM_CHAT_ID" "${TELEGRAM_CHAT_ID:-}"
         save_config_value "GPT_API_KEY" "${GPT_API_KEY:-}"
-        save_config_value "CF_KEY_1_ID" "${CF_KEY_1_ID:-}"
-        save_config_value "CF_KEY_1_ID" "${CF_KEY_1_ID:-}"
-        save_config_value "CF_KEY_1_TOKEN" "${CF_KEY_1_TOKEN:-}"
-        save_config_value "CF_KEY_2_ID" "${CF_KEY_2_ID:-}"
-        save_config_value "CF_KEY_2_TOKEN" "${CF_KEY_2_TOKEN:-}"
-        save_config_value "CF_KEY_3_ID" "${CF_KEY_3_ID:-}"
-        save_config_value "CF_KEY_3_TOKEN" "${CF_KEY_3_TOKEN:-}"
-        save_config_value "CF_ZONE_ID" "${CF_ZONE_ID:-}"
-        save_config_value "CF_RECORD_NAME" "${CF_RECORD_NAME:-}"
+        save_config_value "CF_KEYS_JSON" "${CF_KEYS_JSON:-}"
         save_config_value "FRP_ENABLED" "${FRP_ENABLED}"
         save_config_value "FRP_SERVER" "${FRP_SERVER:-}"
         save_config_value "FRP_TOKEN" "${FRP_TOKEN:-}"
