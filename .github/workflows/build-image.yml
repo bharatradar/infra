@@ -3,14 +3,14 @@ name: Build All Images
 on:
   push:
     branches: [main]
-    paths: ['build/**']
+    paths: ['build/**', '.github/workflows/build-image.yml']
   pull_request:
     branches: [main]
-    paths: ['build/**']
+    paths: ['build/**', '.github/workflows/build-image.yml']
   workflow_dispatch:
     inputs:
       image:
-        description: 'Image to build (leave empty for all): readsb, docker-tar1090, mlat-server, mlat-server-sync-map, api, history, website, docker-tar1090-uuid'
+        description: 'Image to build (leave empty for all): readsb, docker-tar1090, mlat-server, mlat-server-sync-map, api, history, website, docker-tar1090-uuid, cortex-webapp'
         required: false
         default: ''
       fork_ref:
@@ -132,7 +132,8 @@ jobs:
       (github.event.inputs.image == '' || 
        github.event.inputs.image == 'docker-tar1090-uuid' ||
        github.event.inputs.image == 'mlat-server-sync-map' ||
-       github.event.inputs.image == 'api')
+       github.event.inputs.image == 'api' ||
+       github.event.inputs.image == 'cortex-webapp')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -152,6 +153,10 @@ jobs:
           - name: api
             context: build/api
             image: ghcr.io/bharatradar/api
+            platforms: linux/amd64
+          - name: cortex-webapp
+            context: build/cortex-webapp
+            image: ghcr.io/bharatradar/cortex-webapp
             platforms: linux/amd64
     steps:
       - name: Checkout infra

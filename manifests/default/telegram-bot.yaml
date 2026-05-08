@@ -81,8 +81,6 @@ spec:
                 secretKeyRef:
                   name: telegram-bot-credentials
                   key: groq_api_key
-            - name: MCP_SERVER_URL
-              value: "http://mcp-server.bharatradar.svc.cluster.local:8000"
             - name: CLOUDFLARE_KEYS
               valueFrom:
                 secretKeyRef:
