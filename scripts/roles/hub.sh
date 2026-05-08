@@ -699,9 +699,6 @@ role_hub_deploy_services() {
     # Apply shared resources first
     kubectl apply -f "${OVERLAY_DIR}/resources.yaml" -n bharatradar 2>/dev/null || true
 
-    # Get overlay directory from templating module
-    OVERLAY_DIR="${OVERLAY_DIR:-}"
-
     # Helper: deploy a component and strip ServiceMonitor resources
     deploy_component() {
         local component="$1"

@@ -33,6 +33,9 @@ templating_generate_kustomization() {
     local shared_host="${8:-${REDIS_HOST:-192.168.200.12}}"
     
     log_info "Using shared services host for templating: ${shared_host}"
+    
+    # Export so patch function can use it
+    export shared_host
 
     # Copy all needed files to overlay (not just kustomization)
     local files=(
@@ -87,10 +90,10 @@ templating_generate_kustomization() {
 
 # Patch shared services IPs in overlay (not source files)
 templating_patch_shared_services() {
-    # Use the host passed as parameter
-    local shared_host="${shared_host:-192.168.200.12}"
+    # Use exported variable from caller's parameter
+    local ip_to_use="${shared_host:-192.168.200.12}"
     
-    log_info "Patching SHARED_SERVICES_HOST -> ${shared_host}"
+    log_info "Patching SHARED_SERVICES_HOST -> ${ip_to_use}"
     
     # Replace placeholder in files copied to overlay
     local files=(
@@ -101,20 +104,20 @@ templating_patch_shared_services() {
     
     for f in "${files[@]}"; do
         if [ -f "$f" ]; then
-            sed -i "s/SHARED_SERVICES_HOST/${shared_host}/g" "$f"
-            log_info "Patched $(basename $f): SHARED_SERVICES_HOST -> ${shared_host}"
+            sed -i "s/SHARED_SERVICES_HOST/${ip_to_use}/g" "$f"
+            log_info "Patched $(basename $f): SHARED_SERVICES_HOST -> ${ip_to_use}"
         fi
     done
     
     # Handle subdir files
     if [ -f "${OVERLAY_DIR}/cortex-webapp/deployment.yaml" ]; then
-        sed -i "s/SHARED_SERVICES_HOST/${shared_host}/g" "${OVERLAY_DIR}/cortex-webapp/deployment.yaml"
+        sed -i "s/SHARED_SERVICES_HOST/${ip_to_use}/g" "${OVERLAY_DIR}/cortex-webapp/deployment.yaml"
     fi
     if [ -f "${OVERLAY_DIR}/schedule-downloader-manual-job.yaml" ]; then
-        sed -i "s/SHARED_SERVICES_HOST/${shared_host}/g" "${OVERLAY_DIR}/schedule-downloader-manual-job.yaml"
+        sed -i "s/SHARED_SERVICES_HOST/${ip_to_use}/g" "${OVERLAY_DIR}/schedule-downloader-manual-job.yaml"
     fi
     if [ -f "${OVERLAY_DIR}/schedule-downloader-cronjob.yaml" ]; then
-        sed -i "s/SHARED_SERVICES_HOST/${shared_host}/g" "${OVERLAY_DIR}/schedule-downloader-cronjob.yaml"
+        sed -i "s/SHARED_SERVICES_HOST/${ip_to_use}/g" "${OVERLAY_DIR}/schedule-downloader-cronjob.yaml"
     fi
 }
 
