@@ -968,15 +968,20 @@ Edit source code in `build/<component>/` or manifests in `manifests/default/`.
 #### 2. Build New Image
 
 ```bash
-# Set version
-VERSION=v2025.05.07.01
-COMPONENT=telegram-bot  # or flight-tracker, ai-agents, schedule-downloader, etc.
+# Option A: GitHub Actions (triggers from infra repo)
+cd infra
+gh workflow run build-image.yml -f fork_ref=v6.0.0
+# Images: readsb, docker-tar1090, mlat-server, mlat-server-sync-map, api, history, website
 
-# Build multi-arch and push to GHCR
+# Option B: Local build (multi-arch)
+VERSION=v6.0.0
+COMPONENT=api  # readsb, docker-tar1090, mlat-server, etc.
+
 cd /Users/Shared/bharatradar/infra
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   -t ghcr.io/bharatradar/${COMPONENT}:${VERSION} \
+  -t ghcr.io/bharatradar/${COMPONENT}:latest \
   --label "org.opencontainers.image.source=https://github.com/bharatradar/infra" \
   --label "org.opencontainers.image.version=${VERSION}" \
   --push \

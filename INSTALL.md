@@ -705,11 +705,17 @@ Fork repos hold source code only — no CI workflows.
 | `ghcr.io/bharatradar/api` | fork image + patch.py | `build/api/` |
 
 ```bash
-# Build all images (triggers from infra repo)
-# Go to Actions → "Build All Images" → Run workflow
+# Build all images via GitHub Actions
+cd infra
+gh workflow run build-image.yml -f fork_ref=v6.0.0
 
-# Build a single image
-# workflow_dispatch with image=readsb
+# Or manually build from local (multi-arch)
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t ghcr.io/bharatradar/readsb:v6.0.0 \
+  --push \
+  -f build/readsb/Dockerfile \
+  build/readsb/
 ```
 
 > **Note:** `history` image is amd64 only (upstream doesn't provide arm64). The manifest includes `nodeSelector: kubernetes.io/arch: amd64` to ensure it only schedules on amd64 nodes.
