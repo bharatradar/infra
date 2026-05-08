@@ -78,13 +78,15 @@ role_hub_collect_config() {
         echo ""
         echo "  Configure MinIO on your shared services host (Pi):"
         echo ""
-        prompt_input "MinIO endpoint (host:port)" "${MINIO_ENDPOINT}" MINIO_ENDPOINT
+        prompt_input "MinIO host IP" "${MINIO_HOST:-192.168.200.12}" MINIO_HOST
+        prompt_input "MinIO port" "${MINIO_PORT:-9000}" MINIO_PORT
         prompt_input "MinIO access key" "${MINIO_ROOT_USER:-minioadmin}" MINIO_ROOT_USER
         prompt_input "MinIO secret key" "${MINIO_ROOT_PASSWORD:-}" MINIO_ROOT_PASSWORD
         while [ -z "$MINIO_ROOT_PASSWORD" ]; do
             log_error "Secret key cannot be empty"
             prompt_input "MinIO secret key" "" MINIO_ROOT_PASSWORD
         done
+        MINIO_ENDPOINT="${MINIO_HOST}:${MINIO_PORT}"
         RCLONE_CONFIG_PATH=""
     fi
 
@@ -1008,7 +1010,7 @@ EOF
     Password: ${REDIS_PASSWORD}
 
   MinIO (S3-compatible storage):
-    Endpoint: ${MINIO_ENDPOINT}
+    Endpoint: ${MINIO_HOST}:${MINIO_PORT}
     User:     ${MINIO_ROOT_USER}
     Password: ${MINIO_ROOT_PASSWORD}
 EOF
@@ -1185,6 +1187,8 @@ role_hub_run() {
         save_config_value "REDIS_PORT" "${REDIS_PORT:-6379}"
         save_config_value "REDIS_PASSWORD" "${REDIS_PASSWORD}"
         save_config_value "MINIO_ENDPOINT" "${MINIO_ENDPOINT}"
+        save_config_value "MINIO_HOST" "${MINIO_HOST:-}"
+        save_config_value "MINIO_PORT" "${MINIO_PORT:-9000}"
         save_config_value "MINIO_ROOT_USER" "${MINIO_ROOT_USER}"
         save_config_value "MINIO_ROOT_PASSWORD" "${MINIO_ROOT_PASSWORD}"
         save_config_value "RCLONE_CONFIG_PATH" "${RCLONE_CONFIG_PATH:-}"
