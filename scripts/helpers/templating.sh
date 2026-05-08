@@ -5,10 +5,12 @@
 
 set -euo pipefail
 
-OVERLAY_DIR=""
+# Export so it's available in calling scripts
+export OVERLAY_DIR=""
 
 templating_init() {
     OVERLAY_DIR=$(mktemp -d /tmp/bharatradar-overlay.XXXXXX)
+    export OVERLAY_DIR
     log_info "Generated overlay directory: ${OVERLAY_DIR}"
 }
 

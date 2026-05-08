@@ -699,15 +699,24 @@ role_hub_deploy_services() {
     # Apply shared resources first
     kubectl apply -f "${OVERLAY_DIR}/resources.yaml" -n bharatradar 2>/dev/null || true
 
+    # Get overlay directory from templating module
+    OVERLAY_DIR="${OVERLAY_DIR:-}"
+
     # Helper: deploy a component and strip ServiceMonitor resources
     deploy_component() {
         local component="$1"
         
-        # Check for directory-based component (e.g., api/default, ingest/default)
-        local manifest_dir="${SCRIPT_DIR}/../manifests/default/${component}/default"
+        # Check for directory-based component in OVERLAY first
+        local manifest_dir="${OVERLAY_DIR}/${component}/default"
         
-        # Check for standalone YAML file (e.g., telegram-bot.yaml, ai-agents.yaml)
-        local manifest_file="${SCRIPT_DIR}/../manifests/default/${component}.yaml"
+        # Check for standalone YAML file in OVERLAY first (patched)
+        local manifest_file="${OVERLAY_DIR}/${component}.yaml"
+        
+        # Fallback to source if not in overlay
+        if [ ! -d "$manifest_dir" ] && [ ! -f "$manifest_file" ]; then
+            manifest_dir="${SCRIPT_DIR}/../manifests/default/${component}/default"
+            manifest_file="${SCRIPT_DIR}/../manifests/default/${component}.yaml"
+        fi
         
         if [ -d "$manifest_dir" ]; then
             # Deploy from kustomize directory
