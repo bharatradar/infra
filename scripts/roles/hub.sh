@@ -533,6 +533,44 @@ role_hub_create_secrets() {
         log_success "Flight DB credentials secret created"
     fi
 
+    # Redis credentials secret
+    if ! kubectl get secret redis-credentials -n bharatradar &>/dev/null; then
+        kubectl create secret generic redis-credentials \
+            --from-literal=host="${REDIS_HOST:-192.168.200.12}" \
+            --from-literal=port="${REDIS_PORT:-6379}" \
+            --from-literal=password="${REDIS_PASSWORD}" \
+            -n bharatradar 2>/dev/null || true
+        log_success "Redis credentials secret created"
+    fi
+
+    # Telegram bot credentials secret
+    if ! kubectl get secret telegram-bot-credentials -n bharatradar &>/dev/null; then
+        # Use saved config or placeholders
+        local bot_token="${TELEGRAM_BOT_TOKEN:-placeholder_token}"
+        local chat_id="${TELEGRAM_CHAT_ID:-placeholder_chat_id}"
+        local gpt_key="${GPT_API_KEY:-placeholder_gpt_key}"
+        kubectl create secret generic telegram-bot-credentials \
+            --from-literal=bot_token="$bot_token" \
+            --from-literal=chat_id="$chat_id" \
+            --from-literal=gpt_api_key="$gpt_key" \
+            --from-literal=gpt_model="llama-3.1-70b-versatile" \
+            -n bharatradar 2>/dev/null || true
+        log_success "Telegram bot credentials secret created"
+    fi
+
+    # InfluxDB credentials secret
+    if ! kubectl get secret influxdb-credentials -n bharatradar &>/dev/null; then
+        # Try to get from config, use placeholder if not available
+        local influx_token="${INFLUXDB_ADMIN_TOKEN:-token_not_configured}"
+        kubectl create secret generic influxdb-credentials \
+            --from-literal=url="http://192.168.200.12:8086" \
+            --from-literal=token="$influx_token" \
+            --from-literal=org="bharatradar" \
+            --from-literal=bucket="metrics" \
+            -n bharatradar 2>/dev/null || true
+        log_success "InfluxDB credentials secret created"
+    fi
+
     # Rclone secret - use existing config path or create from MinIO credentials
     if ! kubectl get secret bharatradar-rclone -n bharatradar &>/dev/null; then
         if [ -n "${RCLONE_CONFIG_PATH:-}" ] && [ -f "$RCLONE_CONFIG_PATH" ]; then
