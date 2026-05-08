@@ -521,6 +521,18 @@ role_hub_create_secrets() {
         log_warn "Self-signed TLS certificate created (placeholder)"
     fi
 
+    # Flight DB credentials secret
+    if ! kubectl get secret flight-db-credentials -n bharatradar &>/dev/null; then
+        kubectl create secret generic flight-db-credentials \
+            --from-literal=host="${FLIGHT_DB_HOST:-192.168.200.12}" \
+            --from-literal=port="${FLIGHT_DB_PORT:-5432}" \
+            --from-literal=dbname="${FLIGHT_DB_NAME:-flight_db}" \
+            --from-literal=username="${FLIGHT_DB_USER:-flight_db_user}" \
+            --from-literal=password="${FLIGHT_DB_PASSWORD:-raga@098}" \
+            -n bharatradar 2>/dev/null || true
+        log_success "Flight DB credentials secret created"
+    fi
+
     # Rclone secret - use existing config path or create from MinIO credentials
     if ! kubectl get secret bharatradar-rclone -n bharatradar &>/dev/null; then
         if [ -n "${RCLONE_CONFIG_PATH:-}" ] && [ -f "$RCLONE_CONFIG_PATH" ]; then
