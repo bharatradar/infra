@@ -155,6 +155,14 @@ uninstall_feeder() {
 uninstall_postgresql() {
     log_step "Uninstalling PostgreSQL"
 
+    # CRITICAL: Handle broken influxdb2 BEFORE apt operations to prevent autoremove errors
+    log_info "Checking for broken packages before PostgreSQL removal..."
+    if dpkg -l 2>/dev/null | grep -q "^.i.*influxdb2"; then
+        log_warn "Found broken influxdb2 - fixing first..."
+        sudo mv /var/lib/dpkg/info/influxdb2.* /tmp/ 2>/dev/null || true
+        sudo dpkg --remove --force-remove-reinstreq influxdb2 2>/dev/null || true
+    fi
+
     local os
     os=$(detect_os)
 
@@ -196,6 +204,14 @@ uninstall_postgresql() {
 # Uninstall Redis
 uninstall_redis() {
     log_step "Uninstalling Redis"
+
+    # CRITICAL: Handle broken influxdb2 BEFORE apt operations
+    log_info "Checking for broken packages before Redis removal..."
+    if dpkg -l 2>/dev/null | grep -q "^.i.*influxdb2"; then
+        log_warn "Found broken influxdb2 - fixing first..."
+        sudo mv /var/lib/dpkg/info/influxdb2.* /tmp/ 2>/dev/null || true
+        sudo dpkg --remove --force-remove-reinstreq influxdb2 2>/dev/null || true
+    fi
 
     local os
     os=$(detect_os)
