@@ -158,6 +158,39 @@ USE_EXTERNAL_DB=true
     
     log_success "flight_db configured: ${FLIGHT_DB_HOST}:${FLIGHT_DB_PORT}/${FLIGHT_DB_NAME}"
     
+    # Telegram Bot Configuration
+    echo ""
+    log_step "Telegram Bot Configuration (Optional)"
+    echo ""
+    echo "  The telegram-bot service sends alerts to Telegram."
+    echo "  Create a bot at @BotFather on Telegram to get a token."
+    echo "  Leave empty to skip."
+    echo ""
+    prompt_input "Telegram bot token (leave empty to skip)" "" TELEGRAM_BOT_TOKEN
+    prompt_input "Telegram chat ID (for alerts)" "" TELEGRAM_CHAT_ID
+    
+    # Groq API Configuration (for LLM-powered features)
+    echo ""
+    log_step "Groq API Configuration (Optional)"
+    echo ""
+    echo "  Groq provides fast LLM inference for ai-agents."
+    echo "  Get a free API key at: https://console.groq.com/keys"
+    echo "  Leave empty to skip."
+    echo ""
+    prompt_input "Groq API key (leave empty to skip)" "" GPT_API_KEY
+    
+    # Cloudflare Configuration (for DDNS)
+    echo ""
+    log_step "Cloudflare DDNS Configuration (Optional)"
+    echo ""
+    echo "  If you want automatic DNS updates for your domain,"
+    echo "  enter your Cloudflare credentials."
+    echo "  Leave empty to skip."
+    echo ""
+    prompt_input "Cloudflare API token (leave empty to skip)" "" CF_API_TOKEN
+    prompt_input "Cloudflare zone ID" "" CF_ZONE_ID
+    prompt_input "Cloudflare record name" "" CF_RECORD_NAME
+    
     echo ""
     log_step "FRP Tunnel (Optional)"
     echo ""
@@ -544,23 +577,20 @@ role_hub_create_secrets() {
     fi
 
     # Telegram bot credentials secret
-    if ! kubectl get secret telegram-bot-credentials -n bharatradar &>/dev/null; then
-        # Use saved config or placeholders
-        local bot_token="${TELEGRAM_BOT_TOKEN:-placeholder_token}"
-        local chat_id="${TELEGRAM_CHAT_ID:-placeholder_chat_id}"
-        local gpt_key="${GPT_API_KEY:-placeholder_gpt_key}"
-        kubectl create secret generic telegram-bot-credentials \
-            --from-literal=bot_token="$bot_token" \
-            --from-literal=chat_id="$chat_id" \
-            --from-literal=gpt_api_key="$gpt_key" \
-            --from-literal=gpt_model="llama-3.1-70b-versatile" \
-            -n bharatradar 2>/dev/null || true
-        log_success "Telegram bot credentials secret created"
+    if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+        if ! kubectl get secret telegram-bot-credentials -n bharatradar &>/dev/null; then
+            kubectl create secret generic telegram-bot-credentials \
+                --from-literal=bot_token="${TELEGRAM_BOT_TOKEN}" \
+                --from-literal=chat_id="${TELEGRAM_CHAT_ID:-}" \
+                --from-literal=gpt_api_key="${GPT_API_KEY:-}" \
+                --from-literal=gpt_model="llama-3.1-70b-versatile" \
+                -n bharatradar 2>/dev/null || true
+            log_success "Telegram bot credentials secret created"
+        fi
     fi
 
     # InfluxDB credentials secret
     if ! kubectl get secret influxdb-credentials -n bharatradar &>/dev/null; then
-        # Try to get from config, use placeholder if not available
         local influx_token="${INFLUXDB_ADMIN_TOKEN:-token_not_configured}"
         kubectl create secret generic influxdb-credentials \
             --from-literal=url="http://192.168.200.12:8086" \
@@ -569,6 +599,18 @@ role_hub_create_secrets() {
             --from-literal=bucket="metrics" \
             -n bharatradar 2>/dev/null || true
         log_success "InfluxDB credentials secret created"
+    fi
+
+    # Cloudflare DDNS credentials secret
+    if [ -n "${CF_API_TOKEN:-}" ] && [ -n "${CF_ZONE_ID:-}" ]; then
+        if ! kubectl get secret cloudflare-credentials -n bharatradar &>/dev/null; then
+            kubectl create secret generic cloudflare-credentials \
+                --from-literal=api_token="${CF_API_TOKEN}" \
+                --from-literal=zone_id="${CF_ZONE_ID}" \
+                --from-literal=record_name="${CF_RECORD_NAME}" \
+                -n bharatradar 2>/dev/null || true
+            log_success "Cloudflare credentials secret created"
+        fi
     fi
 
     # Rclone secret - use existing config path or create from MinIO credentials
@@ -1131,6 +1173,12 @@ role_hub_run() {
         save_config_value "FLIGHT_DB_NAME" "${FLIGHT_DB_NAME:-flight_db}"
         save_config_value "FLIGHT_DB_USER" "${FLIGHT_DB_USER:-flight_db_user}"
         save_config_value "FLIGHT_DB_PASSWORD" "${FLIGHT_DB_PASSWORD:-}"
+        save_config_value "TELEGRAM_BOT_TOKEN" "${TELEGRAM_BOT_TOKEN:-}"
+        save_config_value "TELEGRAM_CHAT_ID" "${TELEGRAM_CHAT_ID:-}"
+        save_config_value "GPT_API_KEY" "${GPT_API_KEY:-}"
+        save_config_value "CF_API_TOKEN" "${CF_API_TOKEN:-}"
+        save_config_value "CF_ZONE_ID" "${CF_ZONE_ID:-}"
+        save_config_value "CF_RECORD_NAME" "${CF_RECORD_NAME:-}"
         save_config_value "FRP_ENABLED" "${FRP_ENABLED}"
         save_config_value "FRP_SERVER" "${FRP_SERVER:-}"
         save_config_value "FRP_TOKEN" "${FRP_TOKEN:-}"
