@@ -29,8 +29,22 @@ templating_generate_kustomization() {
     local frp_server="${6:-}"
     local api_salt="${7:-}"
 
-    # Copy base kustomization as starting point
-    cp "${base_dir}/kustomization.yaml" "${OVERLAY_DIR}/kustomization.yaml"
+    # Copy all needed files to overlay (not just kustomization)
+    local files=(
+        "kustomization.yaml"
+        "ai-agents.yaml"
+        "telegram-bot.yaml"
+        "flight-tracker.yaml"
+    )
+    for f in "${files[@]}"; do
+        [ -f "${base_dir}/${f}" ] && cp "${base_dir}/${f}" "${OVERLAY_DIR}/${f}"
+    done
+    
+    # Copy subdirs if exist
+    [ -d "${base_dir}/cortex-webapp" ] && cp -r "${base_dir}/cortex-webapp" "${OVERLAY_DIR}/"
+
+    # Patch shared services IPs in overlay copies
+    templating_patch_shared_services
 
     # Generate domain patch for resources.yaml
     templating_patch_resources "$domain"
@@ -55,6 +69,40 @@ templating_generate_kustomization() {
     fi
 
     log_success "Overlay generated in ${OVERLAY_DIR}"
+}
+
+# Patch shared services IPs in overlay (not source files)
+templating_patch_shared_services() {
+    local flight_db_host="${FLIGHT_DB_HOST:-192.168.200.12}"
+    local redis_host="${REDIS_HOST:-192.168.200.12}"
+    local influxdb_url="http://${INFLUXDB_HOST:-192.168.200.12}:8086"
+    
+    local old_ip="192.168.200.15"
+    
+    # Replace hardcoded IPs in files copied to overlay
+    local files=(
+        "${OVERLAY_DIR}/ai-agents.yaml"
+        "${OVERLAY_DIR}/telegram-bot.yaml"
+        "${OVERLAY_DIR}/flight-tracker.yaml"
+    )
+    
+    for f in "${files[@]}"; do
+        if [ -f "$f" ]; then
+            sed -i "s/${old_ip}/${flight_db_host}/g" "$f"
+            log_info "Patched $(basename $f): ${old_ip} -> ${flight_db_host}"
+        fi
+    done
+    
+    # Handle subdir files
+    if [ -d "${OVERLAY_DIR}/cortex-webapp" ]; then
+        sed -i "s/${old_ip}/${flight_db_host}/g" "${OVERLAY_DIR}/cortex-webapp/deployment.yaml"
+    fi
+    if [ -d "${OVERLAY_DIR}/schedule-downloader-manual-job.yaml" ]; then
+        sed -i "s/${old_ip}/${flight_db_host}/g" "${OVERLAY_DIR}/schedule-downloader-manual-job.yaml"
+    fi
+    if [ -d "${OVERLAY_DIR}/schedule-downloader-cronjob.yaml" ]; then
+        sed -i "s/${old_ip}/${flight_db_host}/g" "${OVERLAY_DIR}/schedule-downloader-cronjob.yaml"
+    fi
 }
 
 # Patch resources.yaml: replace all domain references
