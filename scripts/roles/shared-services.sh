@@ -235,8 +235,12 @@ role_shared_services_configure_postgresql() {
     # Create BharatRadar database (flight_db)
     log_info "Creating BharatRadar database (flight_db)..."
     
-    # Default password for flight_db_user
-    FLIGHT_DB_PASSWORD="${FLIGHT_DB_PASSWORD:-raga@098}"
+    # Auto-generate password if not provided
+    if [ -z "$FLIGHT_DB_PASSWORD" ]; then
+        FLIGHT_DB_PASSWORD=$(generate_secret)
+    fi
+    
+    log_info "flight_db password: ${FLIGHT_DB_PASSWORD}"
     
     # Create user if not exists, or alter password
     log_info "Creating flight_db_user and flight_db..."
@@ -777,7 +781,9 @@ role_shared_services_post_install() {
     echo "    ${conn_string}"
     echo ""
     echo -e "  ${CYAN}BharatRadar Database (flight_db):${NC}"
-    echo "    user=flight_db_user  password=${FLIGHT_DB_PASSWORD:-raga@098}"
+    echo "    Database: flight_db"
+    echo "    User:     flight_db_user"
+    echo "    Password: ${FLIGHT_DB_PASSWORD}"
     echo ""
     echo -e "  ${CYAN}MinIO Rclone Config:${NC}"
     echo "    endpoint = http://${DB_LISTEN_IP}:9000"

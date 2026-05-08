@@ -134,22 +134,29 @@ USE_EXTERNAL_DB=true
     
     # Flight Database (flight_db) - used by ai-agents, telegram-bot, etc.
     echo ""
-    log_step "Flight Database (Optional)"
+    log_step "Flight Database (flight_db)"
     echo ""
     echo "  BharatRadar uses a separate PostgreSQL database (flight_db)"
     echo "  for ai-agents, telegram-bot, and other services."
     echo ""
-    if prompt_confirm "Set up flight_db database?"; then
-        FLIGHT_DB_HOST="${DB_HOST:-127.0.0.1}"
-        prompt_input "flight_db host IP" "${FLIGHT_DB_HOST}" FLIGHT_DB_HOST
-        FLIGHT_DB_PORT="${DB_PORT:-5432}"
-        prompt_input "flight_db port" "${FLIGHT_DB_PORT}" FLIGHT_DB_PORT
-        FLIGHT_DB_NAME="flight_db"
-        FLIGHT_DB_USER="flight_db_user"
-        prompt_input "flight_db password" "${FLIGHT_DB_PASSWORD:-raga@098}" FLIGHT_DB_PASSWORD
-    else
-        FLIGHT_DB_HOST=""
+    echo "  This is created automatically during shared-services installation."
+    echo "  The credentials are:"
+    echo "    Database: flight_db"
+    echo "    User: flight_db_user"
+    echo "    Password: (shown at end of shared-services install)"
+    echo ""
+    FLIGHT_DB_HOST="${DB_HOST:-127.0.0.1}"
+    FLIGHT_DB_PORT="${DB_PORT:-5432}"
+    FLIGHT_DB_NAME="flight_db"
+    FLIGHT_DB_USER="flight_db_user"
+    FLIGHT_DB_PASSWORD="${FLIGHT_DB_PASSWORD:-}"
+    
+    if [ -z "$FLIGHT_DB_PASSWORD" ]; then
+        log_info "Using default flight_db password: raga@098"
+        FLIGHT_DB_PASSWORD="raga@098"
     fi
+    
+    log_success "flight_db configured: ${FLIGHT_DB_HOST}:${FLIGHT_DB_PORT}/${FLIGHT_DB_NAME}"
     
     echo ""
     log_step "FRP Tunnel (Optional)"
