@@ -21,6 +21,7 @@
 
     <title>tar1090</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { padding-top: 0px; }
         @media (min-width: 640px) {
@@ -34,20 +35,23 @@
 
   <body>
     <!-- Header -->
-    <header class="fixed top-0 left-0 right-0 h-[88px] sm:h-16 bg-gray-900 border-b border-gray-800 flex flex-col sm:flex-row items-center justify-center sm:justify-between px-3 sm:px-6 z-[9999] shadow-lg gap-2 sm:gap-0">
+    <header class="fixed top-0 left-0 right-0 h-[88px] sm:h-16 bg-gray-900 border-b border-gray-800 flex flex-col sm:flex-row items-center justify-center sm:justify-between px-3 sm:px-6 z-50 shadow-lg gap-2 sm:gap-0">
         <div class="flex items-center gap-3">
             <div class="relative flex h-3 w-3">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-full w-full bg-blue-500"></span>
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
             </div>
-            <a href="https://bharatradar.com" class="text-xl font-black tracking-widest uppercase bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-                BharatRadar <span class="text-gray-400 text-sm font-normal">| Live Map</span>
+            <a href="https://bharatradar.com" class="text-base sm:text-xl font-black tracking-widest uppercase bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                BharatRadar
             </a>
         </div>
-        <div class="flex items-center gap-4">
-            <a href="https://bharatradar.com" class="text-gray-400 hover:text-white text-sm">Home</a>
-            <a href="https://cortex.bharatradar.com" class="text-gray-400 hover:text-white text-sm">Cortex</a>
-        </div>
+        <ul class="flex items-center gap-4 sm:gap-6">
+            <li><a href="https://map.bharatradar.com" class="text-gray-400 hover:text-white transition text-sm sm:text-base"><i class="fa-solid fa-globe"></i> <span class="hidden sm:inline">Map</span></a></li>
+            <li><a href="https://api.bharatradar.com" class="text-gray-400 hover:text-white transition text-sm sm:text-base"><i class="fa-solid fa-code"></i> <span class="hidden sm:inline">API</span></a></li>
+            <li><a href="https://mlat.bharatradar.com" class="text-gray-400 hover:text-white transition text-sm sm:text-base"><i class="fa-solid fa-location-dot"></i> <span class="hidden sm:inline">MLAT</span></a></li>
+            <li><a href="https://cortex.bharatradar.com" class="text-gray-400 hover:text-white transition text-sm sm:text-base"><i class="fa-solid fa-user-astronaut"></i> <span class="hidden sm:inline">Portal</span></a></li>
+            <li><a href="https://bharatradar.com/docs/" class="text-gray-400 hover:text-white transition text-sm sm:text-base"><i class="fa-solid fa-book"></i> <span class="hidden sm:inline">Docs</span></a></li>
+        </ul>
     </header>
     <!-- BODY_ANCHOR -->
     <div id="layout_container">
