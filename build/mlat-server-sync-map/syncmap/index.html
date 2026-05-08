@@ -5,6 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+      document.addEventListener('DOMContentLoaded', function() {
+          var currentHost = window.location.hostname;
+          var currentPath = window.location.pathname;
+          var navLinks = document.querySelectorAll('#site-nav a');
+          navLinks.forEach(function(link) {
+              var linkHref = link.getAttribute('href');
+              if (linkHref) {
+                  try {
+                      var url = new URL(linkHref);
+                      if (url.hostname === currentHost || (currentHost.includes('bharatradar.com') && url.hostname.includes('bharatradar.com'))) {
+                          if (currentHost === 'map.bharatradar.com' && linkHref.includes('map.bharatradar.com')) {
+                              link.parentElement.style.display = 'none';
+                          } else if (currentHost === 'mlat.bharatradar.com' && linkHref.includes('mlat.bharatradar.com')) {
+                              link.parentElement.style.display = 'none';
+                          } else if (currentHost === 'api.bharatradar.com' && linkHref.includes('api.bharatradar.com')) {
+                              link.parentElement.style.display = 'none';
+                          } else if (currentHost === 'cortex.bharatradar.com' && linkHref.includes('cortex.bharatradar.com')) {
+                              link.parentElement.style.display = 'none';
+                          } else if (currentHost === 'bharatradar.com' && !currentPath.includes('/docs/') && linkHref.includes('bharatradar.com/docs')) {
+                              link.parentElement.style.display = 'none';
+                          }
+                      }
+                  } catch(e) {}
+              }
+          });
+      });
+  </script>
   <style>
     body { padding-top: 0px; }
     @media (min-width: 640px) {
@@ -39,12 +67,13 @@
                 BharatRadar
             </a>
         </div>
-        <ul class="flex items-center gap-4 sm:gap-6">
+        <ul id="site-nav" class="flex items-center gap-4 sm:gap-6">
             <li><a href="https://map.bharatradar.com" class="text-gray-400 hover:text-white transition text-sm sm:text-base"><i class="fa-solid fa-globe"></i> <span class="hidden sm:inline">Map</span></a></li>
             <li><a href="https://api.bharatradar.com" class="text-gray-400 hover:text-white transition text-sm sm:text-base"><i class="fa-solid fa-code"></i> <span class="hidden sm:inline">API</span></a></li>
             <li><a href="https://mlat.bharatradar.com" class="text-gray-400 hover:text-white transition text-sm sm:text-base"><i class="fa-solid fa-location-dot"></i> <span class="hidden sm:inline">MLAT</span></a></li>
             <li><a href="https://cortex.bharatradar.com" class="text-gray-400 hover:text-white transition text-sm sm:text-base"><i class="fa-solid fa-user-astronaut"></i> <span class="hidden sm:inline">Portal</span></a></li>
             <li><a href="https://bharatradar.com/docs/" class="text-gray-400 hover:text-white transition text-sm sm:text-base"><i class="fa-solid fa-book"></i> <span class="hidden sm:inline">Docs</span></a></li>
+            <li><a href="https://github.com/bharatradar" class="text-gray-400 hover:text-white transition text-sm sm:text-base"><i class="fa-brands fa-github"></i> <span class="hidden sm:inline">GitHub</span></a></li>
         </ul>
     </header>
   <div id="sidebar-container">
