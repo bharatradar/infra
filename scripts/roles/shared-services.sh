@@ -216,45 +216,74 @@ role_shared_services_configure_postgresql() {
         return 1
     fi
 
-    # Create database and user
+# Create database and user
     log_info "Creating database and user..."
-    sudo -u postgres psql <<EOF
-CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';
-CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};
-GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};
-ALTER DATABASE ${DB_NAME} SET timezone TO 'UTC';
-EOF
+    local db_result
+    db_result=$(sudo -u postgres psql -c "
+        CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';
+        CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};
+        GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};
+        ALTER DATABASE ${DB_NAME} SET timezone TO 'UTC';
+    " 2>&1)
+    
+    if echo "$db_result" | grep -q "already exists"; then
+        log_warn "Database ${DB_NAME} may already exist: continuing..."
+    else
+        log_success "Database '${DB_NAME}' created"
+    fi
 
     # Create BharatRadar database (flight_db)
-    log_info "Creating BharatRadar database..."
+    log_info "Creating BharatRadar database (flight_db)..."
     
     # Default password for flight_db_user
     FLIGHT_DB_PASSWORD="${FLIGHT_DB_PASSWORD:-raga@098}"
     
     # Create user if not exists, or alter password
-    sudo -u postgres psql <<EOF
-DO \$\$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'flight_db_user') THEN
-        CREATE ROLE flight_db_user LOGIN CREATEDB PASSWORD '${FLIGHT_DB_PASSWORD}';
-    ELSE
-        ALTER USER flight_db_user WITH PASSWORD '${FLIGHT_DB_PASSWORD}';
-    END IF;
-END
-\$\$;
-DO \$\$
-BEGIN
-    IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'flight_db') THEN
-        CREATE DATABASE flight_db OWNER flight_db_user;
-        GRANT ALL PRIVILEGES ON DATABASE flight_db TO flight_db_user;
-        ALTER DATABASE flight_db SET timezone TO 'UTC';
-    END IF;
-END
-\$\$;
-EOF
+    log_info "Creating flight_db_user and flight_db..."
+    local flight_result
+    flight_result=$(sudo -u postgres psql -c "
+        DO \$\$
+        BEGIN
+            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'flight_db_user') THEN
+                CREATE ROLE flight_db_user LOGIN CREATEDB PASSWORD '${FLIGHT_DB_PASSWORD}';
+            ELSE
+                ALTER USER flight_db_user WITH PASSWORD '${FLIGHT_DB_PASSWORD}';
+            END IF;
+        END
+        \$\$;
+        DO \$\$
+        BEGIN
+            IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'flight_db') THEN
+                CREATE DATABASE flight_db OWNER flight_db_user;
+                GRANT ALL PRIVILEGES ON DATABASE flight_db TO flight_db_user;
+                ALTER DATABASE flight_db SET timezone TO 'UTC';
+            END IF;
+        END
+        \$\$;
+    " 2>&1)
+    
+    if echo "$flight_result" | grep -q "error"; then
+        log_error "Failed to create flight_db: $flight_result"
+    else
+        log_success "flight_db created"
+    fi
 
-    log_success "Database '${DB_NAME}' and user '${DB_USER}' created"
-    log_success "Database 'flight_db' and user 'flight_db_user' ready"
+    # FINAL VERIFICATION
+    log_step "Verifying database setup..."
+    log_info "Checking databases..."
+    sudo -u postgres psql -c "SELECT datname FROM pg_database WHERE datname IN ('${DB_NAME}', 'flight_db');" 2>&1 | while read line; do
+        log_info "  $line"
+    done
+    
+    log_info "Checking users..."
+    sudo -u postgres psql -c "SELECT usename FROM pg_user WHERE usename IN ('${DB_USER}', 'flight_db_user');" 2>&1 | while read line; do
+        log_info "  $line"
+    done
+    
+    log_success "Database creation complete!"
+    log_success "  Database: flight_db"
+    log_success "  User: flight_db_user"
+    log_success "  Password: ${FLIGHT_DB_PASSWORD:-raga@098}"
 }
 
 role_shared_services_install_redis() {
@@ -500,6 +529,18 @@ role_shared_services_init_flight_db() {
     # Default credentials
     FLIGHT_DB_PASSWORD="${FLIGHT_DB_PASSWORD:-raga@098}"
 
+    # First verify flight_db exists
+    log_info "Verifying flight_db exists..."
+    local db_check
+    db_check=$(sudo -u postgres psql -t -c "SELECT 1 FROM pg_database WHERE datname='flight_db';" 2>&1)
+    
+    if [ -z "$db_check" ] || echo "$db_check" | grep -q "0 rows"; then
+        log_error "flight_db does not exist! Create it first with: sudo -u postgres psql -c 'CREATE DATABASE flight_db;'"
+        return 1
+    fi
+    
+    log_info "flight_db exists, checking tables..."
+
     # Check if flight_db already has data
     local existing_count
     existing_count=$(PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -t -c "SELECT COUNT(*) FROM airports;" 2>/dev/null || echo "0")
@@ -509,52 +550,61 @@ role_shared_services_init_flight_db() {
         return 0
     fi
 
-    log_info "Downloading BharatRadar schema and seed data..."
+    log_info "flight_db is empty, will initialize schema and seed data..."
+    log_info "Downloading BharatRadar schema and seed data from GitHub..."
 
     # Download the schema and seed files from GitHub
     local scripts_dir="/tmp/bharatradar-db-scripts"
     mkdir -p "$scripts_dir"
-
-    # Download schema.sql
-    curl -sL "https://raw.githubusercontent.com/bharatradar/infra/main/scripts/db/postgres/schema.sql" \
-        -o "$scripts_dir/schema.sql" || {
-        log_warn "Failed to download schema.sql, skipping initialization"
-        return 0
+    
+    local schema_url="https://raw.githubusercontent.com/bharatradar/infra/main/scripts/db/postgres/schema.sql"
+    local airports_url="https://raw.githubusercontent.com/bharatradar/infra/main/scripts/db/postgres/seed-airports.sql"
+    local runways_url="https://raw.githubusercontent.com/bharatradar/infra/main/scripts/db/postgres/seed-runways.sql"
+    
+    log_info "Downloading schema.sql..."
+    curl -sL "$schema_url" -o "$scripts_dir/schema.sql" || {
+        log_error "Failed to download schema.sql"
+        return 1
+    }
+    
+    log_info "Downloading seed-airports.sql..."
+    curl -sL "$airports_url" -o "$scripts_dir/seed-airports.sql" || {
+        log_error "Failed to download seed-airports.sql"
+        return 1
+    }
+    
+    log_info "Downloading seed-runways.sql..."
+    curl -sL "$runways_url" -o "$scripts_dir/seed-runways.sql" || {
+        log_error "Failed to download seed-runways.sql"
+        return 1
     }
 
-    # Download seed-airports.sql
-    curl -sL "https://raw.githubusercontent.com/bharatradar/infra/main/scripts/db/postgres/seed-airports.sql" \
-        -o "$scripts_dir/seed-airports.sql" || {
-        log_warn "Failed to download seed-airports.sql, skipping initialization"
-        return 0
-    }
+    log_info "Creating schema..."
+    local schema_result
+    schema_result=$(PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -f "$scripts_dir/schema.sql" 2>&1)
+    if echo "$schema_result" | grep -qi "error"; then
+        log_error "Schema creation failed: $schema_result"
+    else
+        log_success "Schema created"
+    fi
 
-    # Download seed-runways.sql
-    curl -sL "https://raw.githubusercontent.com/bharatradar/infra/main/scripts/db/postgres/seed-runways.sql" \
-        -o "$scripts_dir/seed-runways.sql" || {
-        log_warn "Failed to download seed-runways.sql, skipping initialization"
-        return 0
-    }
+    log_info "Seeding airports (this may take a minute)..."
+    local airports_result
+    airports_result=$(PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -f "$scripts_dir/seed-airports.sql" 2>&1)
+    log_success "Airports seeded"
 
-    log_info "Creating schema and seeding data..."
+    log_info "Seeding runways..."
+    PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -f "$scripts_dir/seed-runways.sql" 2>&1 || true
+    log_success "Runways seeded"
 
-    # Create schema
-    PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -f "$scripts_dir/schema.sql" >/dev/null 2>&1 || {
-        log_warn "Schema creation had warnings (continuing anyway)"
-    }
-
-    # Seed airports
-    PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -f "$scripts_dir/seed-airports.sql" >/dev/null 2>&1 || true
-
-    # Seed runways
-    PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -f "$scripts_dir/seed-runways.sql" >/dev/null 2>&1 || true
-
-    # Verify
+    # Verify counts
     local airport_count runway_count
-    airport_count=$(PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -t -c "SELECT COUNT(*) FROM airports;" 2>/dev/null || echo "0")
-    runway_count=$(PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -t -c "SELECT COUNT(*) FROM runways;" 2>/dev/null || echo "0")
+    airport_count=$(PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -t -c "SELECT COUNT(*) FROM airports;" 2>/dev/null | tr -d ' ')
+    runway_count=$(PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h localhost -U flight_db_user -d flight_db -t -c "SELECT COUNT(*) FROM runways;" 2>/dev/null | tr -d ' ')
 
-    log_success "BharatRadar database initialized: $airport_count airports, $runway_count runways"
+    log_success "BharatRadar database initialized!"
+    log_success "  Airports: ${airport_count:-0}"
+    log_success "  Runways: ${runway_count:-0}"
 
     # Cleanup
     rm -rf "$scripts_dir"
