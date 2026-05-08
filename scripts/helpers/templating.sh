@@ -35,13 +35,22 @@ templating_generate_kustomization() {
         "ai-agents.yaml"
         "telegram-bot.yaml"
         "flight-tracker.yaml"
+        "schedule-downloader-manual-job.yaml"
+        "schedule-downloader-cronjob.yaml"
     )
     for f in "${files[@]}"; do
-        [ -f "${base_dir}/${f}" ] && cp "${base_dir}/${f}" "${OVERLAY_DIR}/${f}"
+        local src="${base_dir}/${f}"
+        if [ -f "$src" ]; then
+            cp "$src" "${OVERLAY_DIR}/${f}"
+            log_info "Copied $f to overlay"
+        else
+            log_warn "File not found: $src"
+        fi
     done
     
     # Copy subdirs if exist
     [ -d "${base_dir}/cortex-webapp" ] && cp -r "${base_dir}/cortex-webapp" "${OVERLAY_DIR}/"
+    [ -d "${base_dir}/schedule-downloader-cronjob" ] && cp -r "${base_dir}/schedule-downloader-cronjob" "${OVERLAY_DIR}/"
 
     # Patch shared services IPs in overlay copies
     templating_patch_shared_services

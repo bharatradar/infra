@@ -147,7 +147,7 @@ USE_EXTERNAL_DB=true
     echo "    User: flight_db_user"
     echo "    Password: (shown at end of shared-services install)"
     echo ""
-    FLIGHT_DB_HOST="${DB_HOST:-127.0.0.1}"
+    FLIGHT_DB_HOST="${DB_HOST:-${REDIS_HOST:-192.168.200.12}}"
     FLIGHT_DB_PORT="${DB_PORT:-5432}"
     FLIGHT_DB_NAME="flight_db"
     FLIGHT_DB_USER="flight_db_user"
@@ -587,7 +587,7 @@ role_hub_create_secrets() {
     # Flight DB credentials secret
     if ! kubectl get secret flight-db-credentials -n bharatradar &>/dev/null; then
         kubectl create secret generic flight-db-credentials \
-            --from-literal=host="${FLIGHT_DB_HOST:-192.168.200.12}" \
+            --from-literal=host="${FLIGHT_DB_HOST}" \
             --from-literal=port="${FLIGHT_DB_PORT:-5432}" \
             --from-literal=dbname="${FLIGHT_DB_NAME:-flight_db}" \
             --from-literal=username="${FLIGHT_DB_USER:-flight_db_user}" \
@@ -599,7 +599,7 @@ role_hub_create_secrets() {
     # Redis credentials secret
     if ! kubectl get secret redis-credentials -n bharatradar &>/dev/null; then
         kubectl create secret generic redis-credentials \
-            --from-literal=host="${REDIS_HOST:-192.168.200.12}" \
+            --from-literal=host="${REDIS_HOST}" \
             --from-literal=port="${REDIS_PORT:-6379}" \
             --from-literal=password="${REDIS_PASSWORD}" \
             -n bharatradar 2>/dev/null || true
