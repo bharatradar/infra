@@ -73,13 +73,10 @@ templating_generate_kustomization() {
 
 # Patch shared services IPs in overlay (not source files)
 templating_patch_shared_services() {
-    local flight_db_host="${FLIGHT_DB_HOST:-192.168.200.12}"
-    local redis_host="${REDIS_HOST:-192.168.200.12}"
-    local influxdb_url="http://${INFLUXDB_HOST:-192.168.200.12}:8086"
+    # Use the first IP from the user config - could be flight_db host or db host
+    local shared_host="${FLIGHT_DB_HOST:-${DB_HOST:-192.168.200.12}}"
     
-    local old_ip="192.168.200.15"
-    
-    # Replace hardcoded IPs in files copied to overlay
+    # Replace placeholder in files copied to overlay
     local files=(
         "${OVERLAY_DIR}/ai-agents.yaml"
         "${OVERLAY_DIR}/telegram-bot.yaml"
@@ -88,20 +85,20 @@ templating_patch_shared_services() {
     
     for f in "${files[@]}"; do
         if [ -f "$f" ]; then
-            sed -i "s/${old_ip}/${flight_db_host}/g" "$f"
-            log_info "Patched $(basename $f): ${old_ip} -> ${flight_db_host}"
+            sed -i "s/SHARED_SERVICES_HOST/${shared_host}/g" "$f"
+            log_info "Patched $(basename $f): SHARED_SERVICES_HOST -> ${shared_host}"
         fi
     done
     
     # Handle subdir files
-    if [ -d "${OVERLAY_DIR}/cortex-webapp" ]; then
-        sed -i "s/${old_ip}/${flight_db_host}/g" "${OVERLAY_DIR}/cortex-webapp/deployment.yaml"
+    if [ -f "${OVERLAY_DIR}/cortex-webapp/deployment.yaml" ]; then
+        sed -i "s/SHARED_SERVICES_HOST/${shared_host}/g" "${OVERLAY_DIR}/cortex-webapp/deployment.yaml"
     fi
-    if [ -d "${OVERLAY_DIR}/schedule-downloader-manual-job.yaml" ]; then
-        sed -i "s/${old_ip}/${flight_db_host}/g" "${OVERLAY_DIR}/schedule-downloader-manual-job.yaml"
+    if [ -f "${OVERLAY_DIR}/schedule-downloader-manual-job.yaml" ]; then
+        sed -i "s/SHARED_SERVICES_HOST/${shared_host}/g" "${OVERLAY_DIR}/schedule-downloader-manual-job.yaml"
     fi
-    if [ -d "${OVERLAY_DIR}/schedule-downloader-cronjob.yaml" ]; then
-        sed -i "s/${old_ip}/${flight_db_host}/g" "${OVERLAY_DIR}/schedule-downloader-cronjob.yaml"
+    if [ -f "${OVERLAY_DIR}/schedule-downloader-cronjob.yaml" ]; then
+        sed -i "s/SHARED_SERVICES_HOST/${shared_host}/g" "${OVERLAY_DIR}/schedule-downloader-cronjob.yaml"
     fi
 }
 

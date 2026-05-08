@@ -33,7 +33,7 @@ spec:
             command: ["python", "-u", "route_schedule_downloader.py"]
             env:
             - name: DB_HOST
-              value: "192.168.200.15"
+              value: "SHARED_SERVICES_HOST"
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME

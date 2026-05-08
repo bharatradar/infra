@@ -43,7 +43,7 @@ spec:
               name: http
           env:
             - name: DB_HOST
-              value: "192.168.200.15"
+              value: "SHARED_SERVICES_HOST"
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME
@@ -56,7 +56,7 @@ spec:
                   name: flight-db-credentials
                   key: password
             - name: REDIS_HOST
-              value: "192.168.200.15"
+              value: "SHARED_SERVICES_HOST"
             - name: REDIS_PORT
               value: "6379"
             - name: REDIS_PASSWORD

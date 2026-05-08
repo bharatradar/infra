@@ -78,7 +78,7 @@ role_hub_collect_config() {
         echo ""
         echo "  Configure MinIO on your shared services host (Pi):"
         echo ""
-        prompt_input "MinIO endpoint (host:port)" "${MINIO_ENDPOINT:-192.168.200.15:9000}" MINIO_ENDPOINT
+        prompt_input "MinIO endpoint (host:port)" "${MINIO_ENDPOINT}" MINIO_ENDPOINT
         prompt_input "MinIO access key" "${MINIO_ROOT_USER:-minioadmin}" MINIO_ROOT_USER
         prompt_input "MinIO secret key" "${MINIO_ROOT_PASSWORD:-}" MINIO_ROOT_PASSWORD
         while [ -z "$MINIO_ROOT_PASSWORD" ]; do

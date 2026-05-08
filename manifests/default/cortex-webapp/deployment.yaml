@@ -44,7 +44,7 @@ spec:
               name: http
           env:
             - name: DB_HOST
-              value: "192.168.200.15"
+              value: "SHARED_SERVICES_HOST"
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME
@@ -54,11 +54,11 @@ spec:
             - name: DB_PASSWORD
               value: "flight_db_password"
             - name: REDIS_HOST
-              value: "192.168.200.15"
+              value: "SHARED_SERVICES_HOST"
             - name: REDIS_PORT
               value: "6379"
             - name: INFLUXDB_URL
-              value: "http://192.168.200.15:8086"
+              value: "http://SHARED_SERVICES_HOST:8086"
             - name: INFLUXDB_ORG
               value: "Vellur"
             - name: GOOGLE_REDIRECT_URI

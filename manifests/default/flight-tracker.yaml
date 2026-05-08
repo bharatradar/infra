@@ -38,13 +38,13 @@ data:
   AIRPORTS_CSV_FILE: "/app/data/airports.csv"
   
   # InfluxDB
-  INFLUXDB_URL: "http://192.168.200.15:8086"
+  INFLUXDB_URL: "http://SHARED_SERVICES_HOST:8086"
   INFLUXDB_ORG: "Vellur"
   INFLUXDB_BUCKET: "raga_flight_radar_db"
   INFLUXDB_WRITE_INTERVAL_SEC: "5"
   
   # Redis
-  REDIS_HOST: "192.168.200.15"
+  REDIS_HOST: "SHARED_SERVICES_HOST"
   REDIS_PORT: "6379"
   REDIS_DB: "0"
   REDIS_LIVE_FLIGHTS_KEY: "live_flights"
@@ -52,7 +52,7 @@ data:
   REDIS_FLIGHTS_TTL: "30"
   
   # Database
-  DB_HOST: "192.168.200.15"
+  DB_HOST: "SHARED_SERVICES_HOST"
   DB_PORT: "5432"
   DB_NAME: "flight_db"
   DB_USER: "flight_db_user"
