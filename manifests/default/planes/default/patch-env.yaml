@@ -7,7 +7,7 @@ spec:
     spec:
       containers:
       - name: readsb
-        image: ghcr.io/bharatradar/docker-tar1090-uuid:v2026.05.08.09
+        image: ghcr.io/bharatradar/docker-tar1090-uuid:v2026.05.08.10
         # Removing health checks that might be killing the pod too early
         livenessProbe: null
         readinessProbe: null
@@ -24,6 +24,8 @@ spec:
             value: "true"
           - name: READSB_RX_LOCATION_ACCURACY
             value: "2"
+          - name: UPDATE_TAR1090
+            value: "false"
         # Only keep the storage volume, remove the config/secret mounts for now
         volumeMounts:
         - name: state
