@@ -556,35 +556,52 @@ role_hub_deploy_services() {
     # Helper: deploy a component and strip ServiceMonitor resources
     deploy_component() {
         local component="$1"
+        
+        # Check for directory-based component (e.g., api/default, ingest/default)
         local manifest_dir="${SCRIPT_DIR}/../manifests/default/${component}/default"
-        if [ ! -d "$manifest_dir" ]; then
+        
+        # Check for standalone YAML file (e.g., telegram-bot.yaml, ai-agents.yaml)
+        local manifest_file="${SCRIPT_DIR}/../manifests/default/${component}.yaml"
+        
+        if [ -d "$manifest_dir" ]; then
+            # Deploy from kustomize directory
+            log_info "Deploying ${component}..."
+            local built
+            built=$(kustomize build "$manifest_dir" 2>&1)
+            local rc=$?
+            if [ $rc -ne 0 ]; then
+                log_error "kustomize build failed for ${component}:"
+                echo "$built"
+                return 1
+            fi
+            
+            echo "$built" | awk 'BEGIN{RS="---"; ORS="---"}
+                !/kind: ServiceMonitor/ &&
+                !/kind: ImagePolicy/ &&
+                !/kind: ImageRepository/ &&
+                !/kind: ImageUpdateAutomation/ &&
+                /kind:/' | kubectl apply -f - -n bharatradar 2>&1
+            rc=$?
+            if [ $rc -ne 0 ]; then
+                log_error "kubectl apply failed for ${component}"
+                return 1
+            fi
+            
+            log_success "${component} deployed"
+        elif [ -f "$manifest_file" ]; then
+            # Deploy standalone YAML file
+            log_info "Deploying ${component}..."
+            kubectl apply -f "$manifest_file" -n bharatradar 2>&1
+            local rc=$?
+            if [ $rc -ne 0 ]; then
+                log_error "kubectl apply failed for ${component}"
+                return 1
+            fi
+            log_success "${component} deployed"
+        else
+            log_info "Skipping ${component} - not found"
             return 0
         fi
-        log_info "Deploying ${component}..."
-        
-        # Build manifests, strip ServiceMonitor (requires CRD), apply
-        local built
-        built=$(kustomize build "$manifest_dir" 2>&1)
-        local rc=$?
-        if [ $rc -ne 0 ]; then
-            log_error "kustomize build failed for ${component}:"
-            echo "$built"
-            return 1
-        fi
-        
-        echo "$built" | awk 'BEGIN{RS="---"; ORS="---"}
-            !/kind: ServiceMonitor/ &&
-            !/kind: ImagePolicy/ &&
-            !/kind: ImageRepository/ &&
-            !/kind: ImageUpdateAutomation/ &&
-            /kind:/' | kubectl apply -f - -n bharatradar 2>&1
-        rc=$?
-        if [ $rc -ne 0 ]; then
-            log_error "kubectl apply failed for ${component}"
-            return 1
-        fi
-        
-        log_success "${component} deployed"
     }
 
     # Helper: wait for a deployment to be ready
@@ -623,6 +640,19 @@ role_hub_deploy_services() {
     deploy_component "mlat-map" || return 1
     deploy_component "history" || return 1
     deploy_component "schedule-downloader" || return 1
+
+    # Phase 5: Additional services (telegram-bot, ai-agents, cortex-webapp, flight-tracker)
+    deploy_component "telegram-bot" || true
+    deploy_component "ai-agents" || true
+    deploy_component "cortex-webapp" || true
+    deploy_component "flight-tracker" || true
+    deploy_component "redis" || true
+
+    # Wait for additional services
+    wait_for_deployment "telegram-bot" || true
+    wait_for_deployment "ai-agents" || true
+    wait_for_deployment "cortex-webapp" || true
+    wait_for_deployment "flight-tracker" || true
     # NOTE: haproxy removed — beast/MLAT now use direct LoadBalancer services (Option C)
 
     log_success "All services deployed"
@@ -692,7 +722,7 @@ role_hub_setup_frpc() {
     fi
 
     local domain_list=""
-    local subdomains=("map" "mlat" "history" "api" "my" "feed" "ws" "cortex" "grafana")
+    local subdomains=("map" "mlat" "history" "api" "my" "feed" "ws" "cortex" "grafana" "telegram")
     for sub in "${subdomains[@]}"; do
         domain_list+="    \"${sub}.${BASE_DOMAIN}\",
 "
