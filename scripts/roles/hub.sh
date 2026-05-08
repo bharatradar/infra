@@ -609,9 +609,9 @@ role_hub_create_secrets() {
         if ! kubectl get secret telegram-bot-credentials -n bharatradar &>/dev/null; then
             kubectl create secret generic telegram-bot-credentials \
                 --from-literal=telegram_token="${TELEGRAM_BOT_TOKEN}" \
-                --from-literal=chat_id="${TELEGRAM_CHAT_ID:-}" \
-                --from-literal=gpt_api_key="${GPT_API_KEY:-}" \
-                --from-literal=gpt_model="llama-3.1-70b-versatile" \
+                --from-literal=telegram_chat_id="${TELEGRAM_CHAT_ID:-}" \
+                --from-literal=groq_api_key="${GPT_API_KEY:-}" \
+                --from-literal=cloudflare_keys="${CF_KEYS_JSON:-}" \
                 -n bharatradar 2>/dev/null || true
             log_success "Telegram bot credentials secret created"
         fi
