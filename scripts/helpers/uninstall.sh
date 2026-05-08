@@ -222,6 +222,15 @@ uninstall_redis() {
 uninstall_influxdb() {
     log_step "Uninstalling InfluxDB"
 
+    # FIX: Pre-create the systemd service file to prevent post-removal script error
+    # The influxdb2 package has a broken post-removal script that fails if the service doesn't exist
+    log_info "Creating dummy influxdb service to prevent post-removal error..."
+    echo "[Unit]" | sudo tee /lib/systemd/system/influxdb.service > /dev/null 2>&1 || true
+    echo "[Service]" | sudo tee -a /lib/systemd/system/influxdb.service > /dev/null 2>&1 || true
+    echo "Type=simple" | sudo tee -a /lib/systemd/system/influxdb.service > /dev/null 2>&1 || true
+    echo "ExecStart=/bin/true" | sudo tee -a /lib/systemd/system/influxdb.service > /dev/null 2>&1 || true
+    sudo systemctl daemon-reload 2>/dev/null || true
+    
     # Handle broken influxdb2 package first
     log_info "Checking for broken InfluxDB packages..."
     
@@ -251,14 +260,21 @@ uninstall_influxdb() {
 
         case "$os" in
             debian|ubuntu|raspbian)
-                # First remove service files to avoid errors
+                # First remove service files to avoid errors - RECREATE BEFORE
+                echo "[Unit]" | sudo tee /lib/systemd/system/influxdb.service > /dev/null 2>&1 || true
+                echo "[Service]" | sudo tee -a /lib/systemd/system/influxdb.service > /dev/null 2>&1 || true
+                echo "Type=simple" | sudo tee -a /lib/systemd/system/influxdb.service > /dev/null 2>&1 || true
+                echo "ExecStart=/bin/true" | sudo tee -a /lib/systemd/system/influxdb.service > /dev/null 2>&1 || true
+                sudo systemctl daemon-reload 2>/dev/null || true
+                
+                # Try to remove with force-scripts to skip post-remove script errors
+                DEBIAN_FRONTEND=noninteractive sudo apt-get remove -y --force-remove influxdb2 2>&1 || true
+                DEBIAN_FRONTEND=noninteractive sudo apt-get autoremove -y 2>&1 || true
+                
+                # Clean up any remaining package state
                 sudo rm -f /lib/systemd/system/influxdb*.service 2>/dev/null || true
                 sudo rm -f /etc/systemd/system/influxdb*.service 2>/dev/null || true
                 sudo systemctl daemon-reload 2>/dev/null || true
-                
-                # Try to remove, ignore errors
-                DEBIAN_FRONTEND=noninteractive apt-get remove -y influxdb2 2>&1 | grep -v "dpkg: error" || true
-                DEBIAN_FRONTEND=noninteractive apt-get autoremove -y 2>&1 | grep -v "dpkg: error" || true
                 ;;
             fedora|centos|rhel)
                 dnf remove -y influxdb2 2>/dev/null || true
@@ -307,6 +323,40 @@ uninstall_minio() {
 # Uninstall shared services (PostgreSQL + Redis + InfluxDB + MinIO)
 uninstall_shared_services() {
     log_step "Uninstalling Shared Services"
+
+    # CRITICAL FIX: Pre-emptively handle broken influxdb2 package BEFORE any apt operations
+    # This prevents apt from triggering the broken post-removal script during any operation
+    log_info "Pre-checking for broken packages..."
+    if dpkg -l 2>/dev/null | grep -q "^.i.*influxdb2"; then
+        log_warn "Found broken influxdb2 package - fixing before uninstall..."
+        
+        # Create dummy service file so post-removal script doesn't fail
+        echo "[Unit]
+Description=Dummy InfluxDB Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/true
+RemainAfterExit=yes" | sudo tee /lib/systemd/system/influxdb.service > /dev/null 2>&1
+        
+        sudo systemctl daemon-reload 2>/dev/null || true
+        
+        # Now disable and remove - should work with dummy service
+        sudo systemctl disable influxdb 2>/dev/null || true
+        sudo systemctl stop influxdb 2>/dev/null || true
+        
+        # Force remove with dpkg to skip post-removal scripts
+        sudo dpkg --remove --force-script-checks influxdb2 2>/dev/null || true
+        sudo dpkg --configure -a 2>/dev/null || true
+        
+        # Clean up
+        sudo rm -f /lib/systemd/system/influxdb.service 2>/dev/null || true
+        sudo rm -f /etc/systemd/system/influxdb.service 2>/dev/null || true
+        sudo systemctl daemon-reload 2>/dev/null || true
+        
+        log_info "Broken influxdb2 package fixed"
+    fi
 
     if prompt_confirm "Remove PostgreSQL?"; then
         uninstall_postgresql
