@@ -36,7 +36,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: agents
-          image: ghcr.io/bharatradar/ai-agents:v6.0.0
+          image: ghcr.io/bharatradar/ai-agents:v2026.05.08.10
           imagePullPolicy: Always
           ports:
             - containerPort: 8080

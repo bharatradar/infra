@@ -9,7 +9,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: api
-        image: ghcr.io/bharatradar/api:v6.0.0
+        image: ghcr.io/bharatradar/api:latest
         imagePullPolicy: IfNotPresent
         envFrom:
         - configMapRef:

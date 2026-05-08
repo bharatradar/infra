@@ -17,7 +17,7 @@ spec:
         emptyDir: {}
       containers:
       - name: history
-        image: ghcr.io/bharatradar/history:v6.0.0
+        image: ghcr.io/bharatradar/history:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
