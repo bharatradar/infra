@@ -692,7 +692,7 @@ role_hub_setup_frpc() {
     fi
 
     local domain_list=""
-    local subdomains=("map" "mlat" "history" "api" "my" "feed" "ws")
+    local subdomains=("map" "mlat" "history" "api" "my" "feed" "ws" "cortex" "grafana")
     for sub in "${subdomains[@]}"; do
         domain_list+="    \"${sub}.${BASE_DOMAIN}\",
 "

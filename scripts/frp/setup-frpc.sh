@@ -129,7 +129,9 @@ customDomains = [
     "mlat.${BASE_DOMAIN}",
     "api.${BASE_DOMAIN}",
     "feed.${BASE_DOMAIN}",
-    "ws.${BASE_DOMAIN}"
+    "ws.${BASE_DOMAIN}",
+    "cortex.${BASE_DOMAIN}",
+    "grafana.${BASE_DOMAIN}"
 ]
 
 # Forward Beast Protocol (Raw ADS-B)
