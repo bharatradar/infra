@@ -5,7 +5,7 @@
 set -euo pipefail
 
 DOMAIN="bharatradar.com"
-SUBDOMAINS="map mlat history api my ws feed"
+SUBDOMAINS="map mlat history api my ws feed grafana"
 ALL_DOMAINS="www.$DOMAIN $DOMAIN"
 for sub in $SUBDOMAINS; do
     ALL_DOMAINS="$ALL_DOMAINS $sub.$DOMAIN"

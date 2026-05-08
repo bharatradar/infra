@@ -15,7 +15,7 @@ source "${SCRIPTS_DIR}/helpers/functions.sh"
 BASE_DOMAIN=""
 FRPS_VHOST_HTTP_PORT=8080
 EMAIL=""
-SUBDOMAINS=("map" "history" "mlat" "api" "feed" "ws")
+SUBDOMAINS=("map" "history" "mlat" "api" "feed" "ws" "grafana")
 
 usage() {
     cat <<EOF

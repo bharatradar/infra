@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-SUBDOMAINS=("map" "mlat" "history" "api" "my" "feed" "ws")
+SUBDOMAINS=("map" "mlat" "history" "api" "my" "feed" "ws" "grafana")
 FRP_VERSION="0.68.1"
 FRPS_BIND_PORT=7000
 FRPS_VHOST_HTTP_PORT=8080

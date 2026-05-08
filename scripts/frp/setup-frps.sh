@@ -26,7 +26,7 @@ EMAIL=""
 CERTBOT_METHOD="standalone"
 
 # Subdomains
-SUBDOMAINS=("map" "history" "mlat" "api" "feed" "ws")
+SUBDOMAINS=("map" "history" "mlat" "api" "feed" "ws" "grafana")
 
 usage() {
     cat <<EOF
