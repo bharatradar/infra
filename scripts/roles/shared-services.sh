@@ -236,9 +236,7 @@ role_shared_services_configure_postgresql() {
     log_info "Creating BharatRadar database (flight_db)..."
     
     # Auto-generate password if not provided
-    if [ -z "$FLIGHT_DB_PASSWORD" ]; then
-        FLIGHT_DB_PASSWORD=$(generate_secret)
-    fi
+    FLIGHT_DB_PASSWORD="${FLIGHT_DB_PASSWORD:-$(generate_secret)}"
     
     log_info "flight_db password: ${FLIGHT_DB_PASSWORD}"
     
