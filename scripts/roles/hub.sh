@@ -125,13 +125,32 @@ role_hub_collect_config() {
         unset K3S_DATASTORE_ENDPOINT 2>/dev/null || true
         log_info "Using embedded etcd datastore"
     else
-        USE_EXTERNAL_DB=true
+USE_EXTERNAL_DB=true
         echo ""
         log_info "Enter your PostgreSQL server details:"
         collect_pg_config "DB"
         log_info "Using external PostgreSQL: ${DB_HOST}:${DB_PORT}/${DB_DBNAME}"
     fi
-
+    
+    # Flight Database (flight_db) - used by ai-agents, telegram-bot, etc.
+    echo ""
+    log_step "Flight Database (Optional)"
+    echo ""
+    echo "  BharatRadar uses a separate PostgreSQL database (flight_db)"
+    echo "  for ai-agents, telegram-bot, and other services."
+    echo ""
+    if prompt_confirm "Set up flight_db database?"; then
+        FLIGHT_DB_HOST="${DB_HOST:-127.0.0.1}"
+        prompt_input "flight_db host IP" "${FLIGHT_DB_HOST}" FLIGHT_DB_HOST
+        FLIGHT_DB_PORT="${DB_PORT:-5432}"
+        prompt_input "flight_db port" "${FLIGHT_DB_PORT}" FLIGHT_DB_PORT
+        FLIGHT_DB_NAME="flight_db"
+        FLIGHT_DB_USER="flight_db_user"
+        prompt_input "flight_db password" "${FLIGHT_DB_PASSWORD:-raga@098}" FLIGHT_DB_PASSWORD
+    else
+        FLIGHT_DB_HOST=""
+    fi
+    
     echo ""
     log_step "FRP Tunnel (Optional)"
     echo ""
@@ -896,6 +915,18 @@ EOF
 EOF
     fi
 
+    if [ -n "${FLIGHT_DB_HOST:-}" ]; then
+        cat >> "$creds_file" <<EOF
+
+  Flight Database (flight_db):
+    Host:     ${FLIGHT_DB_HOST}
+    Port:     ${FLIGHT_DB_PORT:-5432}
+    Database: ${FLIGHT_DB_NAME:-flight_db}
+    User:     ${FLIGHT_DB_USER:-flight_db_user}
+    Password: ${FLIGHT_DB_PASSWORD:-raga@098}
+EOF
+    fi
+
     cat >> "$creds_file" <<EOF
 
 ============================================================
@@ -1038,6 +1069,11 @@ role_hub_run() {
         save_config_value "DB_DBNAME" "${DB_DBNAME:-k3s}"
         save_config_value "DB_DBUSER" "${DB_DBUSER:-k3s}"
         save_config_value "DB_CONNECTION_STRING" "${DB_CONNECTION_STRING:-}"
+        save_config_value "FLIGHT_DB_HOST" "${FLIGHT_DB_HOST:-}"
+        save_config_value "FLIGHT_DB_PORT" "${FLIGHT_DB_PORT:-5432}"
+        save_config_value "FLIGHT_DB_NAME" "${FLIGHT_DB_NAME:-flight_db}"
+        save_config_value "FLIGHT_DB_USER" "${FLIGHT_DB_USER:-flight_db_user}"
+        save_config_value "FLIGHT_DB_PASSWORD" "${FLIGHT_DB_PASSWORD:-}"
         save_config_value "FRP_ENABLED" "${FRP_ENABLED}"
         save_config_value "FRP_SERVER" "${FRP_SERVER:-}"
         save_config_value "FRP_TOKEN" "${FRP_TOKEN:-}"
