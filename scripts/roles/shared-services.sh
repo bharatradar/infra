@@ -499,7 +499,16 @@ EOF
 
     systemctl daemon-reload
     systemctl enable minio
-    systemctl start minio
+    
+    # Start MinIO - try with IP first, fallback to default
+    if ! systemctl start minio 2>/dev/null; then
+        log_warn "MinIO failed to start with specific IP, trying default..."
+        # Fallback: remove IP binding and use default
+        sed -i "s/--address \"\${DB_LISTEN_IP}:9000\"/--address \":9000\"/" /etc/systemd/system/minio.service
+        sed -i "s/--console-address \"\${DB_LISTEN_IP}:9001\"/--console-address \":9001\"/" /etc/systemd/system/minio.service
+        systemctl daemon-reload
+        systemctl start minio
+    fi
 
     # Wait for MinIO to be ready
     for i in $(seq 1 30); do
