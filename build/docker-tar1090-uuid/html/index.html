@@ -22,13 +22,19 @@
     <title>tar1090</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { padding-top: 64px; }
+        body { padding-top: 0px; }
+        @media (min-width: 640px) {
+            #layout_container { margin-top: 64px; height: calc(100% - 64px); }
+        }
+        @media (max-width: 639px) {
+            #layout_container { margin-top: 88px; height: calc(100% - 88px); }
+        }
     </style>
   </head>
 
   <body>
     <!-- Header -->
-    <div class="fixed top-0 left-0 right-0 h-16 bg-gray-900 border-b border-gray-700 flex items-center justify-between px-6 z-[9999]">
+    <header class="fixed top-0 left-0 right-0 h-[88px] sm:h-16 bg-gray-900 border-b border-gray-800 flex flex-col sm:flex-row items-center justify-center sm:justify-between px-3 sm:px-6 z-[9999] shadow-lg gap-2 sm:gap-0">
         <div class="flex items-center gap-3">
             <div class="relative flex h-3 w-3">
               <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -42,7 +48,7 @@
             <a href="https://bharatradar.com" class="text-gray-400 hover:text-white text-sm">Home</a>
             <a href="https://cortex.bharatradar.com" class="text-gray-400 hover:text-white text-sm">Cortex</a>
         </div>
-    </div>
+    </header>
     <!-- BODY_ANCHOR -->
     <div id="layout_container">
 
