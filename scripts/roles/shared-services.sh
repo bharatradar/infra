@@ -356,6 +356,17 @@ role_shared_services_configure_redis() {
 role_shared_services_install_influxdb() {
     log_step "Installing InfluxDB"
 
+    # First, fix any broken influxdb2 package before proceeding
+    log_info "Checking for broken InfluxDB packages..."
+    if dpkg -l | grep -q "influxdb2"; then
+        log_info "Removing broken InfluxDB packages..."
+        sudo mv /var/lib/dpkg/info/influxdb2.* /tmp/ 2>/dev/null || true
+        sudo dpkg --remove --force-remove-reinstreq influxdb2 2>/dev/null || true
+        sudo apt-get autoremove -y 2>/dev/null || true
+        sudo apt-get autoclean 2>/dev/null || true
+        sudo dpkg --configure -a 2>/dev/null || true
+    fi
+    
     if command -v influxd &>/dev/null; then
         log_info "InfluxDB already installed"
         return 0
