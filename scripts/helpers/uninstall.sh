@@ -159,15 +159,11 @@ uninstall_postgresql() {
     log_info "Checking for broken packages before PostgreSQL removal..."
     if dpkg -l 2>/dev/null | grep -q "^.i.*influxdb2"; then
         log_warn "Found broken influxdb2 - fixing first..."
-        sudo mv /var/lib/dpkg/info/influxdb2.postrm /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.prerm /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.preinst /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.postinst /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.templates /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.md5sums /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.list /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.status /tmp/ 2>/dev/null || true
-        sudo dpkg --remove --force-remove-reinstreq influxdb2 2>/dev/null || true
+        # Move each file explicitly (not glob - more reliable)
+        for f in /var/lib/dpkg/info/influxdb2.*; do
+            [ -f "$f" ] && sudo mv "$f" /tmp/
+        done
+        sudo dpkg --remove --force-remove-reinstreq influxdb2
     fi
 
     local os
@@ -216,15 +212,10 @@ uninstall_redis() {
     log_info "Checking for broken packages before Redis removal..."
     if dpkg -l 2>/dev/null | grep -q "^.i.*influxdb2"; then
         log_warn "Found broken influxdb2 - fixing first..."
-        sudo mv /var/lib/dpkg/info/influxdb2.postrm /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.prerm /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.preinst /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.postinst /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.templates /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.md5sums /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.list /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.status /tmp/ 2>/dev/null || true
-        sudo dpkg --remove --force-remove-reinstreq influxdb2 2>/dev/null || true
+        for f in /var/lib/dpkg/info/influxdb2.*; do
+            [ -f "$f" ] && sudo mv "$f" /tmp/
+        done
+        sudo dpkg --remove --force-remove-reinstreq influxdb2
     fi
 
     local os
@@ -255,18 +246,9 @@ uninstall_influxdb() {
     if prompt_confirm "This will remove InfluxDB and all data. Continue?"; then
         log_info "Removing broken influxdb2 package..."
 
-        # Show what's in dpkg/info first for debugging
-        ls -la /var/lib/dpkg/info/influxdb2.* 2>/dev/null || log_info "No influxdb2 files found"
-
-        sudo mv /var/lib/dpkg/info/influxdb2.postrm /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.prerm /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.preinst /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.postinst /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.templates /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.md5sums /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.list /tmp/ 2>/dev/null || true
-        sudo mv /var/lib/dpkg/info/influxdb2.status /tmp/ 2>/dev/null || true
-
+        for f in /var/lib/dpkg/info/influxdb2.*; do
+            [ -f "$f" ] && sudo mv "$f" /tmp/
+        done
         sudo dpkg --remove --force-remove-reinstreq influxdb2
         sudo apt-get autoremove
         sudo apt-get autoclean
