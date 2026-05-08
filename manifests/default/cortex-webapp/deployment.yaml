@@ -37,7 +37,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: cortex-webapp
-          image: ghcr.io/bharatradar/cortex-webapp:v2026.05.08.10
+          image: ghcr.io/bharatradar/cortex-webapp:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8081

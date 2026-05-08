@@ -30,7 +30,7 @@ jobs:
         include:
           - name: readsb
             repo: bharatradar/readsb
-            ref: dev
+            ref: main
             image: ghcr.io/bharatradar/readsb
             platforms: linux/amd64,linux/arm64
           - name: docker-tar1090
@@ -40,12 +40,12 @@ jobs:
             platforms: linux/amd64,linux/arm64
           - name: mlat-server
             repo: bharatradar/mlat-server
-            ref: master
+            ref: main
             image: ghcr.io/bharatradar/mlat-server
             platforms: linux/amd64
           - name: mlat-server-sync-map
             repo: bharatradar/mlat-server-sync-map
-            ref: master
+            ref: main
             image: ghcr.io/bharatradar/mlat-server-sync-map
             platforms: linux/amd64
           - name: api
