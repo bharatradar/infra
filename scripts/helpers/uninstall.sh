@@ -222,17 +222,43 @@ uninstall_redis() {
 uninstall_influxdb() {
     log_step "Uninstalling InfluxDB"
 
+    # Handle broken influxdb2 package first
+    log_info "Checking for broken InfluxDB packages..."
+    
+    # Check if package is in broken state
+    if dpkg -l 2>/dev/null | grep -q "^.i.*influxdb2"; then
+        log_warn "Found broken influxdb2 package, forcing removal..."
+        
+        # Remove systemd service files that cause the error
+        sudo rm -f /lib/systemd/system/influxdb.service 2>/dev/null || true
+        sudo rm -f /etc/systemd/system/influxdb.service 2>/dev/null || true
+        sudo rm -f /lib/systemd/system/influxdb2.service 2>/dev/null || true
+        sudo rm -f /etc/systemd/system/influxdb2.service 2>/dev/null || true
+        sudo systemctl daemon-reload 2>/dev/null || true
+        
+        # Force remove the package
+        sudo dpkg --remove --force-all influxdb2 2>/dev/null || true
+        sudo dpkg --configure -a 2>/dev/null || true
+    fi
+    
+    # Now try normal removal
     local os
     os=$(detect_os)
-
+    
     if prompt_confirm "This will remove InfluxDB and all data. Continue?"; then
         systemctl stop influxdb 2>/dev/null || true
         systemctl disable influxdb 2>/dev/null || true
 
         case "$os" in
             debian|ubuntu|raspbian)
-                apt-get remove -y -qq influxdb2 2>/dev/null || true
-                apt-get autoremove -y -qq 2>/dev/null || true
+                # First remove service files to avoid errors
+                sudo rm -f /lib/systemd/system/influxdb*.service 2>/dev/null || true
+                sudo rm -f /etc/systemd/system/influxdb*.service 2>/dev/null || true
+                sudo systemctl daemon-reload 2>/dev/null || true
+                
+                # Try to remove, ignore errors
+                DEBIAN_FRONTEND=noninteractive apt-get remove -y influxdb2 2>&1 | grep -v "dpkg: error" || true
+                DEBIAN_FRONTEND=noninteractive apt-get autoremove -y 2>&1 | grep -v "dpkg: error" || true
                 ;;
             fedora|centos|rhel)
                 dnf remove -y influxdb2 2>/dev/null || true
