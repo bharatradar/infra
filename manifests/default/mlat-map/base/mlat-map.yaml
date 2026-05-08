@@ -9,7 +9,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: mlat-map
-        image: ghcr.io/bharatradar/mlat-server-sync-map:v2026.05.08.10
+        image: ghcr.io/bharatradar/mlat-server-sync-map:v6.0.0
         ports:
         - containerPort: 80
           name: http
