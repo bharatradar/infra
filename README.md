@@ -1099,6 +1099,52 @@ sshpass -p 'raga@098' ssh \
 
 ## Future Improvements
 
+### Optional Components (Monitoring, GitOps, TLS)
+
+These optional components are already defined in your manifests but require CRDs to be installed:
+
+#### Monitoring (Prometheus + Grafana)
+
+Web dashboards for cluster monitoring (CPU, memory, request rates).
+
+**Already defined:** ServiceMonitor in `api/base/api.yaml`
+
+**Install:**
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --namespace monitoring --create-namespace \
+  --set grafana.service.type=LoadBalancer
+```
+
+---
+
+#### FluxCD (GitOps Auto-Deploy)
+
+Auto-deploys when new images are pushed to GHCR.
+
+**Already defined:** flux.yaml files in `api/default/`, `history/default/`, `mlat-map/default/`
+
+**Install:**
+```bash
+kubectl apply -f https://fluxcd.io/install.sh
+```
+
+---
+
+#### cert-manager (TLS - AWS Migration Only)
+
+For moving TLS from AWS EC2 to K3s (future).
+
+**Already defined:** Certificate in `resources.yaml`
+
+**When migrating off AWS:**
+```bash
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/release/cert-manager.yaml
+```
+
+---
+
 ### ETA Calculation: Option C (Hybrid Historical + Real-time)
 
 The current ETA model (Option B) uses altitude-based descent profiles + airport-specific historical buffers. This is a significant improvement over raw distance/speed, but there's a **Option C** that would add even more accuracy:

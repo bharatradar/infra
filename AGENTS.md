@@ -259,3 +259,113 @@ kubectl apply -f manifests/default/cortex-webapp/ingress.yaml
 - **404 from nginx**: frpc.toml doesn't have the domain in customDomains.
 - **404 from K3s**: Ingress host doesn't match, or service name/port is wrong.
 - **Connection refused**: frpc isn't running, or K3s service isn't exposing the right port.
+
+## Optional Components (Future)
+
+These components are already defined in your manifests but require CRDs to be installed:
+
+### 1. Monitoring (Prometheus + Grafana)
+
+Web dashboards for cluster monitoring (CPU, memory, request rates).
+
+**Already defined:**
+- `api/base/api.yaml` (line 80) has ServiceMonitor
+
+**Install:**
+```bash
+# Add Helm repo
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+
+# Install kube-prometheus-stack
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --namespace monitoring --create-namespace \
+  --set grafana.service.type=LoadBalancer \
+  --set prometheus.prometheusSpec.retention=30d
+```
+
+**Access:** Get Grafana URL:
+```bash
+kubectl get svc -n monitoring -l app.kubernetes.io/name=grafana
+```
+
+**Default login:** admin / prom-operator (change after first login)
+
+---
+
+### 2. FluxCD (GitOps Auto-Deploy)
+
+Auto-deploys when new images are pushed to GHCR.
+
+**Already defined in manifests:**
+- `api/default/flux.yaml` - ImagePolicy, ImageRepository, ImageUpdateAutomation
+- `history/default/flux.yaml` - FluxCD for history
+- `mlat-map/default/flux.yaml` - FluxCD for mlat-map
+
+**Install:**
+```bash
+# Install FluxCD
+kubectl apply -f https://fluxcd.io/install.sh
+
+# Verify
+flux check
+```
+
+**Configure existing flux.yaml files:**
+```bash
+# Apply existing flux resources
+kubectl apply -f manifests/default/api/default/flux.yaml
+kubectl apply -f manifests/default/history/default/flux.yaml
+kubectl apply -f manifests/default/mlat-map/default/flux.yaml
+```
+
+---
+
+### 3. cert-manager (TLS - AWS Migration Only)
+
+For moving TLS from AWS EC2 to K3s (future).
+
+**Already defined:**
+- `resources.yaml` (line 166) has Certificate resource
+
+**When migrating off AWS:**
+```bash
+# Install cert-manager CRDs
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/release/cert-manager.yaml
+
+# Create ClusterIssuer (Let's Encrypt)
+cat <<EOF | kubectl apply -f -
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: your-email@example.com
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+      - http01:
+          ingress:
+            class: traefik
+EOF
+
+# Update ingress to use cert-manager
+# Edit manifests/default/resources.yaml - add annotations:
+#   cert-manager.io/cluster-issuer: letsencrypt-prod
+```
+
+**Current setup:** TLS terminates on AWS EC2 (certbot) → K3s receives plain HTTP via FRP. This is fine for now.
+
+---
+
+### Summary: What's Already Defined
+
+| Component | Manifest File | Status |
+|-----------|--------------|--------|
+| ServiceMonitor | `api/base/api.yaml` | Needs Prometheus |
+| ImagePolicy | `api/default/flux.yaml` | Needs FluxCD |
+| ImageRepository | `api/default/flux.yaml` | Needs FluxCD |
+| ImageUpdateAutomation | `api/default/flux.yaml` | Needs FluxCD |
+| Certificate | `resources.yaml` | Needs cert-manager |
