@@ -28,6 +28,9 @@ templating_generate_kustomization() {
     local tz="$5"
     local frp_server="${6:-}"
     local api_salt="${7:-}"
+    local shared_host="${8:-${REDIS_HOST:-192.168.200.12}}"
+    
+    log_info "Using shared services host for templating: ${shared_host}"
 
     # Copy all needed files to overlay (not just kustomization)
     local files=(
@@ -82,8 +85,10 @@ templating_generate_kustomization() {
 
 # Patch shared services IPs in overlay (not source files)
 templating_patch_shared_services() {
-    # Use the first IP from the user config - could be flight_db host or db host
-    local shared_host="${FLIGHT_DB_HOST:-${DB_HOST:-192.168.200.12}}"
+    # Use the host passed as parameter
+    local shared_host="${shared_host:-192.168.200.12}"
+    
+    log_info "Patching SHARED_SERVICES_HOST -> ${shared_host}"
     
     # Replace placeholder in files copied to overlay
     local files=(
