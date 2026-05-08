@@ -289,6 +289,21 @@ helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
 kubectl get svc -n monitoring -l app.kubernetes.io/name=grafana
 ```
 
+**Public URL:** https://grafana.bharatradar.com/login
+- Username: admin
+- Password: (get from secret)
+
+**Troubleshooting:**
+- If 404 from FRP: Add subdomain to `customDomains` in `/etc/frpc.toml` on K3s server
+- Restart frpc after config change: `sudo systemctl restart frpc`
+
+**Subdomain format for FRP** - needs to match exactly between:
+1. AWS nginx server_name
+2. AWS certbot certificate
+3. K3s frpc.toml customDomains
+4. K3s Ingress host
+```
+
 **Default login:** admin / prom-operator (change after first login)
 
 ---
