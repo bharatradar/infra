@@ -385,7 +385,7 @@ uninstall_all() {
 
     if [ -f /etc/bharatradar/config.env ]; then
         source /etc/bharatradar/config.env
-        role="${ROLE:-${role}}"
+        role="${role:-${ROLE:-}}"
     fi
 
     case "$role" in
