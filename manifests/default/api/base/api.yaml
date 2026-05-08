@@ -20,7 +20,7 @@ spec:
         - name: ADSBLOL_INGEST_DNS
           value: "ingest-readsb-headless.bharatradar.svc.cluster.local"
         - name: ADSBLOL_REDIS_HOST
-          value: "redis://:wtyLxVOgugrViWEiJRGtfmhskoYCTTQ84dwJ4akklY@192.168.200.15:6379"
+          value: "redis://:wtyLxVOgugrViWEiJRGtfmhskoYCTTQ84dwJ4akklY@127.0.0.1:6379"
         - name: ADSBLOL_REAPI_ENDPOINT
           value: "http://reapi-readsb.bharatradar.svc.cluster.local:30152/re-api/"
         - name: ADSBLOL_STATS_URL
