@@ -16,7 +16,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: website
-        image: ghcr.io/bharatradar/website:v2026.05.08.09
+        image: ghcr.io/bharatradar/website:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 80

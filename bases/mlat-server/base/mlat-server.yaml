@@ -12,7 +12,7 @@ spec:
       - name: ghcr-secret
       containers:
       - name: mlat-server
-        image: ghcr.io/bharatradar/mlat-server:v6.0.0
+        image: ghcr.io/bharatradar/mlat-server:latest
         imagePullPolicy: Always
         env:
         - {name: MKL_NUM_THREADS, value: "1"}
