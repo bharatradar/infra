@@ -179,17 +179,20 @@ USE_EXTERNAL_DB=true
     echo ""
     prompt_input "Groq API key (leave empty to skip)" "" GPT_API_KEY
     
-    # Cloudflare Configuration (for DDNS)
+    # Cloudflare AI Analytics Keys (optional)
     echo ""
-    log_step "Cloudflare DDNS Configuration (Optional)"
+    log_step "Cloudflare AI Analytics Configuration (Optional)"
     echo ""
-    echo "  If you want automatic DNS updates for your domain,"
-    echo "  enter your Cloudflare credentials."
+    echo "  Add your Cloudflare AI Web Analytics keys for tracking."
+    echo "  Get them from: https://www.cloudflare.com/products/analytics/"
     echo "  Leave empty to skip."
     echo ""
-    prompt_input "Cloudflare API token (leave empty to skip)" "" CF_API_TOKEN
-    prompt_input "Cloudflare zone ID" "" CF_ZONE_ID
-    prompt_input "Cloudflare record name" "" CF_RECORD_NAME
+    prompt_input "Cloudflare AI key 1 (first key ID)" "" CF_KEY_1_ID
+    prompt_input "Cloudflare AI key 1 token" "" CF_KEY_1_TOKEN
+    prompt_input "Cloudflare AI key 2 (second key ID)" "" CF_KEY_2_ID
+    prompt_input "Cloudflare AI key 2 token" "" CF_KEY_2_TOKEN
+    prompt_input "Cloudflare AI key 3 (third key ID)" "" CF_KEY_3_ID
+    prompt_input "Cloudflare AI key 3 token" "" CF_KEY_3_TOKEN
     
     echo ""
     log_step "FRP Tunnel (Optional)"
@@ -601,15 +604,18 @@ role_hub_create_secrets() {
         log_success "InfluxDB credentials secret created"
     fi
 
-    # Cloudflare DDNS credentials secret
-    if [ -n "${CF_API_TOKEN:-}" ] && [ -n "${CF_ZONE_ID:-}" ]; then
+    # Cloudflare AI Analytics credentials secret
+    if [ -n "${CF_KEY_1_ID:-}" ]; then
         if ! kubectl get secret cloudflare-credentials -n bharatradar &>/dev/null; then
             kubectl create secret generic cloudflare-credentials \
-                --from-literal=api_token="${CF_API_TOKEN}" \
-                --from-literal=zone_id="${CF_ZONE_ID}" \
-                --from-literal=record_name="${CF_RECORD_NAME}" \
+                --from-literal=key1_id="${CF_KEY_1_ID}" \
+                --from-literal=key1_token="${CF_KEY_1_TOKEN}" \
+                --from-literal=key2_id="${CF_KEY_2_ID:-}" \
+                --from-literal=key2_token="${CF_KEY_2_TOKEN:-}" \
+                --from-literal=key3_id="${CF_KEY_3_ID:-}" \
+                --from-literal=key3_token="${CF_KEY_3_TOKEN:-}" \
                 -n bharatradar 2>/dev/null || true
-            log_success "Cloudflare credentials secret created"
+            log_success "Cloudflare AI credentials secret created"
         fi
     fi
 
@@ -1176,7 +1182,13 @@ role_hub_run() {
         save_config_value "TELEGRAM_BOT_TOKEN" "${TELEGRAM_BOT_TOKEN:-}"
         save_config_value "TELEGRAM_CHAT_ID" "${TELEGRAM_CHAT_ID:-}"
         save_config_value "GPT_API_KEY" "${GPT_API_KEY:-}"
-        save_config_value "CF_API_TOKEN" "${CF_API_TOKEN:-}"
+        save_config_value "CF_KEY_1_ID" "${CF_KEY_1_ID:-}"
+        save_config_value "CF_KEY_1_ID" "${CF_KEY_1_ID:-}"
+        save_config_value "CF_KEY_1_TOKEN" "${CF_KEY_1_TOKEN:-}"
+        save_config_value "CF_KEY_2_ID" "${CF_KEY_2_ID:-}"
+        save_config_value "CF_KEY_2_TOKEN" "${CF_KEY_2_TOKEN:-}"
+        save_config_value "CF_KEY_3_ID" "${CF_KEY_3_ID:-}"
+        save_config_value "CF_KEY_3_TOKEN" "${CF_KEY_3_TOKEN:-}"
         save_config_value "CF_ZONE_ID" "${CF_ZONE_ID:-}"
         save_config_value "CF_RECORD_NAME" "${CF_RECORD_NAME:-}"
         save_config_value "FRP_ENABLED" "${FRP_ENABLED}"
