@@ -374,11 +374,6 @@ role_shared_services_install_influxdb() {
         return 0
     fi
     
-    # Skip installation entirely if there are package issues
-    log_info "InfluxDB not installed - skipping (optional component)"
-    return 0
-}
-
     local os
     os=$(detect_os)
 
