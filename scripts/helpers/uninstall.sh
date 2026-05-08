@@ -244,17 +244,28 @@ uninstall_influxdb() {
     log_step "Uninstalling InfluxDB"
 
     if prompt_confirm "This will remove InfluxDB and all data. Continue?"; then
+        # First stop the running service - critical!
+        log_info "Stopping InfluxDB service..."
+        sudo systemctl stop influxdb 2>/dev/null || true
+        sudo systemctl disable influxdb 2>/dev/null || true
+        sudo systemctl stop influxdb2 2>/dev/null || true
+        sudo systemctl disable influxdb2 2>/dev/null || true
+        
+        # Kill any remaining influxd processes
+        sudo pkill -f influxd 2>/dev/null || true
+        sleep 2
+        
         log_info "Removing broken influxdb2 package..."
 
         for f in /var/lib/dpkg/info/influxdb2.*; do
             [ -f "$f" ] && sudo mv "$f" /tmp/
         done
-        sudo dpkg --remove --force-remove-reinstreq influxdb2
-        sudo apt-get autoremove
-        sudo apt-get autoclean
-        sudo apt-get update
-        sudo systemctl unmask influxdb
-        sudo apt-get purge influxdb2
+        sudo dpkg --remove --force-remove-reinstreq influxdb2 2>/dev/null || true
+        sudo apt-get autoremove 2>/dev/null || true
+        sudo apt-get autoclean 2>/dev/null || true
+        sudo apt-get update 2>/dev/null || true
+        sudo systemctl unmask influxdb 2>/dev/null || true
+        sudo apt-get purge influxdb2 2>/dev/null || true
 
         if prompt_confirm "Also remove InfluxDB data directory?"; then
             rm -rf /var/lib/influxdb2/*
