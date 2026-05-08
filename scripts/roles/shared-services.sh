@@ -231,45 +231,47 @@ role_shared_services_configure_postgresql() {
     else
         log_success "Database '${DB_NAME}' created"
     fi
+}
 
-    # Create BharatRadar database (flight_db)
-    log_info "Creating BharatRadar database (flight_db)..."
+role_shared_services_create_flight_db() {
+    log_step "Creating BharatRadar Database (flight_db)"
     
     # Auto-generate password if not provided
     FLIGHT_DB_PASSWORD="${FLIGHT_DB_PASSWORD:-$(generate_secret)}"
     
     log_info "flight_db password: ${FLIGHT_DB_PASSWORD}"
     
-    # Create user if not exists, or alter password
-    log_info "Creating flight_db_user and flight_db..."
-    local flight_result
-    flight_result=$(sudo -u postgres psql -c "
-        DO \$\$
-        BEGIN
-            IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'flight_db_user') THEN
-                CREATE ROLE flight_db_user LOGIN CREATEDB PASSWORD '${FLIGHT_DB_PASSWORD}';
-            ELSE
-                ALTER USER flight_db_user WITH PASSWORD '${FLIGHT_DB_PASSWORD}';
-            END IF;
-        END
-        \$\$;
-        DO \$\$
-        BEGIN
-            IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'flight_db') THEN
-                CREATE DATABASE flight_db OWNER flight_db_user;
-                GRANT ALL PRIVILEGES ON DATABASE flight_db TO flight_db_user;
-                ALTER DATABASE flight_db SET timezone TO 'UTC';
-            END IF;
-        END
-        \$\$;
-    " 2>&1)
-    
-    if echo "$flight_result" | grep -q "error"; then
-        log_error "Failed to create flight_db: $flight_result"
+    # Step 1: Create user
+    log_info "[1/4] Creating user flight_db_user..."
+    if sudo -u postgres psql -t -c "SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'flight_db_user';" | grep -q 1; then
+        log_info "User flight_db_user exists, updating password..."
+        sudo -u postgres psql -c "ALTER USER flight_db_user WITH PASSWORD '${FLIGHT_DB_PASSWORD}';" 2>&1 || log_warn "Could not alter user"
     else
-        log_success "flight_db created"
+        log_info "Creating new user flight_db_user..."
+        sudo -u postgres psql -c "CREATE ROLE flight_db_user LOGIN CREATEDB PASSWORD '${FLIGHT_DB_PASSWORD}';" 2>&1 || log_error "Failed to create user"
     fi
-
+    log_success "[1/4] User created"
+    
+    # Step 2: Create database
+    log_info "[2/4] Creating database flight_db..."
+    if sudo -u postgres psql -t -c "SELECT 1 FROM pg_database WHERE datname = 'flight_db';" | grep -q 1; then
+        log_info "Database flight_db already exists"
+    else
+        sudo -u postgres psql -c "CREATE DATABASE flight_db OWNER flight_db_user;" 2>&1 || log_error "Failed to create database"
+    fi
+    log_success "[2/4] Database created"
+    
+    # Step 3: Grant privileges
+    log_info "[3/4] Granting privileges..."
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE flight_db TO flight_db_user;" 2>&1 || log_warn "Grant failed"
+    sudo -u postgres psql -d flight_db -c "GRANT ALL ON SCHEMA public TO flight_db_user;" 2>&1 || log_warn "Schema grant failed"
+    log_success "[3/4] Privileges granted"
+    
+    # Step 4: Set timezone
+    log_info "[4/4] Setting timezone..."
+    sudo -u postgres psql -c "ALTER DATABASE flight_db SET timezone TO 'UTC';" 2>&1 || log_warn "Timezone set failed"
+    log_success "[4/4] Timezone set"
+    
     # FINAL VERIFICATION
     log_step "Verifying database setup..."
     log_info "Checking databases..."
@@ -285,7 +287,7 @@ role_shared_services_configure_postgresql() {
     log_success "Database creation complete!"
     log_success "  Database: flight_db"
     log_success "  User: flight_db_user"
-    log_success "  Password: ${FLIGHT_DB_PASSWORD:-raga@098}"
+    log_success "  Password: ${FLIGHT_DB_PASSWORD}"
 }
 
 role_shared_services_install_redis() {
@@ -806,7 +808,7 @@ role_shared_services_run() {
     require_root
 
     local install_failed=false
-    local phases=(config packages postgresql redis influxdb minio flight_db_init save)
+    local phases=(config packages postgresql flight_db redis influxdb minio flight_db_init save)
 
     show_resume_banner "${phases[@]}"
 
@@ -864,6 +866,12 @@ role_shared_services_run() {
             exit 1
         fi
         checkpoint_mark "postgresql"
+    fi
+
+    # Phase: flight_db (create BharatRadar database)
+    if ! checkpoint_completed "flight_db"; then
+        role_shared_services_create_flight_db || log_warn "Flight DB creation failed"
+        checkpoint_mark "flight_db"
     fi
 
     # Phase: redis
