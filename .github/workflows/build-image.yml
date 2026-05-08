@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
     paths: ['build/**']
+  pull_request:
+    branches: [main]
+    paths: ['build/**']
   workflow_dispatch:
     inputs:
       image:
