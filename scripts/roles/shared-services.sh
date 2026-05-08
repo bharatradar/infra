@@ -219,18 +219,34 @@ role_shared_services_configure_postgresql() {
 # Create database and user
     log_info "Creating database and user..."
     local db_result
-    db_result=$(sudo -u postgres psql -c "
-        CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';
-        CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};
-        GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};
-        ALTER DATABASE ${DB_NAME} SET timezone TO 'UTC';
-    " 2>&1)
     
-    if echo "$db_result" | grep -q "already exists"; then
-        log_warn "Database ${DB_NAME} may already exist: continuing..."
+    # First create user if not exists
+    if ! sudo -u postgres psql -t -c "SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '${DB_USER}';" | grep -q 1; then
+        log_info "Creating user ${DB_USER}..."
+        db_result=$(sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';" 2>&1)
+        if echo "$db_result" | grep -qi error; then
+            log_error "Failed to create user: $db_result"
+        fi
     else
-        log_success "Database '${DB_NAME}' created"
+        log_info "User ${DB_USER} exists, updating password..."
+        sudo -u postgres psql -c "ALTER USER ${DB_USER} WITH PASSWORD '${DB_PASSWORD}';" 2>&1
     fi
+    
+    # Create database if not exists
+    if ! sudo -u postgres psql -t -c "SELECT 1 FROM pg_database WHERE datname = '${DB_NAME}';" | grep -q 1; then
+        log_info "Creating database ${DB_NAME}..."
+        db_result=$(sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};" 2>&1)
+        if echo "$db_result" | grep -qi error; then
+            log_error "Failed to create database: $db_result"
+        fi
+    else
+        log_info "Database ${DB_NAME} exists"
+    fi
+    
+    # Set timezone
+    sudo -u postgres psql -c "ALTER DATABASE ${DB_NAME} SET timezone TO 'UTC';" 2>&1 || true
+    
+    log_success "Database '${DB_NAME}' created with user '${DB_USER}'"
 }
 
 role_shared_services_create_flight_db() {
