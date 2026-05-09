@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       image:
-        description: 'Image to build (leave empty for all): readsb, docker-tar1090, mlat-server, mlat-server-sync-map, api, history, website, docker-tar1090-uuid, cortex-webapp'
+        description: 'Image to build (leave empty for all): readsb, docker-tar1090, mlat-server, api, history, website, docker-tar1090-uuid, cortex-webapp, flight-tracker, telegram-bot, ai-agents, schedule-downloader'
         required: false
         default: ''
       fork_ref:
@@ -33,21 +33,6 @@ jobs:
             ref: main
             image: ghcr.io/bharatradar/readsb
             platforms: linux/amd64,linux/arm64
-          - name: flight-tracker
-            repo: bharatradar/flight-tracker
-            ref: main
-            image: ghcr.io/bharatradar/flight-tracker
-            platforms: linux/amd64
-          - name: telegram-bot
-            repo: bharatradar/telegram-bot
-            ref: main
-            image: ghcr.io/bharatradar/telegram-bot
-            platforms: linux/amd64
-          - name: ai-agents
-            repo: bharatradar/ai-agents
-            ref: main
-            image: ghcr.io/bharatradar/ai-agents
-            platforms: linux/amd64
           - name: docker-tar1090
             repo: bharatradar/docker-tar1090
             ref: main
@@ -142,13 +127,16 @@ jobs:
           cache-to: type=gha,mode=max
 
   build-wrapper:
-    needs: build-base
     if: |
       (github.event.inputs.image == '' || 
        github.event.inputs.image == 'docker-tar1090-uuid' ||
        github.event.inputs.image == 'mlat-server-sync-map' ||
        github.event.inputs.image == 'api' ||
-       github.event.inputs.image == 'cortex-webapp')
+       github.event.inputs.image == 'cortex-webapp' ||
+       github.event.inputs.image == 'flight-tracker' ||
+       github.event.inputs.image == 'telegram-bot' ||
+       github.event.inputs.image == 'ai-agents' ||
+       github.event.inputs.image == 'schedule-downloader')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -172,6 +160,22 @@ jobs:
           - name: cortex-webapp
             context: build/cortex-webapp
             image: ghcr.io/bharatradar/cortex-webapp
+            platforms: linux/amd64
+          - name: flight-tracker
+            context: build/flight-tracker
+            image: ghcr.io/bharatradar/flight-tracker
+            platforms: linux/amd64
+          - name: telegram-bot
+            context: build/telegram-bot
+            image: ghcr.io/bharatradar/telegram-bot
+            platforms: linux/amd64
+          - name: ai-agents
+            context: build/ai-agents
+            image: ghcr.io/bharatradar/ai-agents
+            platforms: linux/amd64
+          - name: schedule-downloader
+            context: build/schedule-downloader
+            image: ghcr.io/bharatradar/schedule-downloader
             platforms: linux/amd64
     steps:
       - name: Checkout infra
