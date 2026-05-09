@@ -31,9 +31,9 @@ templating_generate_kustomization() {
     local frp_server="${6:-}"
     local api_salt="${7:-}"
     local shared_host="${8:-${REDIS_HOST:-192.168.200.12}}"
-    
+
     log_info "Using shared services host for templating: ${shared_host}"
-    
+
     # Export so patch function can use it
     export shared_host
 
@@ -90,22 +90,31 @@ templating_generate_kustomization() {
 
 # Patch shared services IPs in overlay (not source files)
 templating_patch_shared_services() {
-    # Use exported variable from caller's parameter
-    local ip_to_use="${shared_host:-192.168.200.12}"
-    
+    # Get the IP passed as parameter 8, or use REDIS_HOST env var, or fallback
+    local ip_to_use="${shared_host:-${REDIS_HOST:-192.168.200.12}}"
+
     log_info "Patching SHARED_SERVICES_HOST -> ${ip_to_use}"
-    
-    # Replace placeholder in files copied to overlay
+
+    # If still empty, fail hard
+    if [ -z "$ip_to_use" ] || [ "$ip_to_use" = "SHARED_SERVICES_HOST" ]; then
+        log_error "SHARED_SERVICES_HOST not replaced! ip_to_use is empty or placeholder!"
+        log_error "Setting default 192.168.200.12"
+        ip_to_use="192.168.200.12"
+    fi
+
+    # Replace in all YAML files in overlay
     local files=(
         "${OVERLAY_DIR}/ai-agents.yaml"
         "${OVERLAY_DIR}/telegram-bot.yaml"
         "${OVERLAY_DIR}/flight-tracker.yaml"
     )
-    
+
     for f in "${files[@]}"; do
         if [ -f "$f" ]; then
-            sed -i "s/SHARED_SERVICES_HOST/${ip_to_use}/g" "$f"
+            sed -i "s|SHARED_SERVICES_HOST|${ip_to_use}|g" "$f"
             log_info "Patched $(basename $f): SHARED_SERVICES_HOST -> ${ip_to_use}"
+        else
+            log_warn "File not found: $f"
         fi
     done
     

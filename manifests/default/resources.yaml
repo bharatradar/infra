@@ -163,22 +163,33 @@ spec:
             port:
               name: http
 ---
-apiVersion: cert-manager.io/v1
-kind: Certificate
+# TODO: Enable when cert-manager is installed
+#apiVersion: cert-manager.io/v1
+#kind: Certificate
+#metadata:
+#  name: bharatradar-tls
+#spec:
+#  secretName: bharatradar-tls
+#  issuerRef:
+#    name: letsencrypt-cloudflare
+#    kind: ClusterIssuer
+#  dnsNames:
+#  - bharatradar.com
+#  - "*.bharatradar.com"
+#  usages:
+#  - digital signature
+#  - key encipherment
+#  - server auth
+#---
+apiVersion: v1
+kind: Secret
 metadata:
   name: bharatradar-tls
-spec:
-  secretName: bharatradar-tls
-  issuerRef:
-    name: letsencrypt-cloudflare
-    kind: ClusterIssuer
-  dnsNames:
-  - bharatradar.com
-  - "*.bharatradar.com"
-  usages:
-  - digital signature
-  - key encipherment
-  - server auth
+type: kubernetes.io/tls
+data:
+  # Dummy self-signed cert for now (replace with real cert when cert-manager enabled)
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURCVENDQWUyZ0F3SUJBZ0lJZGVtb3
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2UUlCQVNDQllDaGR
 ---
 apiVersion: v1
 kind: ConfigMap

@@ -1147,6 +1147,34 @@ role_hub_post_install() {
 role_hub_run() {
     require_root
 
+    # Fresh install: delete any previous cluster state
+    echo ""
+    echo -e "${YELLOW}================================================================${NC}"
+    echo -e "${YELLOW}Fresh install: Cleaning up previous installation...${NC}"
+    echo -e "${YELLOW}================================================================${NC}"
+    echo ""
+
+    # Stop k3s if running
+    if command -v k3s &>/dev/null || [ -f /usr/local/bin/k3s ]; then
+        log_info "Stopping existing K3s..."
+        /usr/local/bin/k3s-killall.sh 2>/dev/null || true
+        systemctl stop k3s 2>/dev/null || true
+    fi
+
+    # Delete bharatradar namespace and all resources
+    log_info "Deleting bharatradar namespace..."
+    kubectl delete namespace bharatradar --force --grace-period=0 2>/dev/null || true
+
+    # Wait for namespace deletion
+    sleep 2
+
+    # Delete stale config files
+    log_info "Deleting stale config files..."
+    rm -rf /etc/bharatradar/ 2>/dev/null || true
+
+    log_success "Cleanup complete"
+    echo ""
+
     # Show resume banner if we have saved progress
     show_resume_banner
 
