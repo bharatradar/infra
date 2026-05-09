@@ -1168,10 +1168,17 @@ role_hub_run() {
     # Wait for namespace deletion
     sleep 2
 
-    # Delete stale config files
+    # Delete stale config files but keep config.env if it has our values
     log_info "Deleting stale config files..."
-    rm -rf /etc/bharatradar/.install-progress 2>/dev/null || true
-    rm -rf /etc/bharatradar/.config.partial 2>/dev/null || true
+    rm -f /etc/bharatradar/.install-progress 2>/dev/null || true
+    rm -f /etc/bharatradar/.config.partial 2>/dev/null || true
+    # If config.env exists without our required values, delete it too
+    if [ -f /etc/bharatradar/config.env ]; then
+        source /etc/bharatradar/config.env
+        if [ -z "${BASE_DOMAIN:-}" ] || [ -z "${REDIS_HOST:-}" ]; then
+            rm -f /etc/bharatradar/config.env
+        fi
+    fi
 
     log_success "Cleanup complete"
     echo ""
