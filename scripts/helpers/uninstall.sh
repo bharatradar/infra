@@ -344,6 +344,70 @@ uninstall_shared_services() {
     rm -f /etc/minio 2>/dev/null || true
     rm -f /usr/local/bin/minio /usr/local/bin/mc 2>/dev/null || true
     log_info "Config files and traces cleaned up"
+
+    # Nuclear cleanup: kill all processes and remove by path regardless of package state
+    uninstall_shared_services_nuclear_cleanup
+}
+
+# Nuclear cleanup: kill processes and remove binaries/data by known paths
+# This runs regardless of package manager state (apt/dpkg may be broken)
+uninstall_shared_services_nuclear_cleanup() {
+    log_step "Nuclear Cleanup — removing all traces"
+
+    # Kill any remaining processes
+    log_info "Killing remaining processes..."
+    sudo pkill -9 -f "postgres" 2>/dev/null || true
+    sudo pkill -9 -f "redis-server" 2>/dev/null || true
+    sudo pkill -9 -f "influxd" 2>/dev/null || true
+    sudo pkill -9 -f "minio" 2>/dev/null || true
+    sleep 2
+
+    # Remove all data directories (full dirs, not just contents)
+    log_info "Removing data directories..."
+    sudo rm -rf /var/lib/postgresql 2>/dev/null || true
+    sudo rm -rf /var/lib/redis 2>/dev/null || true
+    sudo rm -rf /var/lib/influxdb2 2>/dev/null || true
+    sudo rm -rf /data/minio 2>/dev/null || true
+
+    # Remove systemd service files
+    log_info "Removing systemd services..."
+    sudo rm -f /etc/systemd/system/postgresql* 2>/dev/null || true
+    sudo rm -f /etc/systemd/system/redis* 2>/dev/null || true
+    sudo rm -f /etc/systemd/system/influxdb* 2>/dev/null || true
+    sudo rm -f /etc/systemd/system/minio* 2>/dev/null || true
+    sudo systemctl daemon-reload 2>/dev/null || true
+
+    # Remove binaries regardless of how they were installed
+    log_info "Removing binaries..."
+    sudo rm -f /usr/bin/psql /usr/bin/pg_config /usr/bin/pg_dump /usr/bin/pg_isready /usr/bin/pg_basebackup /usr/bin/pg_ctlcluster /usr/bin/pg_createcluster /usr/bin/pg_dropcluster /usr/bin/pg_lsclusters /usr/bin/initdb 2>/dev/null || true
+    sudo rm -f /usr/bin/redis-server /usr/bin/redis-cli /usr/bin/redis-sentinel /usr/bin/redis-check-aof /usr/bin/redis-check-rdb /usr/bin/redis-benchmark 2>/dev/null || true
+    sudo rm -f /usr/bin/influxd /usr/bin/influx /usr/bin/influxd-stdnull 2>/dev/null || true
+    sudo rm -f /usr/local/bin/minio /usr/local/bin/mc 2>/dev/null || true
+
+    # Remove config directories
+    log_info "Removing config directories..."
+    sudo rm -rf /etc/postgresql 2>/dev/null || true
+    sudo rm -rf /etc/redis 2>/dev/null || true
+    sudo rm -rf /etc/influxdb /etc/influxdb2 2>/dev/null || true
+    sudo rm -f /etc/minio 2>/dev/null || true
+    sudo rm -rf /etc/bharatradar 2>/dev/null || true
+
+    # Remove log files
+    log_info "Removing log files..."
+    sudo rm -rf /var/log/postgresql 2>/dev/null || true
+    sudo rm -rf /var/log/redis 2>/dev/null || true
+    sudo rm -rf /var/log/influxdb* 2>/dev/null || true
+
+    # Remove package manager cruft (broken package states)
+    sudo rm -rf /var/lib/dpkg/info/influxdb2* 2>/dev/null || true
+    sudo rm -rf /var/lib/dpkg/info/redis* 2>/dev/null || true
+    sudo rm -rf /var/lib/dpkg/info/postgresql* 2>/dev/null || true
+    sudo dpkg --configure -a 2>/dev/null || true
+
+    # Clean apt
+    sudo apt-get clean 2>/dev/null || true
+
+    log_success "Nuclear cleanup complete — no traces remain"
 }
 
 # Uninstall keepalived
