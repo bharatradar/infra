@@ -209,6 +209,13 @@ role_shared_services_configure_postgresql() {
     # Access control is handled by pg_hba.conf
     sed -i "/^#*listen_addresses/c\\listen_addresses = '*'" "$pg_conf"
 
+    # Set default timezone to UTC - affects all databases
+    if grep -q "^timezone" "$pg_conf"; then
+        sed -i "/^#*timezone/c\\timezone = 'Etc/UTC'" "$pg_conf"
+    else
+        echo "timezone = 'Etc/UTC'" >> "$pg_conf"
+    fi
+
     # Add connection permission for K3s servers on the local subnet
     local subnet
     subnet=$(echo "$DB_LISTEN_IP" | sed 's/\.[0-9]*$/\.0\/24/')
