@@ -481,57 +481,62 @@ role_shared_services_install_influxdb() {
 role_shared_services_configure_influxdb() {
     log_step "Configuring InfluxDB"
 
-    # Stop and wipe old data to ensure clean setup with new token
-    systemctl stop influxdb 2>/dev/null || true
-    rm -rf /var/lib/influxdb2/engine /var/lib/influxdb2/influxd.bolt 2>/dev/null || true
-    systemctl reset-failed influxdb 2>/dev/null || true
-    systemctl enable influxdb 2>/dev/null || true
-    systemctl start influxdb 2>/dev/null || true
-
-    sleep 5
-
-    if ! systemctl is-active --quiet influxdb 2>/dev/null; then
-        log_warn "InfluxDB service not available (may not be installed for this OS/arch)"
-        return 0
+    # Determine InfluxDB data directory
+    local influx_data_dir="/var/lib/influxdb"
+    if [ -d "/var/lib/influxdb2" ]; then
+        influx_data_dir="/var/lib/influxdb2"
     fi
-
-    log_info "Setting up InfluxDB initial config..."
-
-    local onboard_ok=false
 
     # Check if already onboarded
     local setup_status
     setup_status=$(curl -s http://localhost:8086/api/v2/setup 2>/dev/null)
     if echo "$setup_status" | grep -q '"allowed":true'; then
         log_info "InfluxDB needs initial setup, onboarding via API..."
-        local api_result
-        api_result=$(curl -s -X POST http://localhost:8086/api/v2/setup \
-            -H "Content-Type: application/json" \
-            -d "$(cat <<EOJSON
+    else
+        # Already onboarded — verify our token works
+        local token_ok
+        token_ok=$(curl -s -o /dev/null -w "%{http_code}" \
+            http://localhost:8086/api/v2/authorizations \
+            -H "Authorization: Token ${INFLUXDB_ADMIN_TOKEN}" 2>/dev/null)
+        if [ "$token_ok" = "200" ]; then
+            log_success "InfluxDB already configured with correct token"
+            return 0
+        fi
+        log_warn "InfluxDB onboarded with a different token — wiping and re-onboarding"
+        systemctl stop influxdb 2>/dev/null || true
+        rm -rf "${influx_data_dir:?}/engine" "${influx_data_dir:?}/influxd.bolt" "${influx_data_dir:?}/.influxdbv2" 2>/dev/null || true
+        systemctl reset-failed influxdb 2>/dev/null || true
+        systemctl start influxdb 2>/dev/null || true
+        sleep 5
+    fi
+
+    if ! systemctl is-active --quiet influxdb 2>/dev/null; then
+        log_warn "InfluxDB service not available (may not be installed for this OS/arch)"
+        return 0
+    fi
+
+    log_info "Running InfluxDB onboarding..."
+
+    local api_result
+    api_result=$(curl -s -X POST http://localhost:8086/api/v2/setup \
+        -H "Content-Type: application/json" \
+        -d "$(cat <<EOJSON
 {
     "username": "admin",
     "password": "${INFLUXDB_ADMIN_TOKEN}",
     "org": "bharatradar",
-    "bucket": "metrics",
+    "bucket": "raga_flight_radar_db",
     "token": "${INFLUXDB_ADMIN_TOKEN}"
 }
 EOJSON
 )" 2>&1)
-        if echo "$api_result" | grep -q '"code"\|"error"'; then
-            log_error "InfluxDB API setup failed: $(echo "$api_result" | head -c 200)"
-        else
-            onboard_ok=true
-        fi
-    else
-        log_warn "InfluxDB already onboarded (keeping existing config - token may differ)"
-        onboard_ok=true
+
+    if echo "$api_result" | grep -q '"code"\|"error"'; then
+        log_error "InfluxDB API setup failed: $(echo "$api_result" | head -c 200)"
+        return 1
     fi
 
-    if [ "$onboard_ok" = true ]; then
-        log_success "InfluxDB configured"
-    else
-        log_warn "InfluxDB setup failed - verify manually"
-    fi
+    log_success "InfluxDB configured with token from config"
 }
 
 role_shared_services_install_minio() {

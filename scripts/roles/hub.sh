@@ -687,6 +687,15 @@ role_hub_create_secrets() {
         log_success "InfluxDB credentials secret created"
     fi
 
+    # Google OAuth credentials (for cortex-webapp)
+    if ! kubectl get secret google-oauth-credentials -n bharatradar &>/dev/null; then
+        kubectl create secret generic google-oauth-credentials \
+            --from-literal=GOOGLE_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-placeholder}" \
+            --from-literal=GOOGLE_CLIENT_SECRET="${GOOGLE_OAUTH_CLIENT_SECRET:-placeholder}" \
+            -n bharatradar 2>/dev/null || true
+        log_info "Google OAuth credentials secret created"
+    fi
+
     # Cloudflare AI Analytics credentials secret
     if [ "$CF_KEYS_JSON" != "[]" ]; then
         if ! kubectl get secret cloudflare-credentials -n bharatradar &>/dev/null; then

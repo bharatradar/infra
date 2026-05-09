@@ -89,24 +89,18 @@ Unauthorized log_id=... error="authorization not found"
 ```
 
 ### Root Cause
-The shared-services installer checks if InfluxDB is already onboarded via `GET /api/v2/setup`. If it returns `"allowed": false` (already set up), the installer **skips re-initialization** and keeps the existing token. If InfluxDB was set up during an earlier deployment attempt with a different `INFLUXDB_ADMIN_TOKEN`, the token in the credentials file and Kubernetes secret won't match what InfluxDB actually has stored.
+The shared-services installer checks if InfluxDB is already onboarded via `GET /api/v2/setup`. If it returns `"allowed": false` (already set up), the old code skipped re-initialization and kept the existing token. If InfluxDB was set up during an earlier deployment attempt with a different `INFLUXDB_ADMIN_TOKEN`, the token in the credentials file and Kubernetes secret won't match what InfluxDB actually has stored.
 
-### Detection
-Test the token from the credentials file:
-```bash
-influx query "from(bucket:\"raga_flight_radar_db\") |> range(start:-1h)" \
-  --org bharatradar --token <token_from_credentials>
-# Returns: 401 Unauthorized if mismatched
-```
+### Fix (Automatic in v5.7.25+)
+The installer now auto-detects token mismatch:
+1. After detecting "already onboarded", it calls `GET /api/v2/authorizations` with the configured token
+2. If the response is not `200`, it wipes the old data and re-onboards with the correct token
+3. The bucket name was also fixed from `metrics` → `raga_flight_radar_db` to match the application config
 
-Check the credentials file:
-```bash
-cat /etc/bharatradar/credentials/shared-services-*.txt
-```
+No manual action needed — re-running the shared-services role will fix it automatically.
 
-### Fix — Reset InfluxDB
-
-**WARNING:** This destroys all existing InfluxDB data.
+### Manual Reset (if needed)
+If the automatic fix doesn't work:
 
 1. Stop InfluxDB and wipe data:
    ```bash
@@ -116,47 +110,24 @@ cat /etc/bharatradar/credentials/shared-services-*.txt
    sleep 3
    ```
 
-2. Verify setup is needed:
-   ```bash
-   curl -s http://localhost:8086/api/v2/setup
-   # Should return: {"allowed": true}
-   ```
-
-3. Onboard with the correct token (from `config.env` or credentials file):
+2. Onboard with the correct token:
    ```bash
    curl -s -X POST http://localhost:8086/api/v2/setup \
      -H "Content-Type: application/json" \
      -d '{
        "username": "admin",
-       "password": "<INFLUXDB_ADMIN_TOKEN>",
+       "password": "'$(grep INFLUXDB_ADMIN_TOKEN /etc/bharatradar/config.env | cut -d= -f2)'",
        "org": "bharatradar",
        "bucket": "raga_flight_radar_db",
-       "token": "<INFLUXDB_ADMIN_TOKEN>"
+       "token": "'$(grep INFLUXDB_ADMIN_TOKEN /etc/bharatradar/config.env | cut -d= -f2)'"
      }'
    ```
 
-4. Verify the token works:
+3. Verify:
    ```bash
    influx query "from(bucket:\"raga_flight_radar_db\") |> range(start:-1h)" \
-     --org bharatradar --token <INFLUXDB_ADMIN_TOKEN>
+     --org bharatradar --token $(grep INFLUXDB_ADMIN_TOKEN /etc/bharatradar/config.env | cut -d= -f2)
    ```
-
-### Prevention
-If you want to update the InfluxDB token without wiping data, use the API to create a new token:
-```bash
-# First get a working session by authenticating with the existing admin password
-# Or use an existing valid token to create a new one:
-curl -s -X POST http://localhost:8086/api/v2/authorizations \
-  -H "Authorization: Token <existing_valid_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "orgID": "<org_id>",
-    "permissions": [{"action": "read", "resource": {"type": "buckets"}}],
-    "token": "<new_token_value>"
-  }'
-```
-
-Then update the Kubernetes secret and credentials file with the new token.
 
 ---
 
@@ -169,62 +140,32 @@ kubectl get pods -n bharatradar -l app=cortex-webapp
 # No resources found
 ```
 
-### Root Cause
-The `deploy_component` function in `hub.sh` supports:
+### Root Cause (fixed in v5.7.25+)
+The `deploy_component` function in `hub.sh` only supports:
 - **Kustomize directories**: `component/default/` with `kustomization.yaml`
 - **Single YAML files**: `component.yaml`
 
-It does **not** support directories with multiple standalone YAML files (like `cortex-webapp/deployment.yaml` + `cortex-webapp/ingress.yaml`). The function silently skips the component (logged as "Skipping cortex-webapp - not found") because neither check matches.
+The cortex-webapp had `deployment.yaml` + `ingress.yaml` directly in a directory without a kustomization.yaml, so `deploy_component` silently skipped it (logged as "Skipping cortex-webapp - not found"). The `|| true` swallowing the failure.
 
-The `|| true` on the deploy call means you won't notice the skip:
+### Fix (v5.7.25+)
+Restructured to a proper kustomize layout:
+- `manifests/default/cortex-webapp/default/{kustomization.yaml, deployment.yaml, ingress.yaml}`
+- `deployment.yaml` now uses `secretKeyRef` for DB/REDIS/InfluxDB passwords instead of hardcoded values
+- `ingress.yaml` uses standard HTTP entrypoint (AWS nginx terminates TLS, FRP forwards HTTP)
+- Google OAuth secret (`google-oauth-credentials`) is created during hub install
+
+Re-running the hub installer will now deploy cortex-webapp automatically.
+
+### Manual Deployment (if needed on older versions)
 ```bash
-deploy_component "cortex-webapp" || true   # failure is swallowed
+# Create the Google OAuth secret
+kubectl create secret generic google-oauth-credentials -n bharatradar \
+  --from-literal=GOOGLE_CLIENT_ID=<your_client_id> \
+  --from-literal=GOOGLE_CLIENT_SECRET=<your_client_secret>
+
+# Build and apply via kustomize (replaces SHARED_SERVICES_HOST and injects secrets)
+kustomize build manifests/default/cortex-webapp/default/ | kubectl apply -f -
 ```
-
-### Fix — Manual Deployment
-
-1. Create the Google OAuth secret (required by cortex-webapp):
-   ```bash
-   kubectl create secret generic google-oauth-credentials -n bharatradar \
-     --from-literal=GOOGLE_CLIENT_ID=<your_client_id> \
-     --from-literal=GOOGLE_CLIENT_SECRET=<your_client_secret>
-   ```
-
-2. Apply the deployment with correct shared services host and DB password:
-   ```bash
-   sed "s/SHARED_SERVICES_HOST/<shared_ip>/g; s/flight_db_password/<db_password>/g" \
-     manifests/default/cortex-webapp/deployment.yaml | kubectl apply -f -
-   ```
-
-3. Apply the ingress:
-   ```bash
-   kubectl apply -f manifests/default/cortex-webapp/ingress.yaml
-   ```
-
-4. **Fix the ingress** to match other service ingresses (remove TLS annotations since AWS nginx terminates TLS):
-   ```bash
-   kubectl annotate ingress cortex-webapp -n bharatradar \
-     traefik.ingress.kubernetes.io/router.entrypoints- \
-     traefik.ingress.kubernetes.io/router.tls-
-   ```
-
-### Verification
-```bash
-# Check pod is running
-kubectl get pods -n bharatradar -l app=cortex-webapp
-
-# Check logs
-kubectl logs -n bharatradar deployment/cortex-webapp --tail=20
-
-# Check ingress
-kubectl get ingress cortex-webapp -n bharatradar
-
-# Check from browser
-curl -s https://cortex.bharatradar.com | head -5
-```
-
-### Permanent Fix
-Convert the cortex-webapp manifest directory to a kustomize structure or consolidate into a single YAML file so `deploy_component` can find it.
 
 ---
 

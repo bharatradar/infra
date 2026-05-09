@@ -121,8 +121,8 @@ templating_patch_shared_services() {
     done
     
     # Handle subdir files
-    if [ -f "${OVERLAY_DIR}/cortex-webapp/deployment.yaml" ]; then
-        sed -i "s/SHARED_SERVICES_HOST/${ip_to_use}/g" "${OVERLAY_DIR}/cortex-webapp/deployment.yaml"
+    if [ -f "${OVERLAY_DIR}/cortex-webapp/default/deployment.yaml" ]; then
+        sed -i "s/SHARED_SERVICES_HOST/${ip_to_use}/g" "${OVERLAY_DIR}/cortex-webapp/default/deployment.yaml"
         log_info "Patched cortex-webapp"
     fi
     if [ -f "${OVERLAY_DIR}/schedule-downloader-manual-job.yaml" ]; then
