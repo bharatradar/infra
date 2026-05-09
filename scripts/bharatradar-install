@@ -312,7 +312,7 @@ else
 fi
 
 # Run the selected role
-run_role {
+run_role() {
     case "$ROLE" in
         status)
             cmd_status
