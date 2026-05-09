@@ -306,6 +306,7 @@ if [ -n "${ROLE:-}" ]; then
             ;;
     esac
     # Skip interactive selection - go directly to run_role
+    return
 else
     # Interactive role selection
     select_role
