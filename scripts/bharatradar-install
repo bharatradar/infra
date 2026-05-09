@@ -20,7 +20,7 @@
 
 set -eo pipefail
 
-VERSION="5.7.1"
+VERSION="5.7.2"
 
 # Determine script directory
 # When piped (curl | bash), BASH_SOURCE is empty — we do a shallow clone instead
@@ -548,7 +548,11 @@ main() {
             ROLE="$command"
             # shared-services always prompts for sub-mode
             if [ "$ROLE" = "shared-services" ] && [ -z "${SUB_ROLE:-}" ]; then
-                select_shared_subrole
+                SUB_ROLE="primary"
+            fi
+            # For hub role, set default sub_role if not provided
+            if [ "$ROLE" = "hub" ] && [ -z "${SUB_ROLE:-}" ]; then
+                SUB_ROLE="primary"
             fi
             run_role
             ;;
