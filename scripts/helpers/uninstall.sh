@@ -316,6 +316,12 @@ uninstall_minio() {
 uninstall_shared_services() {
     log_step "Uninstalling Shared Services"
 
+    # Clear install checkpoints so reinstall starts fresh
+    if command -v checkpoint_clear &>/dev/null; then
+        checkpoint_clear 2>/dev/null || true
+    fi
+    rm -f /etc/bharatradar/.install-progress 2>/dev/null || true
+
     if prompt_confirm "Remove PostgreSQL?"; then
         uninstall_postgresql
     fi
@@ -405,8 +411,9 @@ uninstall_shared_services_nuclear_cleanup() {
     sudo rm -rf /var/lib/dpkg/info/postgresql* 2>/dev/null || true
     sudo rm -rf /var/lib/dpkg/info/minio* 2>/dev/null || true
     # Fully purge these packages from dpkg so apt treats them as cleanly removed
-    for pkg in $(dpkg -l 2>/dev/null | awk '/postgresql|redis|influxdb|minio/{print $2}'); do
-        sudo dpkg --purge --force-remove-reinstreq "$pkg" 2>/dev/null || true
+    # Use || true to prevent set -e from killing script on corrupted dpkg db
+    for pkg in $(dpkg -l 2>/dev/null | awk '/postgresql|redis-server|influxdb2|minio/{print $2}' || true); do
+        [ -n "$pkg" ] && sudo dpkg --purge --force-remove-reinstreq "$pkg" 2>/dev/null || true
     done
     sudo dpkg --configure -a 2>/dev/null || true
 
