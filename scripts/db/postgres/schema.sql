@@ -56,6 +56,15 @@ CREATE TABLE IF NOT EXISTS flights_in_air (
     heading DOUBLE PRECISION DEFAULT 0,
     last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    origin_icao VARCHAR(10),
+    origin_iata VARCHAR(5),
+    origin_lat DOUBLE PRECISION,
+    origin_lon DOUBLE PRECISION,
+    dest_icao VARCHAR(10),
+    dest_iata VARCHAR(5),
+    dest_lat DOUBLE PRECISION,
+    dest_lon DOUBLE PRECISION,
+    callsign_iata VARCHAR(5),
     UNIQUE(hexid)
 );
 CREATE INDEX IF NOT EXISTS idx_flights_in_air_hex ON flights_in_air(hexid);
