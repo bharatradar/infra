@@ -17,6 +17,8 @@
 #
 # Online install:
 #   curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash
+#   curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- hub
+#   curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- uninstall shared-services
 
 set -eo pipefail
 
@@ -506,7 +508,28 @@ EOF
 main() {
     load_config
 
+    # When piped (curl | bash -s -- arg1 arg2), the arguments after -- should become $@
+    # But since stdin is piped, we need to handle this differently
     local command="${1:-}"
+    
+    # If running via pipe (curl | sudo bash -s -- uninstall), check if we have args
+    # The -- separates options being passed to the script from piped content
+    # Arguments after -- should be available via $@ but we need to capture them
+    if [ -z "$command" ] && [ $# -gt 0 ]; then
+        # Retry - try to get from $@
+        command="${1:-}"
+    fi
+    
+    # Handle uninstall command - if empty, check if we have remaining args (from -- )
+    if [ -z "$command" ]; then
+        # Check if there are arguments passed after -s --
+        for arg in "$@"; do
+            if [ -n "$arg" ]; then
+                command="$arg"
+                break
+            fi
+        done
+    fi
 
     # Check for --conf-file option early to support silent installs
     if [ "$command" = "--conf-file" ] || [ "$command" = "-c" ]; then
