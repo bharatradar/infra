@@ -33,6 +33,21 @@ jobs:
             ref: main
             image: ghcr.io/bharatradar/readsb
             platforms: linux/amd64,linux/arm64
+          - name: flight-tracker
+            repo: bharatradar/flight-tracker
+            ref: main
+            image: ghcr.io/bharatradar/flight-tracker
+            platforms: linux/amd64
+          - name: telegram-bot
+            repo: bharatradar/telegram-bot
+            ref: main
+            image: ghcr.io/bharatradar/telegram-bot
+            platforms: linux/amd64
+          - name: ai-agents
+            repo: bharatradar/ai-agents
+            ref: main
+            image: ghcr.io/bharatradar/ai-agents
+            platforms: linux/amd64
           - name: docker-tar1090
             repo: bharatradar/docker-tar1090
             ref: main
