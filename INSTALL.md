@@ -1292,6 +1292,38 @@ imagePullSecrets:
 
 ---
 
+## Uninstall
+
+### Shared Services
+
+```bash
+# Interactive uninstall (prompts for each component)
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- uninstall shared-services
+
+# Non-interactive uninstall (auto-confirm all, remove all data)
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- uninstall shared-services -y
+```
+
+The `-y` flag removes PostgreSQL, Redis, InfluxDB, and MinIO including all binaries, data, config, and dpkg package states — leaving no trace.
+
+### Hub / HA Server
+
+```bash
+# Uninstall K3s cluster (wipes all workloads and data)
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- uninstall hub -y
+```
+
+### Fresh Install After Failed Run
+
+If a previous install failed and shows `Resuming Previous Installation`, use `--fresh` to skip stale checkpoints:
+
+```bash
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --fresh shared-services
+sudo ./bharatradar-install --fresh hub
+```
+
+This clears `/etc/bharatradar/.install-progress` before starting, so the install runs every phase from scratch.
+
 ## Troubleshooting
 
 ### K3s Issues

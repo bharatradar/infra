@@ -59,6 +59,9 @@ Run the appropriate command on each machine:
 # Always prompts for primary or standby
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
 
+# Fresh install (clear stale checkpoints from failed run)
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --fresh shared-services
+
 # Step 2: Primary Hub (first K3s server, creates cluster)
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- hub
 
@@ -101,7 +104,17 @@ sudo ./bharatradar-install status        # Health dashboard
 sudo ./bharatradar-install remove-node   # Remove a node from cluster
 sudo ./bharatradar-install update        # Update scripts and redeploy
 sudo ./bharatradar-install backup        # Backup configuration
-sudo ./bharatradar-install uninstall     # Remove all components
+sudo ./bharatradar-install uninstall     # Remove all components (interactive)
+sudo ./bharatradar-install uninstall shared-services -y  # Non-interactive, removes everything including data
+```
+
+### Fresh Install (Skip Resume)
+
+If a previous install failed and left stale checkpoints, use `--fresh` to start clean:
+
+```bash
+curl -Ls ... | sudo bash -s -- --fresh shared-services
+sudo ./bharatradar-install --fresh hub
 ```
 
 ## Scripts Overview
@@ -287,6 +300,10 @@ sudo ./bharatradar-install remove-node
 
 # Full uninstall and clean start
 sudo ./bharatradar-install uninstall
+
+# Non-interactive uninstall (auto-confirm all prompts, remove data)
+sudo ./bharatradar-install uninstall shared-services -y
+sudo ./bharatradar-install uninstall hub -y
 ```
 
 ## Checkpoint / Resume
@@ -324,6 +341,10 @@ cat /etc/bharatradar/.config.partial
 ### Restart from Scratch
 
 ```bash
+# Option 1: Use --fresh flag (recommended)
+sudo ./bharatradar-install --fresh <role>
+
+# Option 2: Manually clear checkpoint files
 sudo rm -f /etc/bharatradar/.install-progress /etc/bharatradar/.config.partial
 sudo ./bharatradar-install <role>
 ```
