@@ -33,13 +33,14 @@ if [ "$SELF_INSTALL" = true ]; then
     log_info() { echo -e "\033[0;34m[INFO]\033[0m $1"; }
     log_step() { echo -e "\n\033[0;36m>>> $1\033[0m"; }
 
-    log_step "Downloading installer..."
+    log_step "Downloading installer... $(date +%H:%M:%S)"
     TMPDIR=$(mktemp -d /tmp/bharatradar-install.XXXXXX)
-    git clone --depth 1 --sparse -b main \
-        https://github.com/bharatradar/infra.git "${TMPDIR}/infra" 2>/dev/null || {
-        # Fallback: full shallow clone if sparse not supported
+    # Use full clone to avoid CDN caching issues
+    git clone --depth 1 -b main \
+        "https://github.com/bharatradar/infra.git?t=$(date +%s)" "${TMPDIR}/infra" 2>/dev/null || {
+        # Fallback: direct download
         git clone --depth 1 -b main \
-            https://github.com/bharatradar/infra.git "${TMPDIR}/infra" 2>/dev/null || {
+            "https://github.com/bharatradar/infra.git?t=$(date +%s)" "${TMPDIR}/infra" 2>/dev/null || {
             log_info "Git clone failed, trying direct download..."
             for f in scripts/bharatradar-install scripts/helpers/functions.sh scripts/helpers/templating.sh scripts/helpers/verify.sh scripts/helpers/uninstall.sh scripts/helpers/ssh-helpers.sh scripts/roles/frp-server.sh scripts/roles/hub.sh scripts/roles/ha-server.sh scripts/roles/worker.sh scripts/roles/shared-services.sh scripts/roles/db-standby.sh scripts/roles/feeder.sh scripts/roles/keepalived.sh scripts/roles/aggregator.sh; do
                 mkdir -p "${TMPDIR}/$(dirname "$f")"
