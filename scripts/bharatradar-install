@@ -305,11 +305,14 @@ if [ -n "${ROLE:-}" ]; then
             exit 1
             ;;
     esac
+    # Skip interactive selection - go directly to run_role
 else
     # Interactive role selection
     select_role
 fi
-run_role() {
+
+# Run the selected role
+run_role {
     case "$ROLE" in
         status)
             cmd_status
