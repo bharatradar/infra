@@ -499,24 +499,11 @@ role_shared_services_configure_influxdb() {
 
     local onboard_ok=false
 
-    # Try CLI first
-    if command -v influx &>/dev/null; then
-        if influx setup \
-            --username admin \
-            --password "${INFLUXDB_ADMIN_TOKEN}" \
-            --org bharatradar \
-            --bucket metrics \
-            --token "${INFLUXDB_ADMIN_TOKEN}" \
-            --force; then
-            onboard_ok=true
-        else
-            log_warn "influx CLI setup failed, trying API..."
-        fi
-    fi
-
-    # API fallback
-    if [ "$onboard_ok" = false ]; then
-        log_info "Setting up via InfluxDB API..."
+    # Check if already onboarded
+    local setup_status
+    setup_status=$(curl -s http://localhost:8086/api/v2/setup 2>/dev/null)
+    if echo "$setup_status" | grep -q '"allowed":true'; then
+        log_info "InfluxDB needs initial setup, onboarding via API..."
         local api_result
         api_result=$(curl -s -X POST http://localhost:8086/api/v2/setup \
             -H "Content-Type: application/json" \
@@ -535,12 +522,15 @@ EOJSON
         else
             onboard_ok=true
         fi
+    else
+        log_warn "InfluxDB already onboarded (keeping existing config - token may differ)"
+        onboard_ok=true
     fi
 
     if [ "$onboard_ok" = true ]; then
-        log_success "InfluxDB configured with new token"
+        log_success "InfluxDB configured"
     else
-        log_warn "InfluxDB setup may not be complete - verify manually"
+        log_warn "InfluxDB setup failed - verify manually"
     fi
 }
 
@@ -953,12 +943,11 @@ role_shared_services_verify() {
 
     log_info "Testing InfluxDB..."
     local influx_ok
-    influx_ok=$(curl -s -X POST http://localhost:8086/api/v2/query \
+    influx_ok=$(curl -s "http://localhost:8086/api/v2/query?org=bharatradar" \
         -H "Authorization: Token ${INFLUXDB_ADMIN_TOKEN}" \
-        -H "Content-Type: application/json" \
-        -H "Accept: application/csv" \
-        -d "{\"query\":\"buckets()\",\"org\":\"bharatradar\"}" 2>/dev/null)
-    if echo "$influx_ok" | grep -q "name"; then
+        -H "Content-Type: application/vnd.flux" \
+        -d "buckets()" 2>/dev/null)
+    if echo "$influx_ok" | grep -q "name\|_value\|result"; then
         log_success "InfluxDB: OK (token auth works)"
     else
         log_error "InfluxDB: FAILED (response: $(echo "$influx_ok" | head -c 100))"
