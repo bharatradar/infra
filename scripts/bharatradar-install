@@ -35,22 +35,19 @@ if [ "$SELF_INSTALL" = true ]; then
 
     log_step "Downloading installer..."
     TMPDIR=$(mktemp -d /tmp/bharatradar-install.XXXXXX)
-    rm -rf "${TMPDIR}"
-    TMPDIR=$(mktemp -d /tmp/bharatradar-install.XXXXXX)
     # Use full clone to avoid CDN cache
     git clone --depth 1 -b main \
         "https://github.com/bharatradar/infra.git" "${TMPDIR}/infra" 2>/dev/null || {
-            # Fallback: direct download
-            for f in scripts/bharatradar-install scripts/helpers/functions.sh scripts/helpers/templating.sh scripts/helpers/verify.sh scripts/helpers/uninstall.sh scripts/helpers/ssh-helpers.sh scripts/roles/frp-server.sh scripts/roles/hub.sh scripts/roles/ha-server.sh scripts/roles/worker.sh scripts/roles/shared-services.sh scripts/roles/db-standby.sh scripts/roles/feeder.sh scripts/roles/keepalived.sh scripts/roles/aggregator.sh; do
-                mkdir -p "${TMPDIR}/$(dirname "$f")"
-                curl -sL "https://raw.githubusercontent.com/bharatradar/infra/main/${f}" -o "${TMPDIR}/${f}"
-            done
-            # Download manifests and bases for hub role
-            curl -sL "https://github.com/bharatradar/infra/archive/refs/heads/main.tar.gz" | tar xz -C "${TMPDIR}" --strip-components=1 "infra-main/manifests" "infra-main/bases" 2>/dev/null || true
-            chmod +x "${TMPDIR}/scripts/bharatradar-install"
-            exec bash "${TMPDIR}/scripts/bharatradar-install" "$@"
-        }
-    fi
+        # Fallback: direct download
+        for f in scripts/bharatradar-install scripts/helpers/functions.sh scripts/helpers/templating.sh scripts/helpers/verify.sh scripts/helpers/uninstall.sh scripts/helpers/ssh-helpers.sh scripts/roles/frp-server.sh scripts/roles/hub.sh scripts/roles/ha-server.sh scripts/roles/worker.sh scripts/roles/shared-services.sh scripts/roles/db-standby.sh scripts/roles/feeder.sh scripts/roles/keepalived.sh scripts/roles/aggregator.sh; do
+            mkdir -p "${TMPDIR}/$(dirname "$f")"
+            curl -sL "https://raw.githubusercontent.com/bharatradar/infra/main/${f}" -o "${TMPDIR}/${f}"
+        done
+        # Download manifests and bases for hub role
+        curl -sL "https://github.com/bharatradar/infra/archive/refs/heads/main.tar.gz" | tar xz -C "${TMPDIR}" --strip-components=1 "infra-main/manifests" "infra-main/bases" 2>/dev/null || true
+        chmod +x "${TMPDIR}/scripts/bharatradar-install"
+        exec bash "${TMPDIR}/scripts/bharatradar-install" "$@"
+    }
 
     SCRIPT_DIR="${TMPDIR}/infra/scripts"
     export SCRIPT_DIR INSTALL_TMPDIR="$TMPDIR"
