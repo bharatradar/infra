@@ -139,9 +139,18 @@ role_shared_services_install_postgresql() {
                 pg_version=$(ls /etc/postgresql/ 2>/dev/null | head -1)
                 if [ -z "$pg_version" ]; then
                     log_warn "Server not found after metapackage install - purging broken dpkg state"
+                    # First pass: --force-all to remove broken packages from dpkg
                     for p in $(dpkg -l 2>/dev/null | awk '/postgresql/{print $2}' || true); do
-                        [ -n "$p" ] && dpkg --purge --force-remove-reinstreq "$p" 2>/dev/null || true
+                        [ -n "$p" ] && dpkg --purge --force-all "$p" 2>/dev/null || true
                     done
+                    # Second pass: if dpkg database still has postgresql entries, edit status file directly
+                    if dpkg -l 2>/dev/null | grep -q postgresql 2>/dev/null; then
+                        log_warn "dpkg purge insufficient - directly cleaning dpkg status file"
+                        for p in $(dpkg -l 2>/dev/null | awk '/postgresql/{print $2}' || true); do
+                            [ -z "$p" ] && continue
+                            sed -i "/^Package: $p$/,/^$/d" /var/lib/dpkg/status 2>/dev/null || true
+                        done
+                    fi
                     apt-get install -y -qq postgresql postgresql-client || {
                         log_error "Failed to install PostgreSQL despite retry"
                         return 1

@@ -1,5 +1,5 @@
 #!/bin/bash
-# BharatRadar Infrastructure Installer v5.7.15
+# BharatRadar Infrastructure Installer v5.7.16
 #
 # Main entry point for all installation workflows.
 # Supports interactive mode and non-interactive (role-based) mode.
@@ -23,7 +23,7 @@
 
 set -eo pipefail
 
-VERSION="5.7.15"
+VERSION="5.7.16"
 
 # Determine script directory
 # When piped (curl | bash), BASH_SOURCE is empty — we do a shallow clone instead
