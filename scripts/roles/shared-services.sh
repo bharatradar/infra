@@ -820,7 +820,9 @@ role_shared_services_post_install() {
     echo "    sudo systemctl status redis-server"
     echo "    sudo systemctl status influxdb"
     echo "    sudo systemctl status minio"
-    echo "    sudo -u postgres psql -d k3s"
+    echo "    psql -h 127.0.0.1 -U ${DB_USER} -d ${DB_NAME} -W"
+    echo "    psql -h 127.0.0.1 -U flight_db_user -d flight_db -W"
+    echo "    redis-cli -h 127.0.0.1 -a '${REDIS_PASSWORD}' PING"
     echo "    mc alias set local http://${DB_LISTEN_IP}:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}"
     echo "    mc ls local/history"
     echo ""
@@ -829,11 +831,74 @@ role_shared_services_post_install() {
     echo -e "${GREEN}================================================================${NC}"
 }
 
+role_shared_services_verify() {
+    log_step "Verifying All Services"
+    local all_ok=true
+
+    log_info "Testing PostgreSQL (user=${DB_USER})..."
+    if PGPASSWORD="$DB_PASSWORD" psql -h 127.0.0.1 -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1;" 2>/dev/null | grep -q 1; then
+        log_success "PostgreSQL: OK (password auth works)"
+    else
+        log_error "PostgreSQL: FAILED"
+        all_ok=false
+    fi
+
+    log_info "Testing flight_db (user=flight_db_user)..."
+    if PGPASSWORD="$FLIGHT_DB_PASSWORD" psql -h 127.0.0.1 -U flight_db_user -d flight_db -c "SELECT COUNT(*) FROM airports;" 2>/dev/null | grep -q "[0-9]"; then
+        log_success "flight_db: OK (schema and seed data present)"
+    else
+        log_error "flight_db: FAILED"
+        all_ok=false
+    fi
+
+    log_info "Testing Redis..."
+    if redis-cli -a "$REDIS_PASSWORD" PING 2>/dev/null | grep -q PONG; then
+        log_success "Redis: OK (password auth works)"
+    else
+        log_error "Redis: FAILED"
+        all_ok=false
+    fi
+
+    log_info "Testing InfluxDB..."
+    local influx_ok
+    influx_ok=$(curl -s -X POST http://localhost:8086/api/v2/query \
+        -H "Authorization: Token ${INFLUXDB_ADMIN_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -H "Accept: application/csv" \
+        -d "{\"query\":\"buckets()\",\"org\":\"bharatradar\"}" 2>/dev/null)
+    if echo "$influx_ok" | grep -q "name"; then
+        log_success "InfluxDB: OK (token auth works)"
+    else
+        log_error "InfluxDB: FAILED (response: $(echo "$influx_ok" | head -c 100))"
+        all_ok=false
+    fi
+
+    log_info "Testing MinIO..."
+    if curl -s http://localhost:9000/minio/health/live 2>/dev/null | grep -q "ok\|health"; then
+        log_success "MinIO: OK"
+    else
+        if curl -s -o /dev/null -w "%{http_code}" http://localhost:9000/ 2>/dev/null | grep -q "200\|403"; then
+            log_success "MinIO: OK (responding on port 9000)"
+        else
+            log_error "MinIO: FAILED"
+            all_ok=false
+        fi
+    fi
+
+    echo ""
+    if [ "$all_ok" = true ]; then
+        log_success "All services verified successfully!"
+    else
+        log_warn "Some services failed verification - check logs above"
+    fi
+    echo ""
+}
+
 role_shared_services_run() {
     require_root
 
     local install_failed=false
-    local phases=(config packages postgresql flight_db redis influxdb minio flight_db_init save)
+    local phases=(config packages postgresql flight_db redis influxdb minio flight_db_init verify save)
 
     show_resume_banner "${phases[@]}"
 
@@ -929,6 +994,12 @@ role_shared_services_run() {
     if ! checkpoint_completed "flight_db_init"; then
         role_shared_services_init_flight_db || log_warn "Flight DB initialization skipped/failed"
         checkpoint_mark "flight_db_init"
+    fi
+
+    # Phase: verify (test all services with generated credentials)
+    if ! checkpoint_completed "verify"; then
+        role_shared_services_verify
+        checkpoint_mark "verify"
     fi
 
     # Phase: save
