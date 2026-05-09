@@ -6,6 +6,19 @@
     <title>BharatRadar — India's Open ADS-B Network</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <style>
+        .fn-mark { cursor: pointer; color: #23c074; font-weight: bold; }
+        .fn-mark:hover { text-decoration: underline; }
+        .fn-box {
+            max-width: 640px; margin: -10px auto 30px;
+            padding: 12px 18px; font-size: 13px; line-height: 1.6;
+            background: rgba(35, 192, 116, 0.08);
+            border: 1px solid rgba(35, 192, 116, 0.25);
+            border-radius: 8px; color: #9ca3af;
+        }
+        .fn-box sup { color: #23c074; margin-right: 4px; }
+        .hidden { display: none; }
+    </style>
 </head>
 <body>
     <header>
@@ -43,12 +56,22 @@
                 </a>
             </div>
             <h1>India's Open ADS-B Flight Tracking Network</h1>
-            <p>Community-powered, open-source aircraft tracking across India. All data is free and open for everyone.</p>
+            <p>Community-powered, open-source aircraft tracking across India. All data is free and open for everyone.<sup class="fn-mark">*</sup></p>
             <div class="hero-buttons">
                 <a href="https://map.bharatradar.com" class="btn btn-primary">View Live Map</a>
                 <a href="/docs/get-started/become-a-feeder/" class="btn btn-secondary">Become a Feeder</a>
             </div>
         </section>
+
+        <div id="fn-rate" class="hidden fn-box">
+            <sup>*</sup> Rate limits per tier:
+            <strong>Free</strong> — 5 req/min, 100 req/day &middot;
+            <strong>Bronze</strong> — 100/min, 1,000/day &middot;
+            <strong>Silver</strong> — 500/min, 10,000/day &middot;
+            <strong>Gold</strong> — 2,000/min, 50,000/day &middot;
+            <strong>Platinum</strong> — 10,000/min, unlimited
+            <br>Feeders earn higher tiers based on contributions.
+        </div>
 
         <section class="features">
             <div class="feature-card">
@@ -135,6 +158,9 @@
             } catch (e) {}
             setTimeout(fetchStats, 5000);
         })();
+        document.querySelector('.fn-mark')?.addEventListener('click', function() {
+            document.getElementById('fn-rate').classList.toggle('hidden');
+        });
     </script>
 </body>
 </html>
