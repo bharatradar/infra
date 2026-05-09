@@ -64,39 +64,41 @@ role_hub_collect_config() {
     echo "  2) Cloud Storage - Use existing rclone.conf (OneDrive, GCS, S3, etc.)"
     echo ""
 
-    local storage_choice
-    prompt_select "Storage backend" "MinIO" "Cloud Storage" storage_choice
+    if [ -z "${MINIO_ENDPOINT:-}" ] && [ -z "${RCLONE_CONFIG_PATH:-}" ]; then
+        local storage_choice
+        prompt_select "Storage backend" "MinIO" "Cloud Storage" storage_choice
 
-    if [ "$storage_choice" = "Cloud Storage" ]; then
-        echo ""
-        echo "  Enter path to your existing rclone.conf file"
-        echo "  (e.g., ~/.config/rclone/rclone.conf or /home/pi/.config/rclone/rclone.conf)"
-        echo ""
-        prompt_input "Path to rclone.conf" "~/.config/rclone/rclone.conf" RCLONE_CONFIG_PATH
-        RCLONE_CONFIG_PATH=$(eval echo "$RCLONE_CONFIG_PATH")
-        while [ ! -f "$RCLONE_CONFIG_PATH" ]; do
-            log_error "File not found: $RCLONE_CONFIG_PATH"
-            prompt_input "Path to rclone.conf" "" RCLONE_CONFIG_PATH
+        if [ "$storage_choice" = "Cloud Storage" ]; then
+            echo ""
+            echo "  Enter path to your existing rclone.conf file"
+            echo "  (e.g., ~/.config/rclone/rclone.conf or /home/pi/.config/rclone/rclone.conf)"
+            echo ""
+            prompt_input "Path to rclone.conf" "~/.config/rclone/rclone.conf" RCLONE_CONFIG_PATH
             RCLONE_CONFIG_PATH=$(eval echo "$RCLONE_CONFIG_PATH")
-        done
-        log_success "Using rclone config from: $RCLONE_CONFIG_PATH"
-        MINIO_ENDPOINT=""
-        MINIO_ROOT_USER=""
-        MINIO_ROOT_PASSWORD=""
-    else
-        echo ""
-        echo "  Configure MinIO on your shared services host (Pi):"
-        echo ""
-        prompt_input "MinIO host IP" "${MINIO_HOST:-192.168.200.12}" MINIO_HOST
-        prompt_input "MinIO port" "${MINIO_PORT:-9000}" MINIO_PORT
-        prompt_input "MinIO access key" "${MINIO_ROOT_USER:-minioadmin}" MINIO_ROOT_USER
-        prompt_input "MinIO secret key" "${MINIO_ROOT_PASSWORD:-}" MINIO_ROOT_PASSWORD
-        while [ -z "$MINIO_ROOT_PASSWORD" ]; do
-            log_error "Secret key cannot be empty"
-            prompt_input "MinIO secret key" "" MINIO_ROOT_PASSWORD
-        done
-        MINIO_ENDPOINT="${MINIO_HOST}:${MINIO_PORT}"
-        RCLONE_CONFIG_PATH=""
+            while [ ! -f "$RCLONE_CONFIG_PATH" ]; do
+                log_error "File not found: $RCLONE_CONFIG_PATH"
+                prompt_input "Path to rclone.conf" "" RCLONE_CONFIG_PATH
+                RCLONE_CONFIG_PATH=$(eval echo "$RCLONE_CONFIG_PATH")
+            done
+            log_success "Using rclone config from: $RCLONE_CONFIG_PATH"
+            MINIO_ENDPOINT=""
+            MINIO_ROOT_USER=""
+            MINIO_ROOT_PASSWORD=""
+        else
+            echo ""
+            echo "  Configure MinIO on your shared services host (Pi):"
+            echo ""
+            prompt_input "MinIO host IP" "${MINIO_HOST:-192.168.200.12}" MINIO_HOST
+            prompt_input "MinIO port" "${MINIO_PORT:-9000}" MINIO_PORT
+            prompt_input "MinIO access key" "${MINIO_ROOT_USER:-minioadmin}" MINIO_ROOT_USER
+            prompt_input "MinIO secret key" "${MINIO_ROOT_PASSWORD:-}" MINIO_ROOT_PASSWORD
+            while [ -z "$MINIO_ROOT_PASSWORD" ]; do
+                log_error "Secret key cannot be empty"
+                prompt_input "MinIO secret key" "" MINIO_ROOT_PASSWORD
+            done
+            MINIO_ENDPOINT="${MINIO_HOST}:${MINIO_PORT}"
+            RCLONE_CONFIG_PATH=""
+        fi
     fi
 
     echo ""
@@ -107,13 +109,21 @@ role_hub_collect_config() {
     echo "  Create one at: https://github.com/settings/tokens"
     echo ""
 
-    prompt_input "GitHub username" "" GHCR_USERNAME
-    prompt_input "GitHub PAT (read:packages)" "" GHCR_PASSWORD
+    if [ -z "${GHCR_USERNAME:-}" ]; then
+        prompt_input "GitHub username" "" GHCR_USERNAME
+    fi
+    if [ -z "${GHCR_PASSWORD:-}" ]; then
+        prompt_input "GitHub PAT (read:packages)" "" GHCR_PASSWORD
+    fi
 
     while [ -z "$GHCR_USERNAME" ] || [ -z "$GHCR_PASSWORD" ]; do
         log_error "Both username and PAT are required"
-        prompt_input "GitHub username" "$GHCR_USERNAME" GHCR_USERNAME
-        prompt_input "GitHub PAT (read:packages)" "$GHCR_PASSWORD" GHCR_PASSWORD
+        if [ -z "${GHCR_USERNAME:-}" ]; then
+            prompt_input "GitHub username" "$GHCR_USERNAME" GHCR_USERNAME
+        fi
+        if [ -z "${GHCR_PASSWORD:-}" ]; then
+            prompt_input "GitHub PAT (read:packages)" "$GHCR_PASSWORD" GHCR_PASSWORD
+        fi
     done
 
     echo ""
@@ -125,22 +135,30 @@ role_hub_collect_config() {
     echo "  2) External PostgreSQL (required for HA multi-server)"
     echo ""
 
-    local ds_choice
-    prompt_select "Datastore type" \
-        "Embedded etcd" \
-        "External PostgreSQL" ds_choice
+    if [ -z "${USE_EXTERNAL_DB:-}" ]; then
+        local ds_choice
+        prompt_select "Datastore type" \
+            "Embedded etcd" \
+            "External PostgreSQL" ds_choice
+        if [ "$ds_choice" = "Embedded etcd" ]; then
+            USE_EXTERNAL_DB=false
+        else
+            USE_EXTERNAL_DB=true
+        fi
+    fi
 
-    if [ "$ds_choice" = "Embedded etcd" ]; then
-        USE_EXTERNAL_DB=false
+    if [ "$USE_EXTERNAL_DB" = true ]; then
+        if [ -z "${DB_HOST:-}" ]; then
+            echo ""
+            log_info "Enter your PostgreSQL server details:"
+            collect_pg_config "DB"
+        fi
+        DB_CONNECTION_STRING="${DB_CONNECTION_STRING:-postgres://${DB_USER:-k3s}:${DB_PASS:-}@${DB_HOST:-127.0.0.1}:${DB_PORT:-5432}/${DB_DBNAME:-k3s}}"
+        log_info "Using external PostgreSQL: ${DB_HOST:-127.0.0.1}:${DB_PORT:-5432}/${DB_DBNAME:-k3s}"
+    else
         DB_CONNECTION_STRING=""
         unset K3S_DATASTORE_ENDPOINT 2>/dev/null || true
         log_info "Using embedded etcd datastore"
-    else
-USE_EXTERNAL_DB=true
-        echo ""
-        log_info "Enter your PostgreSQL server details:"
-        collect_pg_config "DB"
-        log_info "Using external PostgreSQL: ${DB_HOST}:${DB_PORT}/${DB_DBNAME}"
     fi
     
     # Flight Database (flight_db) - used by ai-agents, telegram-bot, etc.
@@ -177,8 +195,12 @@ USE_EXTERNAL_DB=true
     echo "  Create a bot at @BotFather on Telegram to get a token."
     echo "  Leave empty to skip."
     echo ""
-    prompt_input "Telegram bot token (leave empty to skip)" "" TELEGRAM_BOT_TOKEN
-    prompt_input "Telegram chat ID (for alerts)" "" TELEGRAM_CHAT_ID
+    if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+        prompt_input "Telegram bot token (leave empty to skip)" "" TELEGRAM_BOT_TOKEN
+    fi
+    if [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
+        prompt_input "Telegram chat ID (for alerts)" "" TELEGRAM_CHAT_ID
+    fi
     
     # Groq API Configuration (for LLM-powered features)
     echo ""
@@ -188,7 +210,9 @@ USE_EXTERNAL_DB=true
     echo "  Get a free API key at: https://console.groq.com/keys"
     echo "  Leave empty to skip."
     echo ""
-    prompt_input "Groq API key (leave empty to skip)" "" GPT_API_KEY
+    if [ -z "${GPT_API_KEY:-}" ]; then
+        prompt_input "Groq API key (leave empty to skip)" "" GPT_API_KEY
+    fi
     
     # Cloudflare AI Analytics Keys (dynamic - add as many as needed)
     echo ""
@@ -202,32 +226,39 @@ USE_EXTERNAL_DB=true
     local add_more=true
     local key_count=0
     
-    while [ "$add_more" = true ]; do
-        if prompt_confirm "Add a Cloudflare AI key?"; then
-            key_count=$((key_count + 1))
-            echo ""
-            echo "  Key #${key_count}:"
-            local key_id key_token
-            prompt_input "  Key ID (from Cloudflare dashboard)" "" key_id
-            prompt_input "  Key token" "" key_token
-            
-            if [ -n "$key_id" ] && [ -n "$key_token" ]; then
-                if [ "$CF_KEYS_JSON" = "[" ]; then
-                    CF_KEYS_JSON="${CF_KEYS_JSON}{\"id\": \"${key_id}\", \"token\": \"${key_token}\"}"
-                else
-                    CF_KEYS_JSON="${CF_KEYS_JSON}, {\"id\": \"${key_id}\", \"token\": \"${key_token}\"}"
+    # Use pre-set CF_KEYS_JSON from config file or prompt interactively
+    if [ -n "${CF_KEYS_JSON:-}" ]; then
+        log_info "Using Cloudflare AI keys from config"
+    else
+        while [ "$add_more" = true ]; do
+            if prompt_confirm "Add a Cloudflare AI key?"; then
+                key_count=$((key_count + 1))
+                echo ""
+                echo "  Key #${key_count}:"
+                local key_id key_token
+                prompt_input "  Key ID (from Cloudflare dashboard)" "" key_id
+                prompt_input "  Key token" "" key_token
+                
+                if [ -n "$key_id" ] && [ -n "$key_token" ]; then
+                    if [ "$CF_KEYS_JSON" = "[" ]; then
+                        CF_KEYS_JSON="${CF_KEYS_JSON}{\"id\": \"${key_id}\", \"token\": \"${key_token}\"}"
+                    else
+                        CF_KEYS_JSON="${CF_KEYS_JSON}, {\"id\": \"${key_id}\", \"token\": \"${key_token}\"}"
+                    fi
+                    log_success "Added Cloudflare AI key #${key_count}"
+                elif [ -n "${SILENT_MODE:-}" ]; then
+                    add_more=false
                 fi
-                log_success "Added Cloudflare AI key #${key_count}"
+            else
+                add_more=false
             fi
-        else
-            add_more=false
+        done
+        
+        CF_KEYS_JSON="${CF_KEYS_JSON}]"
+        
+        if [ "$CF_KEYS_JSON" != "[]" ]; then
+            log_info "Added ${key_count} Cloudflare AI key(s)"
         fi
-    done
-    
-    CF_KEYS_JSON="${CF_KEYS_JSON}]"
-    
-    if [ "$CF_KEYS_JSON" != "[]" ]; then
-        log_info "Added ${key_count} Cloudflare AI key(s)"
     fi
     
     echo ""
@@ -238,24 +269,31 @@ USE_EXTERNAL_DB=true
     echo "  If your hub has a public IP, skip this."
     echo ""
 
-    if prompt_confirm "Set up FRP tunnel for public access?"; then
-        prompt_input "FRP server public IP" "" FRP_SERVER
+    if [ -z "${FRP_ENABLED:-}" ]; then
+        if prompt_confirm "Set up FRP tunnel for public access?"; then
+            FRP_ENABLED=true
+        else
+            FRP_ENABLED=false
+        fi
+    fi
 
-        while ! validate_ip "$FRP_SERVER"; do
-            log_error "Invalid IP address"
-            prompt_input "FRP server public IP" "$FRP_SERVER" FRP_SERVER
-        done
-
-        prompt_input "FRP authentication token" "" FRP_TOKEN
-
-        while [ -z "$FRP_TOKEN" ]; do
-            log_error "Token cannot be empty"
+    if [ "$FRP_ENABLED" = true ]; then
+        if [ -z "${FRP_SERVER:-}" ]; then
+            prompt_input "FRP server public IP" "" FRP_SERVER
+            while ! validate_ip "$FRP_SERVER"; do
+                log_error "Invalid IP address"
+                prompt_input "FRP server public IP" "$FRP_SERVER" FRP_SERVER
+            done
+        fi
+        if [ -z "${FRP_TOKEN:-}" ]; then
             prompt_input "FRP authentication token" "" FRP_TOKEN
-        done
-
-        FRP_ENABLED=true
+            while [ -z "$FRP_TOKEN" ]; do
+                log_error "Token cannot be empty"
+                prompt_input "FRP authentication token" "" FRP_TOKEN
+            done
+        fi
+        log_info "Using FRP tunnel: ${FRP_SERVER}"
     else
-        FRP_ENABLED=false
         FRP_SERVER=""
         FRP_TOKEN=""
         log_info "No FRP tunnel. Services accessible on local network only."
@@ -268,8 +306,15 @@ USE_EXTERNAL_DB=true
     echo "  when you add a second K3s server later."
     echo ""
 
-    if prompt_confirm "Set up Keepalived VIP now?"; then
-        KEEPALIVED_ENABLED=true
+    if [ -z "${KEEPALIVED_ENABLED:-}" ]; then
+        if prompt_confirm "Set up Keepalived VIP now?"; then
+            KEEPALIVED_ENABLED=true
+        else
+            KEEPALIVED_ENABLED=false
+        fi
+    fi
+
+    if [ "$KEEPALIVED_ENABLED" = true ]; then
         source "${SCRIPT_DIR}/roles/keepalived.sh"
         keepalived_collect_config
     else

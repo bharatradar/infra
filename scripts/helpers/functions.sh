@@ -76,9 +76,13 @@ prompt_input() {
     local result_var="$3"
     local input
 
-    # In silent mode with default, use default without prompting
-    if [ -n "${SILENT_MODE:-}" ] && [ -n "$default_value" ]; then
-        printf -v "$result_var" '%s' "$default_value"
+    # In silent mode, use default without prompting
+    if [ -n "${SILENT_MODE:-}" ]; then
+        if [ -n "$default_value" ]; then
+            printf -v "$result_var" '%s' "$default_value"
+        else
+            printf -v "$result_var" '%s' ""
+        fi
         return
     fi
 
@@ -98,7 +102,11 @@ prompt_confirm() {
 
     # In silent mode, use default without prompting
     if [ -n "${SILENT_MODE:-}" ]; then
-        return 0
+        if [ "$default_value" = "y" ]; then
+            return 0
+        else
+            return 1
+        fi
     fi
 
     # If /dev/tty is not available (piped/automated), use default
