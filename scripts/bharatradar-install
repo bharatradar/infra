@@ -1,5 +1,5 @@
 #!/bin/bash
-# BharatRadar Infrastructure Installer v5.7.8
+# BharatRadar Infrastructure Installer v5.7.9
 #
 # Main entry point for all installation workflows.
 # Supports interactive mode and non-interactive (role-based) mode.
@@ -19,10 +19,11 @@
 #   curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash
 #   curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- hub
 #   curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- uninstall shared-services
+#   curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- uninstall shared-services -y
 
 set -eo pipefail
 
-VERSION="5.7.8"
+VERSION="5.7.9"
 
 # Determine script directory
 # When piped (curl | bash), BASH_SOURCE is empty — we do a shallow clone instead
@@ -474,6 +475,7 @@ Commands:
   update          Update scripts and redeploy
   backup          Backup configuration files
   uninstall       Remove BharatRadar components
+  uninstall ROLE -y   Non-interactive uninstall (auto-confirm all)
   help            Show this help message
 
 Feeder (Recommended — standalone):
@@ -550,6 +552,11 @@ main() {
             cmd_"$command"
             ;;
         uninstall)
+            if [ "${3:-}" = "-y" ] || [ "${ARG3:-}" = "-y" ]; then
+                SILENT_MODE=true
+                export SILENT_MODE
+                log_info "Auto-confirm enabled (-y)"
+            fi
             cmd_uninstall "${arg2:-${2:-}}"
             ;;
         remove-node)

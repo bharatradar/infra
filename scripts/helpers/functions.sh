@@ -101,6 +101,15 @@ prompt_confirm() {
         return 0
     fi
 
+    # If /dev/tty is not available (piped/automated), use default
+    if ! [ -r /dev/tty ] 2>/dev/null; then
+        if [ "$default_value" = "y" ]; then
+            return 0
+        else
+            return 1
+        fi
+    fi
+
     if [ "$default_value" = "y" ]; then
         read -rp "${prompt_msg} [Y/n]: " response < /dev/tty
         response=${response:-y}
