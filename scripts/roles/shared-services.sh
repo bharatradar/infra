@@ -112,10 +112,7 @@ role_shared_services_install_packages() {
 role_shared_services_install_postgresql() {
     log_step "Installing PostgreSQL"
 
-    local os
-    os=$(detect_os)
-
-    local os
+    local os pg_version
     os=$(detect_os)
 
     if command -v psql &>/dev/null && pg_lsclusters 2>/dev/null | grep -q online; then
@@ -138,13 +135,30 @@ role_shared_services_install_postgresql() {
                     apt-get update -qq
                     apt-get install -y -qq postgresql postgresql-client
                 }
+                # Verify actual server was installed (metapackage may skip due to broken dpkg state)
+                pg_version=$(ls /etc/postgresql/ 2>/dev/null | head -1)
+                if [ -z "$pg_version" ]; then
+                    log_warn "Server not found after metapackage install - purging broken dpkg state"
+                    for p in $(dpkg -l 2>/dev/null | awk '/postgresql/{print $2}' || true); do
+                        [ -n "$p" ] && dpkg --purge --force-remove-reinstreq "$p" 2>/dev/null || true
+                    done
+                    apt-get install -y -qq postgresql postgresql-client || {
+                        log_error "Failed to install PostgreSQL despite retry"
+                        return 1
+                    }
+                    pg_version=$(ls /etc/postgresql/ 2>/dev/null | head -1)
+                    if [ -z "$pg_version" ]; then
+                        log_error "PostgreSQL server still missing after purge+reinstall"
+                        return 1
+                    fi
+                    log_info "PostgreSQL properly installed after dpkg cleanup"
+                fi
                 ;;
         esac
         log_success "PostgreSQL installed"
     fi
 
     # Ensure the cluster actually exists and has a data directory
-    local pg_version
     pg_version=$(ls /etc/postgresql/ 2>/dev/null | head -1)
     if [ -n "$pg_version" ] && [ ! -d "/var/lib/postgresql/${pg_version}/main" ]; then
         log_warn "PostgreSQL data directory missing, recreating cluster..."
