@@ -195,6 +195,9 @@ uninstall_postgresql() {
                 ;;
         esac
 
+        # Explicitly remove binaries that apt-get may have left behind
+        rm -f /usr/bin/psql /usr/bin/pg_config /usr/bin/pg_dump /usr/bin/pg_isready /usr/bin/pg_basebackup /usr/bin/pg_ctlcluster 2>/dev/null || true
+
         if prompt_confirm "Also remove PostgreSQL data directory?"; then
             rm -rf /var/lib/postgresql/*
             log_info "PostgreSQL data removed"
@@ -267,6 +270,9 @@ uninstall_influxdb() {
         sudo systemctl unmask influxdb 2>/dev/null || true
         sudo apt-get purge influxdb2 2>/dev/null || true
 
+        # Explicitly remove influx binaries (dpkg --remove may not clean them up)
+        rm -f /usr/bin/influxd /usr/bin/influx /usr/bin/influxd-stdnull 2>/dev/null || true
+
         if prompt_confirm "Also remove InfluxDB data directory?"; then
             rm -rf /var/lib/influxdb2/*
             log_info "InfluxDB data removed"
@@ -330,6 +336,14 @@ uninstall_shared_services() {
         rm -rf /var/lib/postgresql/* /var/lib/redis/* /var/lib/influxdb2/* /data/minio
         log_info "All shared data directories removed"
     fi
+
+    # Clean up config files and leftover traces
+    rm -rf /etc/bharatradar 2>/dev/null || true
+    rm -f /etc/redis/redis.conf 2>/dev/null || true
+    rm -rf /etc/influxdb2 2>/dev/null || true
+    rm -f /etc/minio 2>/dev/null || true
+    rm -f /usr/local/bin/minio /usr/local/bin/mc 2>/dev/null || true
+    log_info "Config files and traces cleaned up"
 }
 
 # Uninstall keepalived

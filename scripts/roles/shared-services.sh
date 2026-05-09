@@ -115,7 +115,18 @@ role_shared_services_install_postgresql() {
     local os
     os=$(detect_os)
 
-    if ! command -v psql &>/dev/null; then
+    local os
+    os=$(detect_os)
+
+    if command -v psql &>/dev/null && pg_lsclusters 2>/dev/null | grep -q online; then
+        log_info "PostgreSQL already installed: $(psql --version 2>/dev/null || echo 'unknown')"
+    else
+        # Remove stale binary if exists but no cluster (from incomplete uninstall)
+        if command -v psql &>/dev/null; then
+            log_warn "psql found but PostgreSQL cluster not running - reinstalling"
+            apt-get remove -y -qq postgresql postgresql-client 2>/dev/null || true
+            rm -f /usr/bin/psql /usr/bin/pg_config /usr/bin/pg_dump /usr/bin/pg_isready /usr/bin/pg_basebackup 2>/dev/null || true
+        fi
         case "$os" in
             debian|ubuntu|raspbian)
                 local codename
@@ -130,8 +141,6 @@ role_shared_services_install_postgresql() {
                 ;;
         esac
         log_success "PostgreSQL installed"
-    else
-        log_info "PostgreSQL already installed: $(psql --version 2>/dev/null || echo 'unknown')"
     fi
 
     # Ensure the cluster actually exists and has a data directory
@@ -376,10 +385,17 @@ role_shared_services_configure_redis() {
 role_shared_services_install_influxdb() {
     log_step "Installing InfluxDB (Optional)"
 
-    # Skip if influxdb is already working
-    if command -v influxd &>/dev/null; then
+    # Skip if influxdb is already working (binary exists AND service is active)
+    if command -v influxd &>/dev/null && systemctl is-active --quiet influxdb 2>/dev/null; then
         log_info "InfluxDB already installed: $(influxd version 2>/dev/null || echo 'unknown')"
         return 0
+    fi
+
+    # If binary exists but service isn't running, remove stale installation
+    if command -v influxd &>/dev/null; then
+        log_warn "influxd found but service not running - removing stale installation"
+        systemctl stop influxdb 2>/dev/null || true
+        rm -f /usr/bin/influxd /usr/bin/influx 2>/dev/null || true
     fi
     
     # Skip if there's a broken package - just log and continue
