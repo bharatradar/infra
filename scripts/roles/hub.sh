@@ -47,6 +47,15 @@ role_hub_collect_config() {
     done
 
     echo ""
+    log_step "Time-Series Storage (InfluxDB) Configuration"
+    echo ""
+    echo "  Optional - enables telemetry storage for flight tracking."
+    echo ""
+    prompt_input "InfluxDB host IP" "${INFLUXDB_HOST:-}" INFLUXDB_HOST
+    prompt_input "InfluxDB port" "${INFLUXDB_PORT:-8086}" INFLUXDB_PORT
+    prompt_input "InfluxDB admin token (from shared-services)" "${INFLUXDB_ADMIN_TOKEN:-}" INFLUXDB_ADMIN_TOKEN
+
+    echo ""
     log_step "Storage Backend Configuration (History Service)"
     echo ""
     echo "  How should the history service store ADS-B data?"
@@ -622,11 +631,13 @@ role_hub_create_secrets() {
     # InfluxDB credentials secret
     if ! kubectl get secret influxdb-credentials -n bharatradar &>/dev/null; then
         local influx_token="${INFLUXDB_ADMIN_TOKEN:-token_not_configured}"
+        local influx_host="${INFLUXDB_HOST:-192.168.200.12}"
+        local influx_port="${INFLUXDB_PORT:-8086}"
         kubectl create secret generic influxdb-credentials \
-            --from-literal=url="http://192.168.200.12:8086" \
+            --from-literal=url="http://${influx_host}:${influx_port}" \
             --from-literal=token="$influx_token" \
             --from-literal=org="bharatradar" \
-            --from-literal=bucket="metrics" \
+            --from-literal=bucket="raga_flight_radar_db" \
             -n bharatradar 2>/dev/null || true
         log_success "InfluxDB credentials secret created"
     fi
@@ -1228,6 +1239,9 @@ role_hub_run() {
         save_config_value "REDIS_HOST" "${REDIS_HOST}"
         save_config_value "REDIS_PORT" "${REDIS_PORT:-6379}"
         save_config_value "REDIS_PASSWORD" "${REDIS_PASSWORD}"
+        save_config_value "INFLUXDB_HOST" "${INFLUXDB_HOST:-}"
+        save_config_value "INFLUXDB_PORT" "${INFLUXDB_PORT:-8086}"
+        save_config_value "INFLUXDB_ADMIN_TOKEN" "${INFLUXDB_ADMIN_TOKEN:-}"
         save_config_value "MINIO_ENDPOINT" "${MINIO_ENDPOINT}"
         save_config_value "MINIO_HOST" "${MINIO_HOST:-}"
         save_config_value "MINIO_PORT" "${MINIO_PORT:-9000}"
