@@ -17,8 +17,8 @@
 #
 # Online install:
 #   curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash
-#   curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- hub
-#   curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- uninstall shared-services
+#   ARG1=hub curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash
+#   ARG1=uninstall ARG2=shared-services curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash
 
 set -eo pipefail
 
@@ -508,27 +508,22 @@ EOF
 main() {
     load_config
 
-    # When piped (curl | bash -s -- arg1 arg2), the arguments after -- should become $@
-    # But since stdin is piped, we need to handle this differently
+    # Handle piped input: curl | bash -s -- arg1 arg2
+    # When using -s with a pipe, stdin is consumed by the script, so we need to use $BASH_ARGV or detect -s mode
+    # The workaround: check for ARG1, ARG2 environment variables or use shopt to get positional parameters
+    
     local command="${1:-}"
     
-    # If running via pipe (curl | sudo bash -s -- uninstall), check if we have args
-    # The -- separates options being passed to the script from piped content
-    # Arguments after -- should be available via $@ but we need to capture them
-    if [ -z "$command" ] && [ $# -gt 0 ]; then
-        # Retry - try to get from $@
-        command="${1:-}"
+    # If command is empty but we have arguments passed via -- after -s
+    # This is a bash limitation with piped input + -s
+    # Workaround: support ARG1, ARG2 env vars as alternative to positional args
+    if [ -z "$command" ] && [ -n "${ARG1:-}" ]; then
+        command="$ARG1"
     fi
     
-    # Handle uninstall command - if empty, check if we have remaining args (from -- )
+    # Fallback: if still empty and we have positional params (should work with normal execution)
     if [ -z "$command" ]; then
-        # Check if there are arguments passed after -s --
-        for arg in "$@"; do
-            if [ -n "$arg" ]; then
-                command="$arg"
-                break
-            fi
-        done
+        command="${1:-}"
     fi
 
     # Check for --conf-file option early to support silent installs
