@@ -76,6 +76,12 @@ prompt_input() {
     local result_var="$3"
     local input
 
+    # In silent mode with default, use default without prompting
+    if [ -n "${SILENT_MODE:-}" ] && [ -n "$default_value" ]; then
+        printf -v "$result_var" '%s' "$default_value"
+        return
+    fi
+
     if [ -n "$default_value" ]; then
         read -rp "${prompt_msg} [${default_value}]: " input < /dev/tty
         printf -v "$result_var" '%s' "${input:-$default_value}"
@@ -89,6 +95,11 @@ prompt_confirm() {
     local prompt_msg="$1"
     local default_value="${2:-y}"
     local response
+
+    # In silent mode, use default without prompting
+    if [ -n "${SILENT_MODE:-}" ]; then
+        return 0
+    fi
 
     if [ "$default_value" = "y" ]; then
         read -rp "${prompt_msg} [Y/n]: " response < /dev/tty
@@ -107,6 +118,12 @@ prompt_select() {
     local result_var="${@: -1}"
     local i=1
     local choice
+
+    # In silent mode, use first option
+    if [ -n "${SILENT_MODE:-}" ]; then
+        printf -v "$result_var" '%s' "${options[0]}"
+        return 0
+    fi
 
     echo "$prompt_msg"
     for option in "${options[@]}"; do

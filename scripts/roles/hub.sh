@@ -1170,7 +1170,8 @@ role_hub_run() {
 
     # Delete stale config files
     log_info "Deleting stale config files..."
-    rm -rf /etc/bharatradar/ 2>/dev/null || true
+    rm -rf /etc/bharatradar/.install-progress 2>/dev/null || true
+    rm -rf /etc/bharatradar/.config.partial 2>/dev/null || true
 
     log_success "Cleanup complete"
     echo ""
