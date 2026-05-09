@@ -33,6 +33,7 @@ templating_generate_kustomization() {
     local shared_host="${8:-${REDIS_HOST:-192.168.200.12}}"
 
     log_info "Using shared services host for templating: ${shared_host}"
+    log_info "If this is wrong, set REDIS_HOST env var or pass it as 8th parameter"
 
     # Export so patch function can use it
     export shared_host
