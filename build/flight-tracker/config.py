@@ -17,6 +17,7 @@ def _env(key, default=None):
 class Config:
     DEBUG_MODE = True
     APP_NAME = "raga_flight_status"
+    WEBSOCKET_ENABLED = _env("WEBSOCKET_ENABLED", "true").lower() in ("true", "1", "yes")
     
     # 🎛️ MASTER AI TOGGLE (For ZeroClaw Agent)
     USE_LOCAL_LLM = False 

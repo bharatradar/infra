@@ -1721,8 +1721,9 @@ class FlightMonitor:
                 asyncio.create_task(self.janitor_worker()),
                 asyncio.create_task(self.radar_producer()),
                 asyncio.create_task(self.radar_consumer()),
-                asyncio.create_task(self.websocket_broadcaster())
             ]
+            if getattr(Config, 'WEBSOCKET_ENABLED', True):
+                tasks.append(asyncio.create_task(self.websocket_broadcaster()))
             
             logger.info("✅ All Radar tasks spawned successfully.")
             await asyncio.gather(*tasks)

@@ -11,6 +11,7 @@ data:
   DEBUG_MODE: "false"
   USE_K3S_DATA_PRIMARY: "false"
   FLIGHTAWARE_ROUTE_ENABLED: "true"
+  WEBSOCKET_ENABLED: "false"
   
   # Polling Intervals
   RADAR_FETCH_INTERVAL_SEC: "10"

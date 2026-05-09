@@ -739,11 +739,11 @@ role_hub_deploy_services() {
     # Initialize overlay
     templating_init
 
-    # Generate templated manifests (pass REDIS_HOST as 8th param for IP replacement)
+    # Generate templated manifests (pass REDIS_HOST as 8th param, FRP_TOKEN as 9th)
     templating_generate_kustomization \
         "${SCRIPT_DIR}/../manifests/default" \
         "$BASE_DOMAIN" "$READSB_LAT" "$READSB_LON" "$TIMEZONE" \
-        "${FRP_SERVER:-}" "$API_SALT" "${FRP_TOKEN:-}" "${REDIS_HOST:-192.168.200.12}"
+        "${FRP_SERVER:-}" "$API_SALT" "${REDIS_HOST:-192.168.200.12}" "${FRP_TOKEN:-}"
 
     # Install kustomize if needed
     if ! command -v kustomize &>/dev/null; then

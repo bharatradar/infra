@@ -31,6 +31,7 @@ templating_generate_kustomization() {
     local frp_server="${6:-}"
     local api_salt="${7:-}"
     local shared_host="${8:-${REDIS_HOST:-192.168.200.12}}"
+    local frp_token_arg="${9:-}"
 
     log_info "Using shared services host for templating: ${shared_host}"
     log_info "If this is wrong, set REDIS_HOST env var or pass it as 8th parameter"
@@ -83,7 +84,7 @@ templating_generate_kustomization() {
 
     # Generate FRP client config
     if [ -n "$frp_server" ]; then
-        templating_generate_frpc_config "$frp_server" "$domain" "${8:-}"
+        templating_generate_frpc_config "$frp_server" "$domain" "${frp_token_arg:-}"
     fi
 
     log_success "Overlay generated in ${OVERLAY_DIR}"
