@@ -134,6 +134,7 @@ templating_patch_shared_services() {
     fi
     
     log_success "Patched ${ip_to_use} in all manifest files"
+}
 
 # Patch resources.yaml: replace all domain references
 templating_patch_resources() {

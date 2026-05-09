@@ -708,7 +708,11 @@ role_hub_deploy_services() {
     fi
 
     # Apply shared resources first
-    kubectl apply -f "${OVERLAY_DIR}/resources.yaml" -n bharatradar 2>/dev/null || true
+    if [ -f "${OVERLAY_DIR}/resources.yaml" ]; then
+        kubectl apply -f "${OVERLAY_DIR}/resources.yaml" -n bharatradar || log_error "Failed to apply resources.yaml"
+    else
+        log_error "resources.yaml not found in overlay: ${OVERLAY_DIR}"
+    fi
 
     # Helper: deploy a component and strip ServiceMonitor resources
     deploy_component() {
