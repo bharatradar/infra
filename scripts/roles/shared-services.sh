@@ -442,13 +442,15 @@ role_shared_services_install_influxdb() {
         rm -f /usr/bin/influxd /usr/bin/influx 2>/dev/null || true
     fi
     
-    # Skip if there's a broken package - just log and continue
-    log_info "Checking for InfluxDB..."
-    if dpkg -l 2>/dev/null | grep -q "^.i.*influxdb2"; then
-        log_warn "Found broken influxdb2 package - will skip InfluxDB installation"
-        log_warn "To fix manually: sudo dpkg --remove --force-all influxdb2"
-        return 0
-    fi
+    # Purge any broken influxdb2 packages from dpkg before install
+    log_info "Checking for broken InfluxDB packages in dpkg..."
+    for p in influxdb2 influxdb2-cli influxdb; do
+        if dpkg -l "$p" 2>/dev/null | grep -q "^.i\|^iU\|^iF" 2>/dev/null; then
+            log_warn "Purging broken package: $p"
+            dpkg --purge --force-all "$p" 2>/dev/null || true
+            sed -i "/^Package: $p$/,/^$/d" /var/lib/dpkg/status 2>/dev/null || true
+        fi
+    done
     
     local os
     os=$(detect_os)
@@ -484,31 +486,66 @@ role_shared_services_install_influxdb() {
 role_shared_services_configure_influxdb() {
     log_step "Configuring InfluxDB"
 
-    # Start InfluxDB if not running
+    # Stop and wipe old data to ensure clean setup with new token
+    systemctl stop influxdb 2>/dev/null || true
+    rm -rf /var/lib/influxdb2/engine /var/lib/influxdb2/influxd.bolt 2>/dev/null || true
+    systemctl reset-failed influxdb 2>/dev/null || true
     systemctl enable influxdb 2>/dev/null || true
     systemctl start influxdb 2>/dev/null || true
 
-    sleep 3
+    sleep 5
 
-    if systemctl is-active --quiet influxdb 2>/dev/null; then
-        log_info "Setting up InfluxDB initial config..."
-
-        # Setup via CLI (InfluxDB 2.x)
-        if command -v influx &>/dev/null; then
-            influx setup \
-                --username admin \
-                --password "${INFLUXDB_ADMIN_TOKEN}" \
-                --org bharatradar \
-                --bucket metrics \
-                --token "${INFLUXDB_ADMIN_TOKEN}" \
-                --force 2>/dev/null || {
-                    log_warn "InfluxDB setup failed (may already be configured)"
-                }
-        fi
-
-        log_success "InfluxDB configured"
-    else
+    if ! systemctl is-active --quiet influxdb 2>/dev/null; then
         log_warn "InfluxDB service not available (may not be installed for this OS/arch)"
+        return 0
+    fi
+
+    log_info "Setting up InfluxDB initial config..."
+
+    local onboard_ok=false
+
+    # Try CLI first
+    if command -v influx &>/dev/null; then
+        if influx setup \
+            --username admin \
+            --password "${INFLUXDB_ADMIN_TOKEN}" \
+            --org bharatradar \
+            --bucket metrics \
+            --token "${INFLUXDB_ADMIN_TOKEN}" \
+            --force; then
+            onboard_ok=true
+        else
+            log_warn "influx CLI setup failed, trying API..."
+        fi
+    fi
+
+    # API fallback
+    if [ "$onboard_ok" = false ]; then
+        log_info "Setting up via InfluxDB API..."
+        local api_result
+        api_result=$(curl -s -X POST http://localhost:8086/api/v2/setup \
+            -H "Content-Type: application/json" \
+            -d "$(cat <<EOJSON
+{
+    "username": "admin",
+    "password": "${INFLUXDB_ADMIN_TOKEN}",
+    "org": "bharatradar",
+    "bucket": "metrics",
+    "token": "${INFLUXDB_ADMIN_TOKEN}"
+}
+EOJSON
+)" 2>&1)
+        if echo "$api_result" | grep -q '"code"\|"error"'; then
+            log_error "InfluxDB API setup failed: $(echo "$api_result" | head -c 200)"
+        else
+            onboard_ok=true
+        fi
+    fi
+
+    if [ "$onboard_ok" = true ]; then
+        log_success "InfluxDB configured with new token"
+    else
+        log_warn "InfluxDB setup may not be complete - verify manually"
     fi
 }
 
