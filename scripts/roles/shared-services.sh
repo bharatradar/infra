@@ -165,6 +165,20 @@ role_shared_services_install_postgresql() {
                 ;;
         esac
         log_success "PostgreSQL installed"
+        # Fix dpkg and ensure psql is in PATH (alternatives may not fire when dpkg is broken)
+        dpkg --configure -a --force-all 2>/dev/null || true
+        apt-get install -f -y 2>/dev/null || true
+        if ! command -v psql &>/dev/null; then
+            local pg_bin
+            pg_bin=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | head -1)
+            if [ -n "$pg_bin" ] && [ -x "$pg_bin/psql" ]; then
+                ln -sf "$pg_bin/psql" /usr/bin/psql
+                ln -sf "$pg_bin/pg_isready" /usr/bin/pg_isready
+                ln -sf "$pg_bin/pg_dump" /usr/bin/pg_dump
+                ln -sf "$pg_bin/pg_config" /usr/bin/pg_config
+                hash -r 2>/dev/null || true
+            fi
+        fi
     fi
 
     # Ensure the cluster actually exists and has a data directory
