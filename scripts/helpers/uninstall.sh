@@ -399,9 +399,15 @@ uninstall_shared_services_nuclear_cleanup() {
     sudo rm -rf /var/log/influxdb* 2>/dev/null || true
 
     # Remove package manager cruft (broken package states)
-    sudo rm -rf /var/lib/dpkg/info/influxdb2* 2>/dev/null || true
+    log_info "Purging broken package states from dpkg..."
+    sudo rm -rf /var/lib/dpkg/info/influxdb2* /var/lib/dpkg/info/influxdb2-cli* 2>/dev/null || true
     sudo rm -rf /var/lib/dpkg/info/redis* 2>/dev/null || true
     sudo rm -rf /var/lib/dpkg/info/postgresql* 2>/dev/null || true
+    sudo rm -rf /var/lib/dpkg/info/minio* 2>/dev/null || true
+    # Fully purge these packages from dpkg so apt treats them as cleanly removed
+    for pkg in $(dpkg -l 2>/dev/null | awk '/postgresql|redis|influxdb|minio/{print $2}'); do
+        sudo dpkg --purge --force-remove-reinstreq "$pkg" 2>/dev/null || true
+    done
     sudo dpkg --configure -a 2>/dev/null || true
 
     # Clean apt
