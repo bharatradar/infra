@@ -1,5 +1,5 @@
 #!/bin/bash
-# BharatRadar Infrastructure Installer v5.7.19
+# BharatRadar Infrastructure Installer v5.7.20
 #
 # Main entry point for all installation workflows.
 # Supports interactive mode and non-interactive (role-based) mode.
@@ -23,7 +23,7 @@
 
 set -eo pipefail
 
-VERSION="5.7.19"
+VERSION="5.7.20"
 
 # Determine script directory
 # When piped (curl | bash), BASH_SOURCE is empty — we do a shallow clone instead
@@ -534,6 +534,7 @@ main() {
         fi
         log_info "Loading config from: $conf_file"
         source "$conf_file"
+        SILENT_MODE=1
         command="${3:-}"
     fi
 

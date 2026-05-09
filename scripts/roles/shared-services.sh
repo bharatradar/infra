@@ -44,34 +44,29 @@ role_shared_services_collect_config() {
     echo "  History service will use MinIO as its S3-compatible storage backend."
     echo ""
 
-    # Detect local IP for smart default
-    local detected_ip
-    detected_ip=$(detect_local_ip || echo "192.168.200.1")
+    # Use pre-set values from config file or prompt
+    if [ -z "${DB_LISTEN_IP:-}" ]; then
+        local detected_ip
+        detected_ip=$(detect_local_ip || echo "192.168.200.1")
+        prompt_input "Database listen IP" "$detected_ip" DB_LISTEN_IP
+        while ! validate_ip "$DB_LISTEN_IP"; do
+            log_error "Invalid IP address"
+            prompt_input "Database listen IP" "$DB_LISTEN_IP" DB_LISTEN_IP
+        done
+    fi
 
-    prompt_input "Database listen IP" "$detected_ip" DB_LISTEN_IP
+    if [ -z "${DB_PORT:-}" ]; then
+        prompt_input "PostgreSQL port" "5432" DB_PORT
+    fi
 
-    while ! validate_ip "$DB_LISTEN_IP"; do
-        log_error "Invalid IP address"
-        prompt_input "Database listen IP" "$DB_LISTEN_IP" DB_LISTEN_IP
-    done
-
-    # PostgreSQL port
-    prompt_input "PostgreSQL port" "5432" DB_PORT
-
-    # Generate passwords
-    DB_PASSWORD=$(generate_secret)
-    DB_USER="k3s"
-    DB_NAME="k3s"
-
-    # Redis password
-    REDIS_PASSWORD=$(generate_secret)
-
-    # InfluxDB
-    INFLUXDB_ADMIN_TOKEN=$(generate_secret)
-
-    # MinIO
-    MINIO_ROOT_USER="minioadmin"
-    MINIO_ROOT_PASSWORD=$(generate_secret)
+    # Use pre-set passwords from config file or generate
+    DB_PASSWORD="${DB_PASSWORD:-$(generate_secret)}"
+    DB_USER="${DB_USER:-k3s}"
+    DB_NAME="${DB_NAME:-k3s}"
+    REDIS_PASSWORD="${REDIS_PASSWORD:-$(generate_secret)}"
+    INFLUXDB_ADMIN_TOKEN="${INFLUXDB_ADMIN_TOKEN:-$(generate_secret)}"
+    MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
+    MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-$(generate_secret)}"
 
     echo ""
     log_step "Generated Credentials"
