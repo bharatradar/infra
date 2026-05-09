@@ -274,43 +274,44 @@ select_role() {
     echo ""
 }
 
-# Auto-select role if provided via environment (for non-interactive use)
-if [ -n "${ROLE:-}" ]; then
-    case "$ROLE" in
-        hub)
-            SUB_ROLE="${SUB_ROLE:-primary}"
-            log_info "Auto-selected role: hub"
-            ;;
-        ha-server)
-            SUB_ROLE="${SUB_ROLE:-secondary}"
-            log_info "Auto-selected role: ha-server"
-            ;;
-        worker)
-            SUB_ROLE="${SUB_ROLE:-agent}"
-            log_info "Auto-selected role: worker"
-            ;;
-        shared-services|aggregator)
-            ROLE="shared-services"
-            SUB_ROLE="${SUB_ROLE:-primary}"
-            log_info "Auto-selected role: shared-services"
-            ;;
-        feeder)
-            log_info "Auto-selected role: feeder"
-            ;;
-        frp-server)
-            log_info "Auto-selected role: frp-server"
-            ;;
-        *)
-            log_error "Unknown role: ${ROLE}"
-            exit 1
-            ;;
-    esac
-    # Skip interactive selection - go directly to run_role
-    return
-else
-    # Interactive role selection
-    select_role
-fi
+# Auto-set role if provided via environment
+setup_role() {
+    if [ -n "${ROLE:-}" ]; then
+        case "$ROLE" in
+            hub)
+                SUB_ROLE="${SUB_ROLE:-primary}"
+                log_info "Auto-selected role: hub"
+                ;;
+            ha-server)
+                SUB_ROLE="${SUB_ROLE:-secondary}"
+                log_info "Auto-selected role: ha-server"
+                ;;
+            worker)
+                SUB_ROLE="${SUB_ROLE:-agent}"
+                log_info "Auto-selected role: worker"
+                ;;
+            shared-services|aggregator)
+                ROLE="shared-services"
+                SUB_ROLE="${SUB_ROLE:-primary}"
+                log_info "Auto-selected role: shared-services"
+                ;;
+            feeder)
+                log_info "Auto-selected role: feeder"
+                ;;
+            frp-server)
+                log_info "Auto-selected role: frp-server"
+                ;;
+            *)
+                log_error "Unknown role: ${ROLE}"
+                exit 1
+                ;;
+        esac
+    else
+        select_role
+    fi
+}
+
+setup_role
 
 # Run the selected role
 run_role() {
