@@ -1,5 +1,5 @@
 #!/bin/bash
-# BharatRadar Infrastructure Installer v5.7.21
+# BharatRadar Infrastructure Installer v5.7.22
 #
 # Main entry point for all installation workflows.
 # Supports interactive mode and non-interactive (role-based) mode.
@@ -23,7 +23,7 @@
 
 set -eo pipefail
 
-VERSION="5.7.21"
+VERSION="5.7.22"
 
 # Determine script directory
 # When piped (curl | bash), BASH_SOURCE is empty — we do a shallow clone instead
@@ -517,8 +517,9 @@ main() {
     if [ "$command" = "--fresh" ]; then
         log_info "Fresh install mode: clearing previous checkpoints"
         rm -f /etc/bharatradar/.install-progress 2>/dev/null || true
-        command="${ARG2:-${2:-}}"
-        arg2="${ARG3:-${3:-}}"
+        shift 1
+        command="${1:-}"
+        arg2="${2:-}"
     fi
 
     # Check for --conf-file option early to support silent installs
@@ -535,10 +536,12 @@ main() {
         log_info "Loading config from: $conf_file"
         source "$conf_file"
         SILENT_MODE=1
-        command="${3:-}"
+        shift 2
+        command="${1:-}"
+        arg2="${2:-}"
     fi
 
-    if [ "$command" = "--conf-file" ] && [ -z "${3:-}" ]; then
+    if [ "$command" = "--conf-file" ] && [ -z "${1:-}" ]; then
         log_error "Usage: $command <config-file> <role>"
         exit 1
     fi
