@@ -45,8 +45,7 @@ templating_generate_kustomization() {
         "ai-agents.yaml"
         "telegram-bot.yaml"
         "flight-tracker.yaml"
-        "schedule-downloader-manual-job.yaml"
-        "schedule-downloader-cronjob.yaml"
+        "schedule-downloader.yaml"
     )
     for f in "${files[@]}"; do
         local src="${base_dir}/${f}"
@@ -60,7 +59,7 @@ templating_generate_kustomization() {
     
     # Copy subdirs if exist
     [ -d "${base_dir}/cortex-webapp" ] && cp -r "${base_dir}/cortex-webapp" "${OVERLAY_DIR}/"
-    [ -d "${base_dir}/schedule-downloader-cronjob" ] && cp -r "${base_dir}/schedule-downloader-cronjob" "${OVERLAY_DIR}/"
+
 
     # Patch shared services IPs in overlay copies
     templating_patch_shared_services
@@ -125,13 +124,9 @@ templating_patch_shared_services() {
         sed -i "s/SHARED_SERVICES_HOST/${ip_to_use}/g" "${OVERLAY_DIR}/cortex-webapp/default/deployment.yaml"
         log_info "Patched cortex-webapp"
     fi
-    if [ -f "${OVERLAY_DIR}/schedule-downloader-manual-job.yaml" ]; then
-        sed -i "s/SHARED_SERVICES_HOST/${ip_to_use}/g" "${OVERLAY_DIR}/schedule-downloader-manual-job.yaml"
-        log_info "Patched schedule-downloader-manual-job"
-    fi
-    if [ -f "${OVERLAY_DIR}/schedule-downloader-cronjob.yaml" ]; then
-        sed -i "s/SHARED_SERVICES_HOST/${ip_to_use}/g" "${OVERLAY_DIR}/schedule-downloader-cronjob.yaml"
-        log_info "Patched schedule-downloader-cronjob"
+    if [ -f "${OVERLAY_DIR}/schedule-downloader.yaml" ]; then
+        sed -i "s/SHARED_SERVICES_HOST/${ip_to_use}/g" "${OVERLAY_DIR}/schedule-downloader.yaml"
+        log_info "Patched schedule-downloader"
     fi
     
     log_success "Patched ${ip_to_use} in all manifest files"
