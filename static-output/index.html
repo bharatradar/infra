@@ -207,8 +207,8 @@
             const minAlpha = 0.35;
             const center = { x: 25, y: 50 };
             blips.forEach(el => {
-                const left = parseFloat(el.style.left);
-                const top = parseFloat(el.style.top);
+                const left = parseFloat(getComputedStyle(el).left);
+                const top = parseFloat(getComputedStyle(el).top);
                 const dx = left - center.x;
                 const dy = top - center.y;
                 let angle = Math.atan2(dx, -dy) * 180 / Math.PI;
