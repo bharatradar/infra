@@ -106,6 +106,101 @@
                 left: 0;
             }
         }
+
+        /* Fullscreen preferences panel */
+        #fs-preferences-panel {
+            transform-origin: top right;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            max-height: calc(100vh - 60px);
+            overflow-y: auto;
+        }
+        #fs-preferences-panel.hidden {
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+        }
+        #fs-preferences-panel select {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 0.5rem center;
+            background-size: 12px;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+        /* Fullscreen layer buttons */
+        #fs-preferences-panel .layer-btn.active {
+            background-color: #1e40af;
+            color: white;
+        }
+        #fs-preferences-panel .layer-btn:not(.active) {
+            background-color: #1f2937;
+            color: #d1d5db;
+        }
+        #fs-preferences-panel .layer-btn:not(.active):hover {
+            background-color: #374151;
+        }
+        /* Toggle switch */
+        .fs-toggle {
+            position: relative;
+            display: inline-flex;
+            width: 36px;
+            height: 20px;
+            cursor: pointer;
+        }
+        .fs-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .fs-toggle .slider {
+            position: absolute;
+            inset: 0;
+            background-color: #4b5563;
+            border-radius: 20px;
+            transition: 0.2s;
+        }
+        .fs-toggle .slider::before {
+            content: '';
+            position: absolute;
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            border-radius: 50%;
+            transition: 0.2s;
+        }
+        .fs-toggle input:checked + .slider {
+            background-color: #2563eb;
+        }
+        .fs-toggle input:checked + .slider::before {
+            transform: translateX(16px);
+        }
+        /* Range slider */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 4px;
+            background: #374151;
+            border-radius: 2px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+        }
+        /* Trail legend */
+        .trail-legend {
+            background: linear-gradient(to right, #d98e26, #d9d926, #26d94a, #26d9d9, #d926d9);
+            height: 6px;
+            border-radius: 3px;
+            width: 100%;
+        }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-200 h-screen flex overflow-hidden font-sans selection:bg-blue-500 selection:text-white">
@@ -716,8 +811,68 @@
                 <span class="text-cyan-400 font-bold text-lg">🛰️ RADAR</span>
                 <span id="fullscreen-radar-count" class="text-white font-mono text-sm">-- aircraft</span>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
                 <span id="radar-status" class="text-gray-400 text-xs">Connected</span>
+                <div class="relative">
+                    <button onclick="toggleFullscreenPreferences()" id="fs-prefs-btn" class="text-gray-400 hover:text-white p-1.5 rounded hover:bg-gray-800 transition text-sm" title="Preferences">
+                        <i class="fa-solid fa-sliders"></i>
+                    </button>
+                    <div id="fs-preferences-panel" class="hidden absolute top-full right-0 mt-1 w-[280px] bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-40 p-4 text-xs">
+                        <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-700">
+                            <span class="text-gray-300 font-bold tracking-wide uppercase text-[10px]"><i class="fa-solid fa-sliders mr-1 text-blue-400"></i> Preferences</span>
+                            <button onclick="toggleFullscreenPreferences()" class="text-gray-500 hover:text-white transition"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+
+                        <!-- Base Map -->
+                        <div class="mb-3">
+                            <div class="text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-1.5">Base Map</div>
+                            <div class="grid grid-cols-2 gap-1">
+                                <button onclick="switchFullscreenLayer('carto_dark')" class="fs-layer-btn text-left px-2 py-1 rounded text-[10px] font-medium transition active" data-layer="carto_dark">🌙 Dark</button>
+                                <button onclick="switchFullscreenLayer('carto_voyager')" class="fs-layer-btn text-left px-2 py-1 rounded text-[10px] font-medium transition" data-layer="carto_voyager">☀️ Light</button>
+                                <button onclick="switchFullscreenLayer('osm')" class="fs-layer-btn text-left px-2 py-1 rounded text-[10px] font-medium transition" data-layer="osm">🗺️ OSM</button>
+                                <button onclick="switchFullscreenLayer('openfreemap_bright')" class="fs-layer-btn text-left px-2 py-1 rounded text-[10px] font-medium transition" data-layer="openfreemap_bright">🆓 OpenFree</button>
+                                <button onclick="switchFullscreenLayer('esri_satellite')" class="fs-layer-btn text-left px-2 py-1 rounded text-[10px] font-medium transition" data-layer="esri_satellite">🛰️ Satellite</button>
+                            </div>
+                        </div>
+
+                        <div class="h-px bg-gray-700 my-2"></div>
+
+                        <!-- Toggles -->
+                        <div class="space-y-2.5">
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-300">🌙 Dim Map</span>
+                                <label class="fs-toggle"><input type="checkbox" id="fs-pref-dim" onchange="toggleFullscreenDimming()"><span class="slider"></span></label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-300">🏷️ Type Labels</span>
+                                <label class="fs-toggle"><input type="checkbox" id="fs-pref-labels" checked onchange="toggleFullscreenLabels()"><span class="slider"></span></label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-300">〰️ Altitude Trails</span>
+                                <label class="fs-toggle"><input type="checkbox" id="fs-pref-trails" onchange="toggleFullscreenTrails()"><span class="slider"></span></label>
+                            </div>
+                        </div>
+
+                        <div class="h-px bg-gray-700 my-2"></div>
+
+                        <!-- Aircraft Size -->
+                        <div class="mb-3">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-gray-400 font-bold uppercase tracking-wider text-[9px]">Aircraft Size</span>
+                                <span class="text-blue-400 font-mono text-[10px]" id="fs-pref-size-val">1.0x</span>
+                            </div>
+                            <input type="range" id="fs-pref-size" min="0.5" max="2.0" step="0.1" value="1.0" oninput="setFullscreenAircraftSize(this.value)" class="w-full">
+                        </div>
+
+                        <!-- Aircraft Type Filter -->
+                        <div class="mb-2">
+                            <div class="text-gray-400 font-bold uppercase tracking-wider text-[9px] mb-1">✈️ Aircraft Type Filter</div>
+                            <select id="fs-pref-type-filter" onchange="setFullscreenTypeFilter(this.value)" class="w-full bg-gray-800 border border-gray-700 text-gray-200 rounded-lg px-2 py-1.5 text-xs outline-none cursor-pointer">
+                                <option value="ALL">All Types</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
                 <button onclick="toggleFullscreen()" class="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-500 transition">
                     <i class="fa-solid fa-compress mr-1"></i> Exit
                 </button>

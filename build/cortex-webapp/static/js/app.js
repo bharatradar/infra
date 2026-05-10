@@ -26,9 +26,6 @@ async function loadFrontendConfig() {
 
 // --- WebSocket Configuration ---
 // Values are overridden by FRONTEND_CONFIG from backend
-let WS_ENABLED = FRONTEND_CONFIG.ws_enabled;
-let WS_USE_FOR_RADAR = FRONTEND_CONFIG.ws_use_for_radar;
-let WS_USE_FOR_ATC = FRONTEND_CONFIG.ws_use_for_atc;
 const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`;
 
 // Store flights from WebSocket for shared use
@@ -56,7 +53,7 @@ function updateMapViewport() {
 }
 
 function initWebSocket() {
-    if (!WS_ENABLED) {
+    if (!FRONTEND_CONFIG.ws_enabled) {
         console.log('[WS] WebSocket disabled, using REST API');
         return;
     }
@@ -116,7 +113,7 @@ function handleWebSocketMessage(msg) {
         // Initial flight data
         console.log('WS: Flight snapshot:', msg.count, 'flights');
         // Store for ATC stats if enabled
-        if (WS_USE_FOR_ATC) {
+        if (FRONTEND_CONFIG.ws_use_for_atc) {
             wsFlightsData = msg.flights || [];
         }
         processFlightData(msg.flights || []);
@@ -125,7 +122,7 @@ function handleWebSocketMessage(msg) {
         if (msg.data) {
             updateSingleFlight(msg.data);
             // Update stored data
-            if (WS_USE_FOR_ATC) {
+            if (FRONTEND_CONFIG.ws_use_for_atc) {
                 const idx = wsFlightsData.findIndex(f => f.hexid === msg.data.hexid);
                 if (idx >= 0) {
                     wsFlightsData[idx] = msg.data;
@@ -150,6 +147,7 @@ function fixLatLon(ac) {
 }
 
 function processFlightData(flights) {
+    const _now = Date.now();
     const newAircraft = {};
     flights.forEach(ac => {
         fixLatLon(ac);
@@ -163,15 +161,30 @@ function processFlightData(flights) {
                 gs: ac.speed || 0,
                 heading: ac.heading || 0,
                 origin: ac.origin || '',
-                destination: ac.destination || ''
+                destination: ac.destination || '',
+                ac_type: ac.ac_type || '',
+                reg: ac.reg || '',
+                desc: ac.desc || ''
             };
+            aircraftLastSeen.set(ac.hexid, _now);
         }
     });
 
+    // Coast missing aircraft
+    Object.keys(radarAircraft).forEach(hex => {
+        if (!newAircraft[hex]) {
+            const lastSeen = aircraftLastSeen.get(hex);
+            if (lastSeen && (_now - lastSeen) < AIRCRAFT_COAST_MS) {
+                newAircraft[hex] = radarAircraft[hex];
+            } else {
+                aircraftLastSeen.delete(hex);
+            }
+        }
+    });
     radarAircraft = newAircraft;
 
     const countEl = document.getElementById('radar-count');
-    if (countEl) countEl.textContent = flights.length;
+    if (countEl) countEl.textContent = Object.keys(radarAircraft).length;
 
     if (!radarCtx) initRadarCanvas();
     if (radarCtx) updateRadarCanvas();
@@ -191,7 +204,10 @@ function updateSingleFlight(flight) {
         gs: flight.speed || 0,
         heading: flight.heading || 0,
         origin: flight.origin || '',
-        destination: flight.destination || ''
+        destination: flight.destination || '',
+        ac_type: flight.ac_type || '',
+        reg: flight.reg || '',
+        desc: flight.desc || ''
     };
 
     if (!radarCtx) initRadarCanvas();
@@ -493,46 +509,9 @@ function getMarkerScale(zoom) {
 }
 
 // ---------------------------------------------------------------------
-// 🛩️ AIRCRAFT TYPE DATABASE & SHAPE SYSTEM (uses tar1090 markers)
+// 🛩️ AIRCRAFT TYPE & SHAPE SYSTEM (uses tar1090 markers)
+// Aircraft type (ac_type/reg/desc) is now enriched server-side in all API responses.
 // ---------------------------------------------------------------------
-let aircraftDB = {};  // { hex: { reg, type, flags, desc } }
-let aircraftDBReady = false;
-
-async function loadAircraftDB() {
-    try {
-        const res = await fetch('/api/aircraft-db?hex_id=000000');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.status === 'success' || data.status === 'not_found') {
-            aircraftDBReady = true;
-            console.log('[AircraftDB] Backend database ready');
-        }
-    } catch (e) {
-        console.warn('[AircraftDB] Failed to check DB status:', e);
-    }
-}
-
-async function fetchAircraftTypes(hexIds) {
-    if (!aircraftDBReady || !hexIds || hexIds.length === 0) return {};
-    const missing = hexIds.filter(h => !aircraftDB[h]);
-    if (missing.length === 0) return aircraftDB;
-    try {
-        const batch = missing.slice(0, 200).join(',');
-        const res = await fetch(`/api/aircraft-db?batch=${batch}`);
-        const data = await res.json();
-        if (data.status === 'success' && data.data) {
-            Object.assign(aircraftDB, data.data);
-        }
-    } catch (e) {
-        console.warn('[AircraftDB] Batch fetch failed:', e);
-    }
-    return aircraftDB;
-}
-
-function getAircraftType(hex) {
-    const entry = aircraftDB[hex];
-    return entry ? entry.type : null;
-}
 
 // Cache for aircraft styles to avoid recreating them every frame
 const _styleCache = new Map();
@@ -553,13 +532,11 @@ function getAircraftStyle(alt, rotation, zoom, isSelected, typeCode, hex) {
             console.log('[tar1090] svgShapeToURI:', typeof svgShapeToURI);
         }
 
-        // Use tar1090 getBaseMarker if available
+        // Use tar1090 getBaseMarker if available (typeCode is server-enriched ac_type)
         let shapeName = 'unknown';
         let shapeScale = 1;
         if (typeof getBaseMarker === 'function') {
-            const dbEntry = hex && aircraftDB[hex];
-            const icaoType = typeCode || (dbEntry ? dbEntry.type : '');
-            const result = getBaseMarker('', icaoType, '', '', 'adsb_icao', alt, false);
+            const result = getBaseMarker('', typeCode || '', '', '', 'adsb_icao', alt, false);
             shapeName = result[0];
             shapeScale = result[1];
         }
@@ -834,6 +811,8 @@ let pendingUpdate = false;
 let animationFrameId = null;
 const aircraftTarget = new Map(); // hex => {lat, lon, heading, speed, timestamp} - API anchor position
 const aircraftDisplay = new Map(); // hex => {lat, lon, velLat, velLon} - smoothed display position with velocity for smoothDamp
+const AIRCRAFT_COAST_MS = 120000; // Keep missing aircraft alive for 120s via dead reckoning
+const aircraftLastSeen = new Map(); // hex => timestamp
 
 // Critically-damped spring smoothing (Unity-style smoothDamp)
 // No overshoot, no wobble, smooth catch-up regardless of frame rate
@@ -956,10 +935,7 @@ function updateOLAircraft(flights) {
     if (pendingUpdate) return;
     pendingUpdate = true;
 
-    // Fetch aircraft types in background
-    const hexIds = flights.map(fl => (fl.hexid || fl.hex || '')).filter(h => h);
-    fetchAircraftTypes(hexIds).then(() => {
-        requestAnimationFrame(() => {
+    const doRender = () => requestAnimationFrame(() => {
             try {
                 const currentHexIds = new Set();
                 const source = olAircraftLayer.getSource();
@@ -971,13 +947,14 @@ function updateOLAircraft(flights) {
                     const hex = fl.hexid || fl.hex;
                     if (!hex) return;
                     currentHexIds.add(hex);
+                    aircraftLastSeen.set(hex, Date.now());
 
                     const lat = parseFloat(fl.lat);
                     const lon = parseFloat(fl.lon);
                     const heading = parseFloat(fl.heading) || 0;
                     const speed = parseFloat(fl.speed) || 0;
                     const alt = parseFloat(fl.alt) || 0;
-                    const typeCode = (aircraftDB[hex] && aircraftDB[hex].type) || fl.ac_type || '';
+                    const typeCode = fl.ac_type || '';
                     
                     // Store API target for smooth transition (includes alt for altitude coloring)
                     aircraftTarget.set(hex, { lat, lon, heading, speed, alt, timestamp: Date.now() });
@@ -1019,15 +996,24 @@ function updateOLAircraft(flights) {
                     }
                 });
 
-                // Remove features for aircraft that are no longer present
+                // Coast missing aircraft via dead reckoning instead of immediate removal
+                const _now = Date.now();
                 Object.keys(olFeatureCache).forEach(hex => {
                     if (!currentHexIds.has(hex)) {
-                        const feature = olFeatureCache[hex];
-                        source.removeFeature(feature);
-                        delete olFeatureCache[hex];
-                        aircraftDisplay.delete(hex);
-                        aircraftTarget.delete(hex);
-                        removed++;
+                        const lastSeen = aircraftLastSeen.get(hex);
+                        if (lastSeen && (_now - lastSeen) < AIRCRAFT_COAST_MS) {
+                            // Keep feature and animation state — interpolateAircraftPositions handles dead reckoning
+                        } else {
+                            const feature = olFeatureCache[hex];
+                            source.removeFeature(feature);
+                            delete olFeatureCache[hex];
+                            aircraftDisplay.delete(hex);
+                            aircraftTarget.delete(hex);
+                            aircraftLastSeen.delete(hex);
+                            removed++;
+                        }
+                    } else {
+                        aircraftLastSeen.set(hex, _now);
                     }
                 });
 
@@ -1044,7 +1030,7 @@ function updateOLAircraft(flights) {
             }
             pendingUpdate = false;
         });
-    });
+    doRender();
 }
 
 function showAircraftPopup(props, pixel) {
@@ -1097,7 +1083,7 @@ let charts = {};
 function createChart(id, type, options = {}) {
     const ctx = document.getElementById(id);
     if(!ctx) return null;
-    charts[id] = new Chart(ctx, { type, data: { labels: [], datasets: [] }, options: { responsive: true, maintainAspectRatio: false, ...options } });
+    charts[id] = new Chart(ctx, { type, data: { labels: [], datasets: [{ data: [] }] }, options: { responsive: true, maintainAspectRatio: false, ...options } });
     return charts[id];
 }
 
@@ -1140,7 +1126,8 @@ function initCharts() {
                     onClick: async (e, elements, chart) => {
                         if (elements.length > 0) {
                             const idx = elements[0].index;
-                            const d = chart.data.datasets[0].data[idx];
+                            const d = chart.data.datasets[0]?.data?.[idx];
+                            if (!d) return;
                             await openDrillDownModal('fleet', d.hex, `Airframe ${d.hex}`);
                         }
                     }
@@ -1413,7 +1400,7 @@ async function fetchATC() {
         let flights = [];
         
         // Use WebSocket data if enabled
-        if (WS_USE_FOR_ATC && wsFlightsData.length > 0) {
+        if (FRONTEND_CONFIG.ws_use_for_atc && wsFlightsData.length > 0) {
             // Filter flights from WebSocket data
             flights = wsFlightsData.filter(ac => {
                 if (f.airline !== 'ALL' && (!ac.callsign || !ac.callsign.startsWith(f.airline))) return false;
@@ -1456,23 +1443,20 @@ async function fetchATC() {
             }
         }
 
-        const active = flights.length;
-        const spd = active > 0 ? flights.reduce((sum, fl) => sum + (fl.speed || 0), 0) / active : 0;
-        const alt = active > 0 ? flights.reduce((sum, fl) => sum + (fl.alt || 0), 0) / active : 0;
+        const _now = Date.now();
+        const spd = flights.length > 0 ? flights.reduce((sum, fl) => sum + (fl.speed || 0), 0) / flights.length : 0;
+        const alt = flights.length > 0 ? flights.reduce((sum, fl) => sum + (fl.alt || 0), 0) / flights.length : 0;
         
-        const countEl = document.getElementById('radar-count');
         const spdEl = document.getElementById('atc-spd');
         const altEl = document.getElementById('atc-alt');
-        
-        if (countEl) countEl.innerText = active || '0';
         if (spdEl) spdEl.innerText = Math.round(spd) + ' kts';
         if (altEl) altEl.innerText = Math.round(alt).toLocaleString() + ' ft';
         
-        radarAircraft = {};
+        const _newRadar = {};
         flights.forEach(ac => {
             if (ac.lat && ac.lon) {
                 const hex = ac.hexid || ac.hex || 'unknown';
-                radarAircraft[hex] = {
+                _newRadar[hex] = {
                     hex: hex,
                     callsign: ac.callsign || '',
                     lat: parseFloat(ac.lat),
@@ -1481,10 +1465,28 @@ async function fetchATC() {
                     gs: parseFloat(ac.speed) || 0,
                     heading: parseFloat(ac.heading) || 0,
                     origin: ac.origin || '',
-                    destination: ac.destination || ''
+                    destination: ac.destination || '',
+                    ac_type: ac.ac_type || '',
+                    reg: ac.reg || '',
+                    desc: ac.desc || ''
                 };
+                aircraftLastSeen.set(hex, _now);
             }
         });
+        // Coast missing aircraft: keep them in radarAircraft for a while via dead reckoning
+        Object.keys(radarAircraft).forEach(hex => {
+            if (!_newRadar[hex]) {
+                const lastSeen = aircraftLastSeen.get(hex);
+                if (lastSeen && (_now - lastSeen) < AIRCRAFT_COAST_MS) {
+                    _newRadar[hex] = radarAircraft[hex];
+                } else {
+                    aircraftLastSeen.delete(hex);
+                }
+            }
+        });
+        radarAircraft = _newRadar;
+        const countEl = document.getElementById('radar-count');
+        if (countEl) countEl.innerText = Object.keys(radarAircraft).length || '0';
         
         if (olMapInitialized && map && olAircraftLayer) {
             updateOLAircraft(flights);
@@ -1495,30 +1497,33 @@ async function fetchATC() {
             requestAnimationFrame(() => updateFullscreenAircraft(flights));
         }
         
-        try {
-            const resBands = await fetch(`/api/atc/bands?airline=${f.airline}&airport=${f.airport}`);
-            const bands = await resBands.json();
-            if (charts['bandChart']) {
-                charts['bandChart'].data.labels = bands.map(b => b.band);
-                charts['bandChart'].data.datasets = [{ data: bands.map(b => b.count), backgroundColor: '#3b82f6', borderRadius: 4 }];
-                charts['bandChart'].update();
-            }
-        } catch(e) { console.warn('Bands fetch failed:', e); }
-        
-        try {
-            const resAnom = await fetch(`/api/atc/anomalies?airline=${f.airline}&airport=${f.airport}`);
-            const anom = await resAnom.json();
-            let aHtml = '';
-            anom.forEach(a => {
-                let color = a.anomaly_flag === 'GO_AROUND' ? 'text-yellow-400' : 'text-red-400';
-                aHtml += `<tr onclick="openForensicsModal('${a.hex_id || ''}', '${a.callsign || ''}')" class="hover:bg-gray-800 cursor-pointer">
-                    <td class="py-2 px-1">${a.timestamp ? new Date(a.timestamp).toLocaleTimeString() : '---'}</td>
-                    <td class="py-2 px-1">${a.callsign || '---'}</td>
-                    <td class="py-2 px-1 ${color}">${a.anomaly_flag || a.remark || '---'}</td>
-                </tr>`;
-            });
-            document.getElementById('atc-anomalies').innerHTML = aHtml;
-        } catch(e) { console.warn('Anomalies fetch failed:', e); }
+        if (currentTab === 'atc') {
+            try {
+                const atcRes = await fetch('/api/atc/data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ airline: f.airline, airport: f.airport })
+                });
+                const atcData = await atcRes.json();
+                if (charts['bandChart']) {
+                    const chart = charts['bandChart'];
+                    if (!chart.data.datasets[0]) chart.data.datasets[0] = { data: [] };
+                    chart.data.labels = atcData.bands.map(b => b.band);
+                    chart.data.datasets[0].data = atcData.bands.map(b => b.count);
+                    chart.update('none');
+                }
+                let aHtml = '';
+                atcData.anomalies.forEach(a => {
+                    let color = a.anomaly_flag === 'GO_AROUND' ? 'text-yellow-400' : 'text-red-400';
+                    aHtml += `<tr onclick="openForensicsModal('${a.hex_id || ''}', '${a.callsign || ''}')" class="hover:bg-gray-800 cursor-pointer">
+                        <td class="py-2 px-1">${a.timestamp ? new Date(a.timestamp).toLocaleTimeString() : '---'}</td>
+                        <td class="py-2 px-1">${a.callsign || '---'}</td>
+                        <td class="py-2 px-1 ${color}">${a.anomaly_flag || a.remark || '---'}</td>
+                    </tr>`;
+                });
+                document.getElementById('atc-anomalies').innerHTML = aHtml;
+            } catch(e) { console.warn('ATC data fetch failed:', e); }
+        }
         
     } catch(e) {
         console.error('fetchATC error:', e);
@@ -1780,49 +1785,45 @@ async function fetchOps() {
     if (!charts['turnaroundChart']) return;
     const f = getFilters();
     try {
-        const resSq = await fetch(`/api/ops/squatters?airport=${f.airport}&airline=${f.airline}`);
-        const sq = await resSq.json();
+        const res = await fetch('/api/ops/data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ airport: f.airport, airline: f.airline })
+        });
+        const d = await res.json();
         let sqHtml = '';
-        sq.forEach(s => {
+        d.squatters.forEach(s => {
             let c = s.mins > 90 ? 'text-red-400 font-bold' : 'text-yellow-400';
             let clickAttr = s.hex_id ? `onclick="openForensicsModal('${s.hex_id}', '${s.callsign}')" class="py-2 px-2 text-blue-400 font-bold cursor-pointer hover:text-white"` : `class="py-2 px-2 text-white"`;
             sqHtml += `<tr class="hover:bg-gray-800"><td ${clickAttr}>${s.callsign}</td><td class="py-2 px-2 text-gray-400">${s.airport_display}</td><td class="py-2 px-2 text-right ${c}">${s.mins}m</td></tr>`;
         });
         document.getElementById('ops-squatters').innerHTML = sqHtml || `<tr><td colspan="3" class="p-4 text-center text-gray-500">No squatters.</td></tr>`;
 
-        const resTurn = await fetch(`/api/ops/turnarounds?airport=${f.airport}&airline=${f.airline}`);
-        const tData = await resTurn.json();
-        charts['turnaroundChart'].data.labels = tData.map(d => d.airline_display);
-        charts['turnaroundChart'].data.rawCodes = tData.map(d => d.airline);
-        charts['turnaroundChart'].data.datasets = [{ label: 'Avg Mins', data: tData.map(d => d.time), backgroundColor: '#a855f7', hoverBackgroundColor: '#d8b4fe', borderRadius: 4, minBarLength: 6 }];
+        charts['turnaroundChart'].data.labels = d.turnarounds.map(t => t.airline_display);
+        charts['turnaroundChart'].data.rawCodes = d.turnarounds.map(t => t.airline);
+        charts['turnaroundChart'].data.datasets = [{ label: 'Avg Mins', data: d.turnarounds.map(t => t.time), backgroundColor: '#a855f7', hoverBackgroundColor: '#d8b4fe', borderRadius: 4, minBarLength: 6 }];
         charts['turnaroundChart'].update();
 
-        const resDem = await fetch(`/api/ops/runway_demand?airport=${f.airport}`);
-        const demData = await resDem.json();
-        charts['runwayDemandChart'].data.labels = demData.map(d => d.hour_bucket);
-        charts['runwayDemandChart'].data.datasets = [{ type: 'line', label: 'Max Capacity', data: Array(demData.length).fill(40), borderColor: '#ef4444', borderDash: [5, 5], fill: false, pointRadius: 0 }, { type: 'bar', label: 'Arrivals', data: demData.map(d => d.arrivals), backgroundColor: '#3b82f6', borderRadius: 4 }];
+        charts['runwayDemandChart'].data.labels = d.runway_demand.map(dm => dm.hour_bucket);
+        charts['runwayDemandChart'].data.datasets = [{ type: 'line', label: 'Max Capacity', data: Array(d.runway_demand.length).fill(40), borderColor: '#ef4444', borderDash: [5, 5], fill: false, pointRadius: 0 }, { type: 'bar', label: 'Arrivals', data: d.runway_demand.map(dm => dm.arrivals), backgroundColor: '#3b82f6', borderRadius: 4 }];
         charts['runwayDemandChart'].update();
 
-        const resFleet = await fetch(`/api/ops/fleet_utilization?airline=${f.airline}`);
-        const fleetData = await resFleet.json();
         charts['fleetChart'].data.datasets = [{ 
             label: 'Airframes', 
-            data: fleetData.map(d => ({ 
-                x: d.flights + (Math.random() * 0.4 - 0.2), 
-                y: d.hours + (Math.random() * 0.4 - 0.2), 
-                realX: d.flights,
-                realY: d.hours,
-                hex: d.hex 
+            data: d.fleet_utilization.map(fu => ({ 
+                x: fu.flights + (Math.random() * 0.4 - 0.2), 
+                y: fu.hours + (Math.random() * 0.4 - 0.2), 
+                realX: fu.flights,
+                realY: fu.hours,
+                hex: fu.hex 
             })), 
             backgroundColor: 'rgba(16, 185, 129, 0.6)' 
         }];
         charts['fleetChart'].update();
 
-        const resOtp = await fetch(`/api/ops/otp?airport=${f.airport}&airline=${f.airline}`);
-        const otpData = await resOtp.json();
-        charts['otpChart'].data.labels = otpData.map(d => d.airline_display);
-        charts['otpChart'].data.rawCodes = otpData.map(d => d.airline); 
-        charts['otpChart'].data.datasets = [{ label: 'Avg Delay (Mins)', data: otpData.map(d => d.delay), backgroundColor: otpData.map(d => d.delay > 15 ? '#ef4444' : (d.delay > 0 ? '#f59e0b' : '#10b981')), borderRadius: 4, minBarLength: 6 }];
+        charts['otpChart'].data.labels = d.otp.map(o => o.airline_display);
+        charts['otpChart'].data.rawCodes = d.otp.map(o => o.airline); 
+        charts['otpChart'].data.datasets = [{ label: 'Avg Delay (Mins)', data: d.otp.map(o => o.delay), backgroundColor: d.otp.map(o => o.delay > 15 ? '#ef4444' : (o.delay > 0 ? '#f59e0b' : '#10b981')), borderRadius: 4, minBarLength: 6 }];
         charts['otpChart'].update();
     } catch (e) {}
 }
@@ -1831,41 +1832,37 @@ async function fetchExec() {
     if (!charts['safetyChart']) return;
     const f = getFilters();
     try {
-        const resSafe = await fetch('/api/exec/safety');
-        const sData = await resSafe.json();
-        charts['safetyChart'].data.labels = sData.map(d => d.date);
-        charts['safetyChart'].data.datasets = [{ data: sData.map(d => d.incidents), borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', fill: true, pointBackgroundColor: '#ef4444' }];
+        const res = await fetch('/api/exec/data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ airport: f.airport })
+        });
+        const d = await res.json();
+        charts['safetyChart'].data.labels = d.safety.map(s => s.date);
+        charts['safetyChart'].data.datasets = [{ data: d.safety.map(s => s.incidents), borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', fill: true, pointBackgroundColor: '#ef4444' }];
         charts['safetyChart'].update();
 
-        const resRoutes = await fetch('/api/exec/routes');
-        const routes = await resRoutes.json();
         let rHtml = '';
-        routes.forEach(r => {
+        d.routes.forEach(r => {
             let clickStr = `onclick="openDrillDownModal('route', '${r.origin}|${r.destination}', '${r.origin_display} ✈️ ${r.destination_display}')"`;
             rHtml += `<tr class="hover:bg-gray-800 cursor-pointer transition" ${clickStr}><td class="py-3 font-bold text-blue-400">${r.origin_display}</td><td class="py-3 font-bold text-blue-400">${r.destination_display}</td><td class="py-3 text-right text-white">${r.flights}</td></tr>`;
         });
         document.getElementById('exec-routes').innerHTML = rHtml;
 
-        const resCdo = await fetch('/api/exec/approach_efficiency');
-        const cdoData = await resCdo.json();
-        charts['cdoChart'].data.labels = cdoData.map(d => d.airline_display);
-        charts['cdoChart'].data.rawCodes = cdoData.map(d => d.airline);
-        charts['cdoChart'].data.datasets = [{ label: 'Avg Mins', data: cdoData.map(d => d.time), backgroundColor: '#10b981', borderRadius: 4, minBarLength: 6 }];
+        charts['cdoChart'].data.labels = d.approach_efficiency.map(c => c.airline_display);
+        charts['cdoChart'].data.rawCodes = d.approach_efficiency.map(c => c.airline);
+        charts['cdoChart'].data.datasets = [{ label: 'Avg Mins', data: d.approach_efficiency.map(c => c.time), backgroundColor: '#10b981', borderRadius: 4, minBarLength: 6 }];
         charts['cdoChart'].update();
 
-        const resUns = await fetch(`/api/exec/unscheduled?airport=${f.airport}`);
-        const unsData = await resUns.json();
         let uHtml = '';
-        unsData.forEach(u => {
+        d.unscheduled.forEach(u => {
             let clickAttr = u.hex_id ? `onclick="openForensicsModal('${u.hex_id}', '${u.callsign}')" class="py-2 font-bold text-blue-400 cursor-pointer hover:text-white"` : `class="py-2 font-bold text-white"`;
             uHtml += `<tr><td class="py-2 text-gray-500">${u.time}</td><td ${clickAttr}>${u.callsign}</td><td class="py-2">${u.airport_display}</td></tr>`;
         });
         document.getElementById('exec-unscheduled').innerHTML = uHtml || `<tr><td colspan="3" class="p-4 text-center text-gray-500">No ghost flights.</td></tr>`;
 
-        const resTrain = await fetch(`/api/exec/training?airport=${f.airport}`);
-        const trData = await resTrain.json();
         let trHtml = '';
-        trData.forEach(t => trHtml += `<tr class="hover:bg-gray-800"><td class="py-2 font-bold text-white px-2">${t.airport_display}</td><td class="py-2 text-right text-blue-400 px-2">${t.tg_count}</td></tr>`);
+        d.training.forEach(t => trHtml += `<tr class="hover:bg-gray-800"><td class="py-2 font-bold text-white px-2">${t.airport_display}</td><td class="py-2 text-right text-blue-400 px-2">${t.tg_count}</td></tr>`);
         document.getElementById('exec-training').innerHTML = trHtml || `<tr><td colspan="2" class="p-4 text-center text-gray-500">No training data recorded.</td></tr>`;
     } catch (e) {}
 }
@@ -1905,9 +1902,6 @@ async function init() {
     // Load frontend config first (before any polling starts)
     await loadFrontendConfig();
 
-    // Load tar1090 aircraft type database
-    loadAircraftDB();
-
     setTodayAsDefaultDate();
 
     // Wait for both Leaflet and Chart.js CDNs to download and build before fetching API data
@@ -1930,7 +1924,7 @@ init();
 let fetchATCTimer = null;
 function startFetchATC() {
     // Only poll REST API if WebSocket is not enabled for ATC
-    if (WS_USE_FOR_ATC && WS_ENABLED) {
+    if (FRONTEND_CONFIG.ws_use_for_atc && FRONTEND_CONFIG.ws_enabled) {
         console.log('[WS] ATC using WebSocket - skipping REST polling');
         return;
     }
@@ -2167,8 +2161,18 @@ let radarCtx = null;
 let radarLoop = null;
 let fullscreenMap = null;
 let fullscreenAircraftLayer = null;
-let fullscreenOlInitialized = false;
+let fullscreenTrailLayer = null;
+let fullscreenDimOverlay = null;
+var fullscreenOlInitialized = false;
 let fullscreenFeatureCache = {};
+let fullscreenBaseLayers = {};
+let fsActiveLayerName = 'carto_dark';
+let fsShowTypeLabels = true;
+let fsShowTrails = false;
+let fsAircraftScale = 1.0;
+let fsTypeFilter = 'ALL';
+// Trail position history: hex -> [{lat, lon, alt}, ...] (max 60 entries)
+let aircraftTrails = {};
 
 function toggleFullscreen() {
     radarFullscreen = !radarFullscreen;
@@ -2246,14 +2250,55 @@ async function initFullscreenMap() {
             ])
         });
 
-        // Default dark layer for fullscreen
-        const darkLayer = new ol.layer.Tile({
+        // Base map layers for fullscreen
+        fullscreenBaseLayers.carto_dark = new ol.layer.Tile({
             source: new ol.source.XYZ({
                 url: 'https://{a-d}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
                 maxZoom: 19
-            })
+            }),
+            visible: true
         });
-        fullscreenMap.addLayer(darkLayer);
+        fullscreenBaseLayers.carto_voyager = new ol.layer.Tile({
+            source: new ol.source.OSM({
+                url: 'https://{a-d}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                attributions: 'Powered by <a href="https://carto.com">CARTO.com</a>',
+                maxZoom: 15
+            }),
+            visible: false
+        });
+        fullscreenBaseLayers.osm = new ol.layer.Tile({
+            source: new ol.source.OSM({ maxZoom: 17, attributionsCollapsible: false }),
+            visible: false
+        });
+        fullscreenBaseLayers.openfreemap_bright = new ol.layer.Tile({
+            source: new ol.source.OSM({
+                url: 'https://tiles.openfreemap.org/styles/bright/{z}/{x}/{y}.png',
+                maxZoom: 18
+            }),
+            visible: false
+        });
+        fullscreenBaseLayers.esri_satellite = new ol.layer.Tile({
+            source: new ol.source.XYZ({
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                maxZoom: 18
+            }),
+            visible: false
+        });
+        Object.values(fullscreenBaseLayers).forEach(l => fullscreenMap.addLayer(l));
+
+        // Trail vector layer (hidden by default)
+        fullscreenTrailLayer = new ol.layer.Vector({
+            source: new ol.source.Vector(),
+            style: (feature) => {
+                const alt = feature.get('alt') || 0;
+                const color = getAltitudeColor(alt);
+                return new ol.style.Style({
+                    stroke: new ol.style.Stroke({ color: color, width: 1.5, opacity: 0.4 })
+                });
+            }
+        });
+        fullscreenTrailLayer.setVisible(false);
+        fullscreenMap.addLayer(fullscreenTrailLayer);
 
         fullscreenAircraftLayer = new ol.layer.Vector({
             source: new ol.source.Vector(),
@@ -2267,6 +2312,12 @@ async function initFullscreenMap() {
             }
         });
         fullscreenMap.addLayer(fullscreenAircraftLayer);
+
+        // Dim overlay
+        fullscreenDimOverlay = document.createElement('div');
+        fullscreenDimOverlay.className = 'absolute inset-0 pointer-events-none z-[5] transition-opacity duration-300 opacity-0';
+        fullscreenDimOverlay.style.backgroundColor = 'rgba(0,0,0,0.45)';
+        container.appendChild(fullscreenDimOverlay);
 
         // Interactions
         fullscreenMap.on('pointermove', function(evt) {
@@ -2291,10 +2342,95 @@ async function initFullscreenMap() {
         });
 
         fullscreenOlInitialized = true;
-        console.log('Fullscreen OL map initialized (tar1090 style)');
+        console.log('Fullscreen OL map initialized with preferences');
     } catch(e) {
         console.error('Fullscreen map init failed:', e);
     }
+}
+
+function toggleFullscreenPreferences() {
+    const panel = document.getElementById('fs-preferences-panel');
+    if (!panel) return;
+    const willShow = panel.classList.contains('hidden');
+    panel.classList.remove('hidden');
+    if (willShow) {
+        // Reposition to stay within viewport
+        const rect = panel.getBoundingClientRect();
+        if (rect.right > window.innerWidth) {
+            panel.style.right = '0';
+            panel.style.left = 'auto';
+        }
+    } else {
+        panel.classList.add('hidden');
+    }
+}
+
+// Close preferences panel on outside click
+document.addEventListener('click', function(e) {
+    const panel = document.getElementById('fs-preferences-panel');
+    const btn = document.getElementById('fs-prefs-btn');
+    if (panel && !panel.classList.contains('hidden') && !panel.contains(e.target) && btn && !btn.contains(e.target)) {
+        panel.classList.add('hidden');
+    }
+});
+
+function switchFullscreenLayer(layerName) {
+    if (!fullscreenBaseLayers[layerName] || !fullscreenMap) return;
+    fsActiveLayerName = layerName;
+    Object.entries(fullscreenBaseLayers).forEach(([name, layer]) => {
+        layer.setVisible(name === layerName);
+    });
+    document.querySelectorAll('.fs-layer-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.layer === layerName);
+    });
+}
+
+function toggleFullscreenDimming() {
+    const checked = document.getElementById('fs-pref-dim')?.checked;
+    if (fullscreenDimOverlay) {
+        fullscreenDimOverlay.style.opacity = checked ? '1' : '0';
+    }
+}
+
+function toggleFullscreenLabels() {
+    fsShowTypeLabels = document.getElementById('fs-pref-labels')?.checked ?? true;
+    updateFullscreenAircraftList();
+}
+
+function toggleFullscreenTrails() {
+    fsShowTrails = document.getElementById('fs-pref-trails')?.checked ?? false;
+    if (fullscreenTrailLayer) {
+        fullscreenTrailLayer.setVisible(fsShowTrails);
+    }
+}
+
+function setFullscreenAircraftSize(val) {
+    fsAircraftScale = parseFloat(val) || 1.0;
+    const valEl = document.getElementById('fs-pref-size-val');
+    if (valEl) valEl.textContent = fsAircraftScale.toFixed(1) + 'x';
+    iconScale = fsAircraftScale;
+    if (olAircraftLayer) olAircraftLayer.changed();
+    if (fullscreenAircraftLayer) fullscreenAircraftLayer.changed();
+}
+
+function setFullscreenTypeFilter(val) {
+    fsTypeFilter = val || 'ALL';
+    updateFullscreenAircraftList();
+}
+
+function updateFullscreenTypeFilterOptions() {
+    const select = document.getElementById('fs-pref-type-filter');
+    if (!select) return;
+    const types = new Set();
+    Object.values(radarAircraft).forEach(ac => {
+        if (ac.ac_type) types.add(ac.ac_type);
+    });
+    const currentVal = select.value;
+    select.innerHTML = '<option value="ALL">All Types</option>';
+    [...types].sort().forEach(t => {
+        select.innerHTML += `<option value="${t}">${t}</option>`;
+    });
+    select.value = currentVal;
 }
 
 function updateFullscreenAircraft(flights) {
@@ -2302,21 +2438,19 @@ function updateFullscreenAircraft(flights) {
 
     const source = fullscreenAircraftLayer.getSource();
     const currentHexIds = new Set();
-    const hexIds = flights.map(fl => (fl.hexid || fl.hex || '')).filter(h => h);
 
-    fetchAircraftTypes(hexIds).then(() => {
-        flights.forEach(fl => {
-            fixLatLon(fl);
-            if (!fl.lat || !fl.lon) return;
-            const hex = fl.hexid || fl.hex;
-            if (!hex) return;
-            currentHexIds.add(hex);
+    flights.forEach(fl => {
+        fixLatLon(fl);
+        if (!fl.lat || !fl.lon) return;
+        const hex = fl.hexid || fl.hex;
+        if (!hex) return;
+        currentHexIds.add(hex);
 
-            const coord = ol.proj.fromLonLat([parseFloat(fl.lon), parseFloat(fl.lat)]);
-            const rotation = (parseFloat(fl.heading) || 0) * Math.PI / 180;
-            const alt = parseFloat(fl.alt) || 0;
-            const speed = parseFloat(fl.speed) || 0;
-            const typeCode = (aircraftDB[hex] && aircraftDB[hex].type) || fl.ac_type || '';
+        const coord = ol.proj.fromLonLat([parseFloat(fl.lon), parseFloat(fl.lat)]);
+        const rotation = (parseFloat(fl.heading) || 0) * Math.PI / 180;
+        const alt = parseFloat(fl.alt) || 0;
+        const speed = parseFloat(fl.speed) || 0;
+        const typeCode = fl.ac_type || '';
 
             let feature = fullscreenFeatureCache[hex];
 
@@ -2347,18 +2481,60 @@ function updateFullscreenAircraft(flights) {
             }
         });
 
+        // Collect trail positions when trails enabled
+        if (fsShowTrails) {
+            const _trailNow = Date.now();
+            flights.forEach(fl => {
+                const hex = fl.hexid || fl.hex;
+                if (!hex || !fl.lat || !fl.lon) return;
+                if (!aircraftTrails[hex]) aircraftTrails[hex] = [];
+                aircraftTrails[hex].push({ lat: parseFloat(fl.lat), lon: parseFloat(fl.lon), alt: parseFloat(fl.alt) || 0, ts: _trailNow });
+                // Keep last 60 trail points
+                if (aircraftTrails[hex].length > 60) aircraftTrails[hex].shift();
+            });
+            // Prune trails for coasted aircraft
+            Object.keys(aircraftTrails).forEach(hex => {
+                if (!currentHexIds.has(hex) && (!aircraftLastSeen.get(hex) || (_trailNow - (aircraftLastSeen.get(hex) || 0)) > AIRCRAFT_COAST_MS)) {
+                    delete aircraftTrails[hex];
+                }
+            });
+            // Render trails
+            if (fullscreenTrailLayer && fullscreenTrailLayer.getVisible()) {
+                const trailSource = fullscreenTrailLayer.getSource();
+                trailSource.clear();
+                Object.entries(aircraftTrails).forEach(([hex, points]) => {
+                    if (points.length < 2) return;
+                    const coords = points.map(p => ol.proj.fromLonLat([p.lon, p.lat]));
+                    const firstAlt = points[0].alt;
+                    const trailFeature = new ol.Feature({
+                        geometry: new ol.geom.LineString(coords),
+                        alt: firstAlt
+                    });
+                    trailSource.addFeature(trailFeature);
+                });
+            }
+        }
+
+        const _now = Date.now();
         Object.keys(fullscreenFeatureCache).forEach(hex => {
             if (!currentHexIds.has(hex)) {
-                source.removeFeature(fullscreenFeatureCache[hex]);
-                delete fullscreenFeatureCache[hex];
+                const lastSeen = aircraftLastSeen.get(hex);
+                if (lastSeen && (_now - lastSeen) < AIRCRAFT_COAST_MS) {
+                    // Coast — keep feature alive
+                } else {
+                    source.removeFeature(fullscreenFeatureCache[hex]);
+                    delete fullscreenFeatureCache[hex];
+                    aircraftLastSeen.delete(hex);
+                }
+            } else {
+                aircraftLastSeen.set(hex, _now);
             }
         });
 
         const countEl = document.getElementById('fullscreen-radar-count');
-        if (countEl) countEl.innerText = flights.length + ' aircraft';
+        if (countEl) countEl.innerText = Object.keys(fullscreenFeatureCache).length + ' aircraft';
 
         updateFullscreenAircraftList();
-    });
 }
 
 // Fullscreen sidebar aircraft list
@@ -2375,6 +2551,10 @@ function updateFullscreenAircraftList() {
     if (search) {
         list = list.filter(ac => (ac.callsign || ac.hex).toUpperCase().includes(search));
     }
+    // Apply aircraft type filter
+    if (fsTypeFilter !== 'ALL') {
+        list = list.filter(ac => ac.ac_type === fsTypeFilter);
+    }
 
     list.sort((a, b) => {
         let valA = a[fsSortCol] || 0;
@@ -2388,9 +2568,8 @@ function updateFullscreenAircraftList() {
     tbody.innerHTML = list.map(ac => {
         const color = getAltitudeColor(ac.alt);
         const isSelected = ac.hex === fsSelectedHex;
-        const dbEntry = aircraftDB[ac.hex];
-        const typeBadge = dbEntry && dbEntry.type
-            ? `<span class="ml-1 text-[9px] bg-gray-700 px-1 rounded text-gray-400">${dbEntry.type}</span>`
+        const typeBadge = fsShowTypeLabels && ac.ac_type
+            ? `<span class="ml-1 text-[9px] bg-gray-700 px-1 rounded text-gray-400">${ac.ac_type}</span>`
             : '';
         return `
             <tr class="hover:bg-gray-800 cursor-pointer transition ${isSelected ? 'bg-gray-800/80' : ''}" data-hex="${ac.hex}" onclick="highlightFullscreenAircraft('${ac.hex}')">
@@ -2401,6 +2580,9 @@ function updateFullscreenAircraftList() {
             </tr>
         `;
     }).join('');
+
+    // Update type filter options periodically
+    updateFullscreenTypeFilterOptions();
 }
 
 function sortFullscreenTable(col) {
@@ -2428,9 +2610,8 @@ function highlightFullscreenAircraft(hexid) {
     const originEl = document.getElementById('fs-detail-origin');
     const destEl = document.getElementById('fs-detail-dest');
 
-    const dbEntry = aircraftDB[hexid];
-    const typeStr = dbEntry && dbEntry.type ? ` (${dbEntry.type})` : '';
-    const regStr = dbEntry && dbEntry.reg ? ` [${dbEntry.reg}]` : '';
+    const typeStr = ac.ac_type ? ` (${ac.ac_type})` : '';
+    const regStr = ac.reg ? ` [${ac.reg}]` : '';
 
     if (details) details.classList.remove('hidden');
     if (callsignEl) callsignEl.textContent = (ac.callsign || ac.hex) + typeStr;
@@ -2522,12 +2703,12 @@ function startRadarLoop() {
     console.log('[WS] startRadarLoop called');
     
     // Initialize WebSocket if enabled - doesn't need canvas
-    if (WS_ENABLED && WS_USE_FOR_RADAR) {
+    if (FRONTEND_CONFIG.ws_enabled && FRONTEND_CONFIG.ws_use_for_radar) {
         initWebSocket();
     }
     
     // Only fetch via REST if WebSocket is disabled
-    if (!WS_ENABLED) {
+    if (!FRONTEND_CONFIG.ws_enabled) {
         fetchRadarData();
         radarLoop = setInterval(fetchRadarData, FRONTEND_CONFIG.radar_poll_interval_ms);
     } else {

@@ -124,6 +124,22 @@ influx_query_api = None
 AIRCRAFT_DB = {}  # { "hex": { "reg": "N123AB", "type": "B738", "flags": "00", "desc": "BOEING 737-800" } }
 AIRCRAFT_DB_PATH = os.path.join(os.path.dirname(__file__), "data", "aircraft.csv.gz")
 
+def _enrich_flights(flights):
+    """Add ac_type, reg, desc fields from AIRCRAFT_DB to each flight dict in-place."""
+    if not AIRCRAFT_DB or not flights:
+        return flights
+    for ac in flights:
+        hex_code = (ac.get('hexid') or ac.get('hex') or '').strip().upper()
+        if hex_code and hex_code in AIRCRAFT_DB:
+            entry = AIRCRAFT_DB[hex_code]
+            if entry.get('type'):
+                ac['ac_type'] = entry['type']
+            if entry.get('reg'):
+                ac['reg'] = entry['reg']
+            if entry.get('desc'):
+                ac['desc'] = entry['desc']
+    return flights
+
 async def load_aircraft_db():
     """Download and parse tar1090 aircraft.csv.gz into memory."""
     global AIRCRAFT_DB
@@ -882,7 +898,8 @@ async def api_filters():
 @app.get("/api/atc/live")
 async def api_atc_live(request: Request, airline: str = Query("ALL"), airport: str = Query("ALL")):
     # No auth required for radar display
-    return await web_app_db.fetch_live_flights(db_pool, airline, airport)
+    flights = await web_app_db.fetch_live_flights(db_pool, airline, airport)
+    return _enrich_flights(flights or [])
 
 @app.get("/api/aircraft/all")
 async def api_aircraft_all():
@@ -980,7 +997,7 @@ async def api_aircraft_radar(
                             "heading": ac.get('heading', 0)
                         })
                 result.sort(key=lambda x: x.get('alt', 0), reverse=True)
-                return result[:500]
+                return _enrich_flights(result[:500])
     except Exception as e:
         logger.warning(f"aircraft/radar Redis error, falling back to DB: {e}")
 
@@ -1007,7 +1024,7 @@ async def api_aircraft_radar(
                 ORDER BY last_seen DESC
                 LIMIT 500
             """, lat, lon, radius)
-            return [dict(r) for r in rows]
+            return _enrich_flights([dict(r) for r in rows])
     except Exception as e:
         logger.error(f"aircraft/radar DB fallback error: {e}")
         import traceback
@@ -1083,6 +1100,77 @@ async def api_exec_unscheduled(airport: str = Query("ALL")):
 async def api_exec_training(airport: str = Query("ALL")):
     return await web_app_db.fetch_training_activity(db_pool, airport)
 
+# ---------------------------------------------------------------------
+# 🌟 TAB WRAPPER APIs (batch all tab data into one round-trip)
+# ---------------------------------------------------------------------
+@app.post("/api/atc/data")
+async def api_atc_data(request: Request):
+    """Return all ATC tab data in one call: bands, anomalies, aircraft_db lookup."""
+    body = await request.json()
+    airline = body.get("airline", "ALL")
+    airport = body.get("airport", "ALL")
+    hex_ids = body.get("hex_ids", [])
+
+    async def lookup_db():
+        if not hex_ids:
+            return {}
+        result = {}
+        for h in hex_ids:
+            h = h.strip().upper()
+            if h in AIRCRAFT_DB:
+                result[h] = AIRCRAFT_DB[h]
+        return {"status": "success", "count": len(result), "data": result}
+
+    bands, anomalies, aircraft_db = await asyncio.gather(
+        web_app_db.fetch_altitude_bands(db_pool, airline, airport),
+        web_app_db.fetch_live_anomalies(db_pool, airport, airline),
+        lookup_db(),
+    )
+    return {"bands": bands, "anomalies": anomalies, "aircraft_db": aircraft_db}
+
+@app.post("/api/ops/data")
+async def api_ops_data(request: Request):
+    """Return all Ops tab data in one call."""
+    body = await request.json()
+    airport = body.get("airport", "ALL")
+    airline = body.get("airline", "ALL")
+
+    squatters, turnarounds, runway_demand, fleet_utilization, otp = await asyncio.gather(
+        web_app_db.fetch_tarmac_squatters(db_pool, airport, airline),
+        web_app_db.fetch_turnarounds(db_pool, airport, airline),
+        web_app_db.fetch_runway_demand(db_pool, airport),
+        web_app_db.fetch_fleet_utilization(db_pool, airline),
+        web_app_db.fetch_otp_data(db_pool, airport, airline),
+    )
+    return {
+        "squatters": squatters,
+        "turnarounds": turnarounds,
+        "runway_demand": runway_demand,
+        "fleet_utilization": fleet_utilization,
+        "otp": otp,
+    }
+
+@app.post("/api/exec/data")
+async def api_exec_data(request: Request):
+    """Return all Exec tab data in one call."""
+    body = await request.json()
+    airport = body.get("airport", "ALL")
+
+    safety, routes, cdo, unscheduled, training = await asyncio.gather(
+        web_app_db.fetch_safety_index(db_pool),
+        web_app_db.fetch_top_routes(db_pool),
+        web_app_db.fetch_cdo_efficiency(db_pool),
+        web_app_db.fetch_unscheduled_arrivals(db_pool, airport),
+        web_app_db.fetch_training_activity(db_pool, airport),
+    )
+    return {
+        "safety": safety,
+        "routes": routes,
+        "approach_efficiency": cdo,
+        "unscheduled": unscheduled,
+        "training": training,
+    }
+
 # Drilldown Endpoints
 @app.get("/api/drilldown/otp")
 async def drilldown_otp(target_airline: str = Query("ALL"), airport: str = Query("ALL")):
@@ -1134,9 +1222,21 @@ async def get_flight_ai_audit(hex_id: str = None, callsign: str = None):
 @app.get("/api/aircraft-db")
 async def get_aircraft_db(hex_id: str = Query(None), batch: str = Query(None)):
     """Lookup aircraft info by ICAO hex. Supports single hex or comma-separated batch."""
+    return _lookup_aircraft_db(hex_id, batch)
+
+@app.post("/api/aircraft-db")
+async def post_aircraft_db(request: Request):
+    """Lookup aircraft info by ICAO hex. POST with {hex_ids: [...]} or {batch: "..."}."""
+    body = await request.json()
+    hex_ids = body.get("hex_ids", [])
+    batch = body.get("batch", "")
+    if hex_ids:
+        return _lookup_aircraft_db(None, ",".join(hex_ids))
+    return _lookup_aircraft_db(None, batch)
+
+def _lookup_aircraft_db(hex_id, batch):
     if not AIRCRAFT_DB:
         return {"status": "error", "message": "Aircraft database not loaded"}
-    
     if batch:
         hexes = [h.strip().upper() for h in batch.split(",") if h.strip()]
         result = {}
@@ -1144,14 +1244,12 @@ async def get_aircraft_db(hex_id: str = Query(None), batch: str = Query(None)):
             if h in AIRCRAFT_DB:
                 result[h] = AIRCRAFT_DB[h]
         return {"status": "success", "count": len(result), "data": result}
-    
     if hex_id:
         h = hex_id.strip().upper()
         if h in AIRCRAFT_DB:
             return {"status": "success", "data": AIRCRAFT_DB[h]}
         return {"status": "not_found", "hex": h}
-    
-    return {"status": "error", "message": "Provide hex_id or batch parameter"}
+    return {"status": "error", "message": "Provide hex_id, batch, or hex_ids"}
 
 # ---------------------------------------------------------------------
 # 🌟 WEB CHAT / PUSH
@@ -2642,6 +2740,7 @@ _ws_broadcast_task: asyncio.Task | None = None
 
 async def _ws_broadcast_loop():
     """Background task: poll Redis live_flights every 2s and broadcast to all clients."""
+    global _ws_clients
     r = None
     while True:
         try:
@@ -2664,6 +2763,7 @@ async def _ws_broadcast_loop():
                         "speed": ac.get('speed', 0) or ac.get('gs', 0),
                         "heading": ac.get('heading', 0)
                     })
+            _enrich_flights(snapshot)
             dead_clients = set()
             for ws in _ws_clients:
                 try:

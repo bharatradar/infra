@@ -489,7 +489,7 @@ class FlightMonitor:
             
             pipeline = self.redis.pipeline()
             for fl in flights_list:
-                hex_id, callsign, lat, lon, alt, speed, heading = fl
+                hex_id, callsign, lat, lon, alt, speed, heading, *_ = fl
                 flight_data = {
                     "lat": lat,
                     "lon": lon,
