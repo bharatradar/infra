@@ -25,12 +25,13 @@
         .animate-radar-sweep {
             animation: sweep 12s linear infinite;
         }
-        @keyframes radar-pulse {
-            0%, 100% { opacity: 0.3; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.2); }
+        .radar-blip {
+            transition: all 0.3s ease;
         }
-        .blip {
-            animation: radar-pulse 3s ease-in-out infinite;
+        .radar-blip.blip-lit {
+            box-shadow: 0 0 20px rgba(21, 163, 74, 1), 0 0 40px rgba(21, 163, 74, 0.6);
+            opacity: 1;
+            transform: scale(1.5);
         }
     </style>
 </head>
@@ -77,20 +78,12 @@
                     <div class="animate-radar-sweep" style="position: absolute; transform: translate(-50%,-50%); width: 1000px; height: 1000px; border-radius: 50%; background: conic-gradient(from 0deg, transparent 94%, rgba(21,163,74,0.3) 100%);"></div>
                     <div style="position: absolute; transform: translate(-50%,-50%); width: 8px; height: 8px; background: #15a34a; border-radius: 50%; box-shadow: 0 0 15px rgba(21,163,74,1);"></div>
                 </div>
-                <div class="blip" style="position: absolute; left: 35%; top: 40%;">
-                    <div style="width: 6px; height: 6px; background: #4ade80; transform: rotate(45deg);"></div>
-                    <div style="margin-top: 4px; margin-left: 8px; font-size: 10px; font-family: monospace; color: #15a34a; line-height: 1.2;">
-                        <div>6E2134</div>
-                        <div>320KT / 24000FT</div>
-                    </div>
-                </div>
-                <div class="blip" style="position: absolute; left: 60%; top: 65%; animation-delay: 1.5s;">
-                    <div style="width: 6px; height: 6px; background: #4ade80; transform: rotate(45deg);"></div>
-                    <div style="margin-top: 4px; margin-left: 8px; font-size: 10px; font-family: monospace; color: #15a34a; line-height: 1.2; opacity: 0.7;">
-                        <div>UK812</div>
-                        <div>410KT / 36000FT</div>
-                    </div>
-                </div>
+                <div class="radar-blip" style="position: absolute; left: 30%; top: 35%; width: 8px; height: 8px; background: #4ade80; border-radius: 50%; box-shadow: 0 0 4px rgba(21,163,74,0.5);"></div>
+                <div class="radar-blip" style="position: absolute; left: 35%; top: 55%; width: 8px; height: 8px; background: #4ade80; border-radius: 50%; box-shadow: 0 0 4px rgba(21,163,74,0.5);"></div>
+                <div class="radar-blip" style="position: absolute; left: 20%; top: 60%; width: 8px; height: 8px; background: #4ade80; border-radius: 50%; box-shadow: 0 0 4px rgba(21,163,74,0.5);"></div>
+                <div class="radar-blip" style="position: absolute; left: 15%; top: 45%; width: 8px; height: 8px; background: #4ade80; border-radius: 50%; box-shadow: 0 0 4px rgba(21,163,74,0.5);"></div>
+                <div class="radar-blip" style="position: absolute; left: 28%; top: 42%; width: 8px; height: 8px; background: #4ade80; border-radius: 50%; box-shadow: 0 0 4px rgba(21,163,74,0.5);"></div>
+                <div class="radar-blip" style="position: absolute; left: 22%; top: 58%; width: 8px; height: 8px; background: #4ade80; border-radius: 50%; box-shadow: 0 0 4px rgba(21,163,74,0.5);"></div>
             </div>
             <div style="position: relative; z-index: 10;">
                 <div class="hero-live-stats">
@@ -211,6 +204,33 @@
         document.querySelector('.fn-mark')?.addEventListener('click', function() {
             document.getElementById('fn-rate').classList.toggle('hidden');
         });
+        (function initRadarBlips() {
+            const blips = document.querySelectorAll('.radar-blip');
+            const sweepPeriod = 12000;
+            const center = { x: 25, y: 50 };
+            blips.forEach(el => {
+                const left = parseFloat(el.style.left);
+                const top = parseFloat(el.style.top);
+                const dx = left - center.x;
+                const dy = top - center.y;
+                let angle = Math.atan2(dx, -dy) * 180 / Math.PI;
+                if (angle < 0) angle += 360;
+                el.dataset.angle = angle;
+            });
+            let sweepStart = performance.now();
+            function update() {
+                const elapsed = (performance.now() - sweepStart) % sweepPeriod;
+                const sweepAngle = (elapsed / sweepPeriod) * 360;
+                blips.forEach(el => {
+                    let diff = parseFloat(el.dataset.angle) - sweepAngle;
+                    if (diff > 180) diff -= 360;
+                    if (diff < -180) diff += 360;
+                    el.classList.toggle('blip-lit', Math.abs(diff) < 12);
+                });
+                requestAnimationFrame(update);
+            }
+            requestAnimationFrame(update);
+        })();
     </script>
 </body>
 </html>
