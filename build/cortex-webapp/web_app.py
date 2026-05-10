@@ -1546,6 +1546,28 @@ async def register_feeder(feeder: FeederRegistration, request: Request):
         logger.error(f"Feeder registration error: {e}")
         return {"status": "error", "message": str(e)}
 
+@app.get("/api/feeders/display-names")
+async def get_feeder_display_names():
+    """Return mapping of station_uuid -> display name for registered feeders.
+    Used by the MLAT sync map to show friendly names instead of UUIDs."""
+    try:
+        async with db_pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT f.station_uuid, u.callsign, u.name
+                FROM feeders f
+                JOIN api_users u ON LOWER(f.user_email) = LOWER(u.email)
+                WHERE f.station_uuid IS NOT NULL
+            """)
+            result = {}
+            for row in rows:
+                display_name = row['callsign'] or row['name']
+                if display_name:
+                    result[row['station_uuid']] = display_name
+            return result
+    except Exception as e:
+        logger.error(f"Feeder display names error: {e}")
+        return {}
+
 @app.get("/api/auth/me")
 async def get_current_user_profile(request: Request):
     """Get current user's profile (name, email, callsign)."""
