@@ -4,6 +4,7 @@ psycopg2-binary==2.9.9
 redis
 fastapi
 uvicorn
+httptools
 influxdb-client
 pydantic
 python-jose
