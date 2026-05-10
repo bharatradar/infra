@@ -863,7 +863,10 @@ function predictPosition(lat, lon, headingDeg, speedKt, elapsedSec) {
 
 // Interpolate aircraft positions at 60fps using smoothDamp
 function interpolateAircraftPositions() {
-    if (!olAircraftLayer || !map) {
+    const hasNormalMap = olAircraftLayer && map;
+    const hasFullscreen = fullscreenOlInitialized && fullscreenAircraftLayer && radarFullscreen && fullscreenMap;
+    
+    if (!hasNormalMap && !hasFullscreen) {
         if (animationFrameId) {
             cancelAnimationFrame(animationFrameId);
             animationFrameId = null;
@@ -872,58 +875,21 @@ function interpolateAircraftPositions() {
     }
     
     try {
-        const source = olAircraftLayer.getSource();
-        const features = source.getFeatures();
         const now = Date.now();
         
-        features.forEach(feature => {
-            const hex = feature.get('hexid');
-            if (!hex) return;
-            
-            const target = aircraftTarget.get(hex);
-            if (!target) return;
-            
-            let display = aircraftDisplay.get(hex);
-            if (!display) {
-                // First time seeing this aircraft — initialize display at API position
-                display = { lat: target.lat, lon: target.lon, velLat: 0, velLon: 0 };
-                aircraftDisplay.set(hex, display);
-            }
-            
-            const dtSinceUpdate = (now - target.timestamp) / 1000;
-            
-            // Compute predicted position based on heading + speed
-            const predicted = predictPosition(target.lat, target.lon, target.heading, target.speed, dtSinceUpdate);
-            
-            // Frame delta for smoothDamp (cap at 100ms to avoid jumps on tab switch)
-            const frameDt = Math.min((now - (display._lastFrame || now)) / 1000, 0.1);
-            display._lastFrame = now;
-            
-            if (frameDt > 0) {
-                // smoothDamp chases the predicted position with critically-damped motion
-                // smoothTime=0.4s gives fast convergence with zero overshoot
-                display.lat = smoothDamp(display.lat, predicted.lat, display.velLat, 0.4, frameDt);
-                display.lon = smoothDamp(display.lon, predicted.lon, display.velLon, 0.4, frameDt);
-            }
-            
-            // Update feature geometry
-            const coord = ol.proj.fromLonLat([display.lon, display.lat]);
-            feature.getGeometry().setCoordinates(coord);
-            
-            // Smooth heading and speed too
-            const heading = smoothDamp(feature.get('heading') || target.heading, target.heading, feature._smoothHeadingVel || 0, 0.4, Math.min(frameDt || 0.016, 0.1));
-            const speed = smoothDamp(feature.get('speed') || target.speed, target.speed, feature._smoothSpeedVel || 0, 0.4, Math.min(frameDt || 0.016, 0.1));
-            feature._smoothHeadingVel = typeof heading === 'number' ? heading : 0;
-            feature._smoothSpeedVel = typeof speed === 'number' ? speed : 0;
-            
-            feature.set('rotation', target.heading * Math.PI / 180);
-            feature.set('alt', target.alt);
-            feature.set('speed', target.speed);
-            feature.set('heading', target.heading);
-        });
+        // Update normal map features
+        if (hasNormalMap) {
+            const features = olAircraftLayer.getSource().getFeatures();
+            features.forEach(feature => updateFeaturePosition(feature, now));
+            olAircraftLayer.changed();
+        }
         
-        // Refresh layer
-        olAircraftLayer.changed();
+        // Update fullscreen features (same smoothDamp state, just different OpenLayers features)
+        if (hasFullscreen) {
+            const fsFeatures = fullscreenAircraftLayer.getSource().getFeatures();
+            fsFeatures.forEach(feature => updateFeaturePosition(feature, now));
+            fullscreenAircraftLayer.changed();
+        }
         
         // Continue animation loop
         animationFrameId = requestAnimationFrame(interpolateAircraftPositions);
@@ -934,6 +900,43 @@ function interpolateAircraftPositions() {
             animationFrameId = null;
         }
     }
+}
+
+function updateFeaturePosition(feature, now) {
+    const hex = feature.get('hexid');
+    if (!hex) return;
+    
+    const target = aircraftTarget.get(hex);
+    if (!target) return;
+    
+    let display = aircraftDisplay.get(hex);
+    if (!display) {
+        display = { lat: target.lat, lon: target.lon, velLat: 0, velLon: 0 };
+        aircraftDisplay.set(hex, display);
+    }
+    
+    const dtSinceUpdate = (now - target.timestamp) / 1000;
+    
+    // Dead reckoning: predict position from heading + speed over elapsed time
+    const predicted = predictPosition(target.lat, target.lon, target.heading, target.speed, dtSinceUpdate);
+    
+    // Frame delta for smoothDamp (cap at 100ms to avoid jumps on tab switch)
+    const frameDt = Math.min((now - (display._lastFrame || now)) / 1000, 0.1);
+    display._lastFrame = now;
+    
+    if (frameDt > 0) {
+        display.lat = smoothDamp(display.lat, predicted.lat, display.velLat, 0.4, frameDt);
+        display.lon = smoothDamp(display.lon, predicted.lon, display.velLon, 0.4, frameDt);
+    }
+    
+    // Update feature geometry
+    const coord = ol.proj.fromLonLat([display.lon, display.lat]);
+    feature.getGeometry().setCoordinates(coord);
+    
+    feature.set('alt', target.alt);
+    feature.set('speed', target.speed);
+    feature.set('rotation', target.heading * Math.PI / 180);
+    feature.set('heading', target.heading);
 }
 
 function updateOLAircraft(flights) {
@@ -967,8 +970,8 @@ function updateOLAircraft(flights) {
                     const alt = parseFloat(fl.alt) || 0;
                     const typeCode = (aircraftDB[hex] && aircraftDB[hex].type) || fl.ac_type || '';
                     
-                    // Store API target for smooth transition
-                    aircraftTarget.set(hex, { lat, lon, heading, speed, timestamp: Date.now() });
+                    // Store API target for smooth transition (includes alt for altitude coloring)
+                    aircraftTarget.set(hex, { lat, lon, heading, speed, alt, timestamp: Date.now() });
 
                     const coord = ol.proj.fromLonLat([lon, lat]);
                     const rotation = heading * Math.PI / 180;
@@ -2309,10 +2312,7 @@ function updateFullscreenAircraft(flights) {
             let feature = fullscreenFeatureCache[hex];
 
             if (feature) {
-                feature.getGeometry().setCoordinates(coord);
-                feature.set('alt', alt);
-                feature.set('speed', speed);
-                feature.set('rotation', rotation);
+                // Position/rotation/alt/speed handled by interpolateAircraftPositions
                 feature.set('origin', fl.origin || '');
                 feature.set('destination', fl.destination || '');
                 feature.set('typeCode', typeCode);
@@ -2330,6 +2330,10 @@ function updateFullscreenAircraft(flights) {
                 });
                 source.addFeature(feature);
                 fullscreenFeatureCache[hex] = feature;
+                // Initialize display state for smoothDamp
+                if (!aircraftDisplay.has(hex)) {
+                    aircraftDisplay.set(hex, { lat: parseFloat(fl.lat), lon: parseFloat(fl.lon), velLat: 0, velLon: 0, _lastFrame: Date.now() });
+                }
             }
         });
 
@@ -2340,7 +2344,6 @@ function updateFullscreenAircraft(flights) {
             }
         });
 
-        fullscreenAircraftLayer.changed();
         const countEl = document.getElementById('fullscreen-radar-count');
         if (countEl) countEl.innerText = flights.length + ' aircraft';
 
