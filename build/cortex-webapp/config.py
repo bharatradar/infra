@@ -216,6 +216,11 @@ class Config:
     # WebSocket reconnect base delay (milliseconds)
     FRONTEND_WS_RECONNECT_DELAY_MS = 3000
 
+    # WebSocket feature flags (served to frontend, env-overridable for rollback)
+    FRONTEND_WS_ENABLED = _env("FRONTEND_WS_ENABLED", "true").lower() == "true"
+    FRONTEND_WS_USE_FOR_RADAR = _env("FRONTEND_WS_USE_FOR_RADAR", "true").lower() == "true"
+    FRONTEND_WS_USE_FOR_ATC = _env("FRONTEND_WS_USE_FOR_ATC", "true").lower() == "true"
+
     TELEGRAM_TOKEN = _env("TELEGRAM_TOKEN")
     TELEGRAM_CHAT_ID = _env("TELEGRAM_CHAT_ID") 
     

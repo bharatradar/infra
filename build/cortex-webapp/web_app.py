@@ -4,7 +4,7 @@ import asyncio
 import secrets
 import hashlib
 import aiohttp
-from fastapi import FastAPI, Request, Query, Depends
+from fastapi import FastAPI, Request, Query, Depends, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, RedirectResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -2627,3 +2627,76 @@ async def get_feeder_map_page(feeder_id: int, request: Request):
     except Exception as e:
         logger.error(f"Map page error: {e}")
         return RedirectResponse(url="/profile")
+
+
+# ---------------------------------------------------------------------
+# 🚀 WEBSOCKET ENDPOINT — Real-time flight updates
+# ---------------------------------------------------------------------
+# Polls Redis live_flights hash every 2s and pushes to connected clients.
+# Fallback: if WS fails, browser reverts to REST polling (Phase 1a).
+# ---------------------------------------------------------------------
+
+# Track connected WebSocket clients
+_ws_clients: set[WebSocket] = set()
+_ws_broadcast_task: asyncio.Task | None = None
+
+async def _ws_broadcast_loop():
+    """Background task: poll Redis live_flights every 2s and broadcast to all clients."""
+    r = None
+    while True:
+        try:
+            if r is None:
+                r = await web_app_db.get_redis_client()
+            all_flights = await r.hgetall(Config.REDIS_LIVE_FLIGHTS_KEY)
+            snapshot = []
+            if all_flights:
+                for hex_id, data in all_flights.items():
+                    try:
+                        ac = json.loads(data)
+                    except Exception:
+                        continue
+                    snapshot.append({
+                        "hexid": hex_id,
+                        "callsign": ac.get('callsign', ''),
+                        "lat": ac.get('lat', 0),
+                        "lon": ac.get('lon', 0),
+                        "alt": ac.get('alt', 0),
+                        "speed": ac.get('speed', 0) or ac.get('gs', 0),
+                        "heading": ac.get('heading', 0)
+                    })
+            dead_clients = set()
+            for ws in _ws_clients:
+                try:
+                    await ws.send_json({"type": "flight_snapshot", "count": len(snapshot), "flights": snapshot})
+                except Exception:
+                    dead_clients.add(ws)
+            _ws_clients -= dead_clients
+        except Exception as e:
+            logger.warning(f"[WS] broadcast error: {e}")
+        await asyncio.sleep(2)
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    global _ws_broadcast_task
+    await ws.accept()
+    _ws_clients.add(ws)
+
+    # Start broadcast loop on first connection
+    if _ws_broadcast_task is None or _ws_broadcast_task.done():
+        _ws_broadcast_task = asyncio.create_task(_ws_broadcast_loop())
+
+    try:
+        # Handle incoming messages (e.g., get_all requests)
+        async for message in ws.iter_json():
+            action = message.get("action")
+            if action == "get_all":
+                # The broadcast loop will send the next snapshot shortly
+                pass
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.warning(f"[WS] client error: {e}")
+    finally:
+        _ws_clients.discard(ws)
+        # If no more clients, leave broadcast task running (cheap sleep loop)

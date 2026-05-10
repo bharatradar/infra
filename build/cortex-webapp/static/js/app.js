@@ -29,7 +29,7 @@ async function loadFrontendConfig() {
 let WS_ENABLED = FRONTEND_CONFIG.ws_enabled;
 let WS_USE_FOR_RADAR = FRONTEND_CONFIG.ws_use_for_radar;
 let WS_USE_FOR_ATC = FRONTEND_CONFIG.ws_use_for_atc;
-const WS_URL = 'ws://localhost:8002';
+const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`;
 
 // Store flights from WebSocket for shared use
 let wsFlightsData = [];

@@ -2,18 +2,41 @@
 
 ## Overview
 Migrate cortex.bharatradar.com from OpenLayers/DOM markers to MapLibre GL JS
-(WebGL canvas), fix smooth movement via velocity extrapolation + WebSocket,
+(WebGL canvas), fix smooth movement via smoothDamp + WebSocket,
 join aircraft type data from back-end, and add a preferences panel in
 fullscreen mode.
 
+## Deployed Versions
+| Tag | Changes | Date |
+|-----|---------|------|
+| v2026.05.10.01 | Phase 1a: 2s polling + velocity extrapolation | 2026-05-10 |
+| v2026.05.10.02–04 | Phase 1a: aircraft rotation fix, dynamic viewport, radar endpoint switch | 2026-05-10 |
+| v2026.05.10.05 | Phase 1a: smoothDamp interpolation, eliminate redundant fetchRadarData API call | 2026-05-10 |
+| v2026.05.10.06 | fix: fullscreen smoothDamp, altitude coloring, dead reckoning | 2026-05-10 |
+| v2026.05.10.07 | fix: smooth heading rotation with angle wrapping | 2026-05-10 |
+
 ## Phase Order (sequential)
 
-### Phase 1a — Fix Smooth Movement (Velocity Extrapolation + Faster Polling)
-- Change `FRONTEND_ATC_POLL_INTERVAL_MS` 5000→2000
-- Add velocity extrapolation in `interpolateAircraftPositions()`:
-  between poll updates, predict (lat,lon) using heading + speed + elapsed time
-  instead of lerping toward a fixed target
-- Increase `TRANSITION_SPEED` from 0.1 to match new interval
+### Phase 1a — Fix Smooth Movement (smoothDamp + Dynamic Viewport) ✅ v2026.05.10.05
+- Change `FRONTEND_ATC_POLL_INTERVAL_MS` 5000→2000, `FRONTEND_RADAR_POLL_INTERVAL_MS` 5000→2000
+- Replace lerp+extrapolation with **smoothDamp** (Unity-style critically-damped spring):
+  predict position from heading+speed+elapsed time, then chase prediction smoothly
+- `aircraftDisplay` map stores smoothDamp velocity state per aircraft
+- `smoothDamp()`: critically-damped spring, `omega=2/smoothTime`, 4th-order Taylor `exp`
+- Dynamic map viewport tracking via `map.on('moveend', updateMapViewport)`
+- Switch `fetchATC()` from `/api/atc/live` to `/api/aircraft/radar?lat=...&lon=...&radius=...`
+- `getRadiusFromZoom()` formula: `1500 * 2^(5 - zoom)`, clamped [10, 2500]
+- Client-side airline/airport filter fallback for radar endpoint
+- Switch `fetchRadarData()` to reuse `radarAircraft` data (eliminate redundant API call)
+- Rotation formula: `heading * PI/180` (no offset — tar1090 SVGs point north)
+- **Deferred to Phase 1b:** WebSocket endpoint (half-finished, no server handler)
+
+### Phase 1a Fixes (separate deploys)
+- **v2026.05.10.06:** Fullscreen smoothDamp interpolation (was jumping every 2s),
+  altitude coloring (bug: `aircraftTarget` missing `alt` field — all aircraft gray),
+  dead reckoning via predictPosition for both views when API data stops
+- **v2026.05.10.07:** Smooth heading rotation with angle wrapping (shortest path
+  around 0/360) — no more jerky heading snaps
 
 ### Phase 1b — WebSocket Endpoint + AWS Nginx + Auto-Fallback
 - **AWS nginx:** Add `proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade;
@@ -27,7 +50,7 @@ fullscreen mode.
   `FRONTEND_WS_USE_FOR_RADAR = True`
 - **`app.js`:** Change `WS_URL` from `ws://localhost:8002` to
   `wss://${location.host}/ws`; fix fallback logic — if WebSocket fails,
-  revert to REST polling with velocity extrapolation (Phase 1a fallback)
+  revert to REST polling (smoothDamp fallback, already working from Phase 1a)
 - **`deployment.yaml`:** Set env `WS_ENABLED: "true"` (currently `"false"`)
 
 ### Phase 2 — MapLibre GL JS Migration (Both Views)
@@ -80,7 +103,7 @@ Then `sudo nginx -t && sudo systemctl reload nginx`.
 - Phase 4 builds on Phase 2 (preferences modify MapLibre paint properties)
 
 ## Rollback
-- Phase 1a: revert poll interval, revert velocity extrapolation
+- Phase 1a: revert poll interval to 5000, restore old lerp-based interpolation
 - Phase 1b: set `WS_ENABLED: "false"` in deployment, revert nginx config
 - Phase 2: revert to OpenLayers CDN + tar1090 markers
 - Phase 4: remove preferences panel HTML/CSS/JS
