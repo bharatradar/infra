@@ -911,7 +911,7 @@ function updateFeaturePosition(feature, now) {
     
     let display = aircraftDisplay.get(hex);
     if (!display) {
-        display = { lat: target.lat, lon: target.lon, velLat: 0, velLon: 0 };
+        display = { lat: target.lat, lon: target.lon, velLat: 0, velLon: 0, heading: target.heading };
         aircraftDisplay.set(hex, display);
     }
     
@@ -927,6 +927,15 @@ function updateFeaturePosition(feature, now) {
     if (frameDt > 0) {
         display.lat = smoothDamp(display.lat, predicted.lat, display.velLat, 0.4, frameDt);
         display.lon = smoothDamp(display.lon, predicted.lon, display.velLon, 0.4, frameDt);
+        
+        // Smooth heading with angle wrapping (shortest path around 0/360)
+        const currentHdg = display.heading;
+        const targetHdg = target.heading;
+        let hdgDiff = targetHdg - currentHdg;
+        if (hdgDiff > 180) hdgDiff -= 360;
+        if (hdgDiff < -180) hdgDiff += 360;
+        display.heading = smoothDamp(currentHdg, currentHdg + hdgDiff, display.headingVel || 0, 0.3, frameDt);
+        display.heading = ((display.heading % 360) + 360) % 360;
     }
     
     // Update feature geometry
@@ -935,8 +944,8 @@ function updateFeaturePosition(feature, now) {
     
     feature.set('alt', target.alt);
     feature.set('speed', target.speed);
-    feature.set('rotation', target.heading * Math.PI / 180);
-    feature.set('heading', target.heading);
+    feature.set('rotation', display.heading * Math.PI / 180);
+    feature.set('heading', display.heading);
 }
 
 function updateOLAircraft(flights) {
@@ -1004,8 +1013,8 @@ function updateOLAircraft(flights) {
                         source.addFeature(feature);
                         olFeatureCache[hex] = feature;
                         
-                        // Initialize display position for smooth animation
-                        aircraftDisplay.set(hex, { lat, lon, velLat: 0, velLon: 0, _lastFrame: Date.now() });
+                        // Initialize display state for smooth animation
+                        aircraftDisplay.set(hex, { lat, lon, velLat: 0, velLon: 0, heading, _lastFrame: Date.now() });
                         added++;
                     }
                 });
@@ -2332,7 +2341,8 @@ function updateFullscreenAircraft(flights) {
                 fullscreenFeatureCache[hex] = feature;
                 // Initialize display state for smoothDamp
                 if (!aircraftDisplay.has(hex)) {
-                    aircraftDisplay.set(hex, { lat: parseFloat(fl.lat), lon: parseFloat(fl.lon), velLat: 0, velLon: 0, _lastFrame: Date.now() });
+                    const hdg = parseFloat(fl.heading) || 0;
+                    aircraftDisplay.set(hex, { lat: parseFloat(fl.lat), lon: parseFloat(fl.lon), velLat: 0, velLon: 0, heading: hdg, _lastFrame: Date.now() });
                 }
             }
         });
