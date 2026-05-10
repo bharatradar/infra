@@ -925,6 +925,48 @@ async def api_aircraft_all():
         traceback.print_exc()
         return []
 
+@app.get("/api/aircraft/radar")
+async def api_aircraft_radar(
+    lat: float = Query(...),
+    lon: float = Query(...),
+    radius: float = Query(default=100.0)
+):
+    """Return aircraft within radius miles of given lat/lon for radar display"""
+    try:
+        pool = web_app_db.get_db_pool(db_pool)
+        if pool is None:
+            logger.warning("aircraft/radar: db_pool is None, creating new pool")
+            import asyncpg
+            pool = await asyncpg.create_pool(**Config.DB_PARAMS)
+
+        if pool is None:
+            logger.error("aircraft/radar error: Could not get database pool")
+            return []
+
+        async with pool.acquire() as conn:
+            # Note: flights_in_air has lat/lon columns SWAPPED
+            # lat column stores longitude, lon column stores latitude
+            # Fix: alias correctly and swap in Haversine
+            rows = await conn.fetch("""
+                SELECT hexid, callsign, lon AS lat, lat AS lon, alt, speed, heading, last_seen
+                FROM flights_in_air
+                WHERE last_seen > NOW() - INTERVAL '30 seconds'
+                  AND lat IS NOT NULL AND lon IS NOT NULL
+                  AND (3959 * acos(LEAST(1, GREATEST(-1,
+                    cos(radians($1)) * cos(radians(lon)) * cos(radians(lat) - radians($2)) +
+                    sin(radians($1)) * sin(radians(lon))
+                  )))) <= $3
+                ORDER BY last_seen DESC
+                LIMIT 500
+            """, lat, lon, radius)
+            result = [dict(r) for r in rows]
+            return result
+    except Exception as e:
+        logger.error(f"aircraft/radar error: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
 @app.get("/api/atc/congestion")
 async def api_atc_congestion():
     return await web_app_db.fetch_congestion_heatmap(db_pool)
