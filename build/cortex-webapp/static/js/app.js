@@ -36,6 +36,25 @@ let wsFlightsData = [];
 let wsReconnectAttempts = 0;
 const WS_MAX_RECONNECT = 5;
 
+// --- Map viewport tracking (for dynamic radar radius) ---
+let mapCenter = { lat: 20.5937, lon: 78.9629 };  // Default: center of India
+let mapRadius = 1500;  // Default: 1500 miles (covers most of India)
+
+function getRadiusFromZoom(zoom) {
+    if (!zoom || zoom < 3) return 2500;
+    if (zoom > 15) return 10;
+    return Math.max(10, Math.min(2500, 1500 * Math.pow(2, 5 - zoom)));
+}
+
+function updateMapViewport() {
+    if (!map) return;
+    const view = map.getView();
+    const center = ol.proj.toLonLat(view.getCenter());
+    const zoom = view.getZoom() || 5;
+    mapCenter = { lat: center[1], lon: center[0] };
+    mapRadius = getRadiusFromZoom(zoom);
+}
+
 function initWebSocket() {
     if (!WS_ENABLED) {
         console.log('[WS] WebSocket disabled, using REST API');
@@ -739,6 +758,13 @@ async function initMainMap() {
             }
         });
 
+        map.on('moveend', function() {
+            updateMapViewport();
+        });
+
+        // Initialize viewport tracking
+        setTimeout(updateMapViewport, 100);
+
         olMapInitialized = true;
         console.log('OpenLayers map initialized (tar1090 style)');
         fetchATC();
@@ -1376,19 +1402,35 @@ async function fetchATC() {
                 return ac.lat && ac.lon;
             });
         } else {
-            // Fallback to REST API
-            const resMap = await fetch(`/api/atc/live?airline=${f.airline}&airport=${f.airport}`);
-            const payload = await resMap.json();
-            flights = payload.flights || [];
-            // Defensive: fix swapped lat/lon if lat looks like an India longitude (>60) and lon looks like a latitude (<60)
-            flights.forEach(ac => {
-                const lat = parseFloat(ac.lat);
-                const lon = parseFloat(ac.lon);
-                if (!isNaN(lat) && !isNaN(lon) && Math.abs(lat) > 60 && Math.abs(lon) < 60) {
-                    ac.lat = lon;
-                    ac.lon = lat;
-                }
-            });
+            // Use radar endpoint with dynamic center + radius based on map viewport
+            try {
+                const resMap = await fetch(`/api/aircraft/radar?lat=${mapCenter.lat}&lon=${mapCenter.lon}&radius=${mapRadius}`);
+                flights = await resMap.json();
+                if (!Array.isArray(flights)) flights = [];
+                // The radar endpoint already fixes swapped lat/lon — no need for client-side fix
+            } catch (e) {
+                // Fallback to live endpoint if radar endpoint fails
+                console.warn('[fetchATC] Radar endpoint failed, falling back to live:', e);
+                const resLive = await fetch(`/api/atc/live?airline=${f.airline}&airport=${f.airport}`);
+                const payload = await resLive.json();
+                flights = payload.flights || [];
+                flights.forEach(ac => {
+                    const lat = parseFloat(ac.lat);
+                    const lon = parseFloat(ac.lon);
+                    if (!isNaN(lat) && !isNaN(lon) && Math.abs(lat) > 60 && Math.abs(lon) < 60) {
+                        ac.lat = lon;
+                        ac.lon = lat;
+                    }
+                });
+            }
+            // Apply client-side airline/airport filter (radar endpoint doesn't support them)
+            if (f.airline !== 'ALL' || f.airport !== 'ALL') {
+                flights = flights.filter(ac => {
+                    if (f.airline !== 'ALL' && (!ac.callsign || !ac.callsign.startsWith(f.airline))) return false;
+                    if (f.airport !== 'ALL' && (!ac.callsign || !ac.callsign.includes(f.airport))) return false;
+                    return true;
+                });
+            }
             console.log(`[fetchATC] Received ${flights.length} flights from API`);
             if (flights.length > 0) {
                 console.log('[fetchATC] Sample flight:', flights[0]);
@@ -2482,24 +2524,24 @@ function stopRadarLoop() {
 async function fetchRadarData() {
     console.log('fetchRadarData called, radarCtx:', !!radarCtx);
     try {
-        const res = await fetch('/api/atc/live?airline=ALL&airport=ALL');
+        // Use radar endpoint with default India center + 1500 mile radius
+        const res = await fetch('/api/aircraft/radar?lat=20.5937&lon=78.9629&radius=1500');
         
         if (!res.ok) {
             console.warn('Radar API failed:', res.status);
             return;
         }
         
-        const data = await res.json();
-        console.log('API response:', data ? 'has data' : 'empty', data ? data.flights?.length : 0, 'flights');
-        
-        if (!data || !data.flights || !Array.isArray(data.flights)) {
-            console.warn('Invalid API data:', data);
+        const flights = await res.json();
+        if (!Array.isArray(flights)) {
+            console.warn('Invalid radar data:', flights);
             return;
         }
         
+        console.log('API response:', flights.length, 'flights');
+        
         const newAircraft = {};
-        data.flights.forEach(ac => {
-            fixLatLon(ac);
+        flights.forEach(ac => {
             if (ac.lat && ac.lon) {
                 newAircraft[ac.hexid] = {
                     hex: ac.hexid,
@@ -2520,7 +2562,7 @@ async function fetchRadarData() {
         radarAircraft = newAircraft;
         
         const countEl = document.getElementById('radar-count');
-        if (countEl) countEl.textContent = data.flights.length;
+        if (countEl) countEl.textContent = flights.length;
         
         // Initialize canvas if needed, then update
         if (!radarCtx) {
