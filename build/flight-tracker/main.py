@@ -1322,17 +1322,8 @@ class FlightMonitor:
                             dest_lat = float(ap_data.get('lat', 0)) if ap_data.get('lon') else None
                             dest_lon = float(ap_data.get('lon', 0)) if ap_data.get('lon') else None
                     
-                    # Get callsign_iata from FR24 cache if available
-                    cs = tracked_flight['callsign']
+                    # callsign_iata not currently populated - route_memory_cache stores (origin, dest, timestamp)
                     callsign_iata = None
-                    try:
-                        cached = await self.get_cached_route(cs)
-                        if cached:
-                            # Also check memory cache for IATA
-                            mem_entry = self.route_memory_cache.get(cs.upper())
-                            if mem_entry and len(mem_entry) > 2:
-                                callsign_iata = mem_entry[2]  # If stored
-                    except: pass
                     
                     upsert_tuple = (hex_id, tracked_flight['callsign'], c_lat, c_lon, c_alt, c_speed, c_heading, orig, dest, orig_iata, dest_iata, orig_lat, orig_lon, dest_lat, dest_lon, callsign_iata)
                 
