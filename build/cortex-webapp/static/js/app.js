@@ -832,16 +832,36 @@ function updateMapDimming() {
 let olFeatureCache = {};
 let pendingUpdate = false;
 let animationFrameId = null;
-const aircraftState = new Map(); // hex => {lat, lon, heading, speed, timestamp}
-const aircraftTarget = new Map(); // hex => {lat, lon, heading, speed, timestamp} - API target for smooth transition
-const TRANSITION_SPEED = 0.15; // 15% per frame = ~300ms to settle
+const aircraftTarget = new Map(); // hex => {lat, lon, heading, speed, timestamp} - API anchor position
+const aircraftDisplay = new Map(); // hex => {lat, lon, velLat, velLon} - smoothed display position with velocity for smoothDamp
 
-// Smooth interpolation function
-function lerp(start, end, t) {
-    return start + (end - start) * t;
+// Critically-damped spring smoothing (Unity-style smoothDamp)
+// No overshoot, no wobble, smooth catch-up regardless of frame rate
+function smoothDamp(current, target, currentVelocity, smoothTime, dt) {
+    const omega = 2 / smoothTime;
+    const x = omega * dt;
+    const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+    const change = current - target;
+    const temp = (currentVelocity + omega * change) * dt;
+    currentVelocity = (currentVelocity - omega * temp) * exp;
+    return target + (change + temp) * exp;
 }
 
-// Interpolate aircraft positions continuously with velocity extrapolation
+// Compute predicted lat/lon from heading + speed over elapsed time
+function predictPosition(lat, lon, headingDeg, speedKt, elapsedSec) {
+    if (speedKt < 5 || elapsedSec <= 0) return { lat, lon };
+    const headingRad = headingDeg * Math.PI / 180;
+    const distNm = (speedKt * elapsedSec) / 3600;
+    const dLat = distNm * Math.cos(headingRad) / 60;
+    const latRad = lat * Math.PI / 180;
+    const lonFactor = Math.cos(latRad);
+    return {
+        lat: lat + dLat,
+        lon: lon + (lonFactor > 0.01 ? distNm * Math.sin(headingRad) / (lonFactor * 60) : 0)
+    };
+}
+
+// Interpolate aircraft positions at 60fps using smoothDamp
 function interpolateAircraftPositions() {
     if (!olAircraftLayer || !map) {
         if (animationFrameId) {
@@ -860,65 +880,49 @@ function interpolateAircraftPositions() {
             const hex = feature.get('hexid');
             if (!hex) return;
             
-            const state = aircraftState.get(hex);
             const target = aircraftTarget.get(hex);
+            if (!target) return;
             
-            if (!state || !target) return;
+            let display = aircraftDisplay.get(hex);
+            if (!display) {
+                // First time seeing this aircraft — initialize display at API position
+                display = { lat: target.lat, lon: target.lon, velLat: 0, velLon: 0 };
+                aircraftDisplay.set(hex, display);
+            }
             
             const dtSinceUpdate = (now - target.timestamp) / 1000;
             
-            // Lerp state toward API target (raw position, never extrapolated)
-            let lat = lerp(state.lat, target.lat, TRANSITION_SPEED);
-            let lon = lerp(state.lon, target.lon, TRANSITION_SPEED);
-            let heading = lerp(state.heading, target.heading, TRANSITION_SPEED);
-            let speed = lerp(state.speed, target.speed, TRANSITION_SPEED);
+            // Compute predicted position based on heading + speed
+            const predicted = predictPosition(target.lat, target.lon, target.heading, target.speed, dtSinceUpdate);
             
-            // --- Velocity Extrapolation on STATE (not target) ---
-            // Once converged near the API position, predict forward using
-            // heading + speed so aircraft glide between 2s poll updates.
-            // The target stays at the raw API position — when new data
-            // arrives, the state smoothly corrects without "jumping back".
-            const distToTarget = Math.sqrt((lat - target.lat) ** 2 + (lon - target.lon) ** 2);
-            if (distToTarget < 0.002 && dtSinceUpdate > 0.8) {
-                const extrapSpeed = speed || target.speed || 0;
-                const extrapHeading = heading || target.heading || 0;
-                if (extrapSpeed > 5) {
-                    const extrapDt = (now - (target._lastStateExtrap || target.timestamp)) / 1000;
-                    if (extrapDt > 0 && extrapDt < 5) {
-                        const headingRad = extrapHeading * Math.PI / 180;
-                        const distNm = (extrapSpeed * extrapDt) / 3600;
-                        const dLat = distNm * Math.cos(headingRad) / 60;
-                        const latRad = lat * Math.PI / 180;
-                        const lonFactor = Math.cos(latRad);
-                        const dLon = lonFactor > 0.01
-                            ? distNm * Math.sin(headingRad) / (lonFactor * 60)
-                            : 0;
-                        lat += dLat;
-                        lon += dLon;
-                    }
-                    target._lastStateExtrap = now;
-                }
-            } else {
-                target._lastStateExtrap = now;
+            // Frame delta for smoothDamp (cap at 100ms to avoid jumps on tab switch)
+            const frameDt = Math.min((now - (display._lastFrame || now)) / 1000, 0.1);
+            display._lastFrame = now;
+            
+            if (frameDt > 0) {
+                // smoothDamp chases the predicted position with critically-damped motion
+                // smoothTime=0.4s gives fast convergence with zero overshoot
+                display.lat = smoothDamp(display.lat, predicted.lat, display.velLat, 0.4, frameDt);
+                display.lon = smoothDamp(display.lon, predicted.lon, display.velLon, 0.4, frameDt);
             }
             
-            // Update feature
-            const coord = ol.proj.fromLonLat([lon, lat]);
+            // Update feature geometry
+            const coord = ol.proj.fromLonLat([display.lon, display.lat]);
             feature.getGeometry().setCoordinates(coord);
-            feature.set('rotation', heading * Math.PI / 180);
-            feature.set('alt', state.alt);
-            feature.set('speed', speed);
-            feature.set('heading', heading);
             
-            // Update internal state
-            aircraftState.set(hex, {
-                lat, lon, heading, speed, 
-                alt: state.alt,
-                timestamp: now
-            });
+            // Smooth heading and speed too
+            const heading = smoothDamp(feature.get('heading') || target.heading, target.heading, feature._smoothHeadingVel || 0, 0.4, Math.min(frameDt || 0.016, 0.1));
+            const speed = smoothDamp(feature.get('speed') || target.speed, target.speed, feature._smoothSpeedVel || 0, 0.4, Math.min(frameDt || 0.016, 0.1));
+            feature._smoothHeadingVel = typeof heading === 'number' ? heading : 0;
+            feature._smoothSpeedVel = typeof speed === 'number' ? speed : 0;
+            
+            feature.set('rotation', target.heading * Math.PI / 180);
+            feature.set('alt', target.alt);
+            feature.set('speed', target.speed);
+            feature.set('heading', target.heading);
         });
         
-        // Refresh layer to show updated positions
+        // Refresh layer
         olAircraftLayer.changed();
         
         // Continue animation loop
@@ -997,8 +1001,8 @@ function updateOLAircraft(flights) {
                         source.addFeature(feature);
                         olFeatureCache[hex] = feature;
                         
-                        // Initialize state for new aircraft
-                        aircraftState.set(hex, { lat, lon, heading, speed, alt, timestamp: Date.now() });
+                        // Initialize display position for smooth animation
+                        aircraftDisplay.set(hex, { lat, lon, velLat: 0, velLon: 0, _lastFrame: Date.now() });
                         added++;
                     }
                 });
@@ -1009,7 +1013,7 @@ function updateOLAircraft(flights) {
                         const feature = olFeatureCache[hex];
                         source.removeFeature(feature);
                         delete olFeatureCache[hex];
-                        aircraftState.delete(hex);
+                        aircraftDisplay.delete(hex);
                         aircraftTarget.delete(hex);
                         removed++;
                     }
@@ -2527,45 +2531,11 @@ function stopRadarLoop() {
 async function fetchRadarData() {
     console.log('fetchRadarData called, radarCtx:', !!radarCtx);
     try {
-        // Use radar endpoint with default India center + 1500 mile radius
-        const res = await fetch('/api/aircraft/radar?lat=20.5937&lon=78.9629&radius=1500');
-        
-        if (!res.ok) {
-            console.warn('Radar API failed:', res.status);
-            return;
-        }
-        
-        const flights = await res.json();
-        if (!Array.isArray(flights)) {
-            console.warn('Invalid radar data:', flights);
-            return;
-        }
-        
-        console.log('API response:', flights.length, 'flights');
-        
-        const newAircraft = {};
-        flights.forEach(ac => {
-            if (ac.lat && ac.lon) {
-                newAircraft[ac.hexid] = {
-                    hex: ac.hexid,
-                    callsign: ac.callsign,
-                    lat: ac.lat,
-                    lon: ac.lon,
-                    alt: ac.alt || 0,
-                    gs: ac.speed || 0,
-                    heading: ac.heading || 0,
-                    origin: ac.origin || '',
-                    destination: ac.destination || ''
-                };
-            }
-        });
-        
-        console.log('Processed aircraft:', Object.keys(newAircraft).length);
-        
-        radarAircraft = newAircraft;
+        // Reuse radarAircraft data already populated by fetchATC() or WebSocket
+        const count = Object.keys(radarAircraft).length;
         
         const countEl = document.getElementById('radar-count');
-        if (countEl) countEl.textContent = flights.length;
+        if (countEl) countEl.textContent = count;
         
         // Initialize canvas if needed, then update
         if (!radarCtx) {
