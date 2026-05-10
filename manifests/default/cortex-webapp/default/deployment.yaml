@@ -44,7 +44,7 @@ spec:
               name: http
           env:
             - name: DB_HOST
-              value: "SHARED_SERVICES_HOST"
+              value: "192.168.200.11"
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME
@@ -57,7 +57,7 @@ spec:
                   name: flight-db-credentials
                   key: password
             - name: REDIS_HOST
-              value: "SHARED_SERVICES_HOST"
+              value: "192.168.200.11"
             - name: REDIS_PORT
               value: "6379"
             - name: REDIS_PASSWORD
@@ -66,7 +66,7 @@ spec:
                   name: redis-credentials
                   key: password
             - name: INFLUXDB_URL
-              value: "http://SHARED_SERVICES_HOST:8086"
+              value: "http://192.168.200.11:8086"
             - name: INFLUXDB_ORG
               value: "bharatradar"
             - name: INFLUXDB_TOKEN
