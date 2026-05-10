@@ -202,10 +202,10 @@ class Config:
     # Frontend Polling Intervals (milliseconds)
     # ==========================================
     # Radar display refresh interval
-    FRONTEND_RADAR_POLL_INTERVAL_MS = 5000
+    FRONTEND_RADAR_POLL_INTERVAL_MS = 2000
 
     # ATC display refresh interval
-    FRONTEND_ATC_POLL_INTERVAL_MS = 5000
+    FRONTEND_ATC_POLL_INTERVAL_MS = 2000
 
     # Ops display refresh interval
     FRONTEND_OPS_POLL_INTERVAL_MS = 30000

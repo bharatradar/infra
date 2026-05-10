@@ -808,14 +808,14 @@ let pendingUpdate = false;
 let animationFrameId = null;
 const aircraftState = new Map(); // hex => {lat, lon, heading, speed, timestamp}
 const aircraftTarget = new Map(); // hex => {lat, lon, heading, speed, timestamp} - API target for smooth transition
-const TRANSITION_SPEED = 0.1; // 10% per frame = ~500ms to settle
+const TRANSITION_SPEED = 0.15; // 15% per frame = ~300ms to settle
 
 // Smooth interpolation function
 function lerp(start, end, t) {
     return start + (end - start) * t;
 }
 
-// Interpolate aircraft positions continuously
+// Interpolate aircraft positions continuously with velocity extrapolation
 function interpolateAircraftPositions() {
     if (!olAircraftLayer || !map) {
         if (animationFrameId) {
@@ -828,6 +828,7 @@ function interpolateAircraftPositions() {
     try {
         const source = olAircraftLayer.getSource();
         const features = source.getFeatures();
+        const now = Date.now();
         
         features.forEach(feature => {
             const hex = feature.get('hexid');
@@ -838,7 +839,38 @@ function interpolateAircraftPositions() {
             
             if (!state || !target) return;
             
-            // Smoothly interpolate position towards target
+            // --- Velocity Extrapolation ---
+            // Between API polls, predict position using heading + speed
+            // so aircraft glide smoothly along their flight path
+            const dtSinceUpdate = (now - target.timestamp) / 1000;
+            
+            if (dtSinceUpdate > 0.5) {
+                const speedKt = target.speed || state.speed || 0;
+                const headingDeg = target.heading || state.heading || 0;
+                
+                if (speedKt > 5) {  // Only extrapolate if moving meaningfully
+                    const headingRad = headingDeg * Math.PI / 180;
+                    const lastExtrapTs = target._lastExtrapolated || target.timestamp;
+                    const extrapDt = (now - lastExtrapTs) / 1000;
+                    
+                    if (extrapDt > 0) {
+                        // Distance traveled in nautical miles
+                        const distNm = (speedKt * extrapDt) / 3600;
+                        const dLat = distNm * Math.cos(headingRad) / 60;
+                        const latRad = target.lat * Math.PI / 180;
+                        const lonFactor = Math.cos(latRad);
+                        const dLon = lonFactor > 0.01
+                            ? distNm * Math.sin(headingRad) / (lonFactor * 60)
+                            : 0;
+                        
+                        target.lat += dLat;
+                        target.lon += dLon;
+                        target._lastExtrapolated = now;
+                    }
+                }
+            }
+            
+            // Smoothly interpolate position towards (extrapolated) target
             const lat = lerp(state.lat, target.lat, TRANSITION_SPEED);
             const lon = lerp(state.lon, target.lon, TRANSITION_SPEED);
             const heading = lerp(state.heading, target.heading, TRANSITION_SPEED);
@@ -848,7 +880,7 @@ function interpolateAircraftPositions() {
             const coord = ol.proj.fromLonLat([lon, lat]);
             feature.getGeometry().setCoordinates(coord);
             feature.set('rotation', heading * Math.PI / 180);
-            feature.set('alt', state.alt); // Keep altitude from last known state
+            feature.set('alt', state.alt);
             feature.set('speed', speed);
             feature.set('heading', heading);
             
@@ -856,15 +888,8 @@ function interpolateAircraftPositions() {
             aircraftState.set(hex, {
                 lat, lon, heading, speed, 
                 alt: state.alt,
-                timestamp: Date.now()
+                timestamp: now
             });
-            
-            // Check if we've reached target (within small threshold)
-            const latDiff = Math.abs(lat - target.lat);
-            const lonDiff = Math.abs(lon - target.lon);
-            if (latDiff < 0.0001 && lonDiff < 0.0001) {
-                // Reached target, keep state as is
-            }
         });
         
         // Refresh layer to show updated positions
@@ -913,7 +938,7 @@ function updateOLAircraft(flights) {
                     const typeCode = (aircraftDB[hex] && aircraftDB[hex].type) || fl.ac_type || '';
                     
                     // Store API target for smooth transition
-                    aircraftTarget.set(hex, { lat, lon, heading, speed, timestamp: Date.now() });
+                    aircraftTarget.set(hex, { lat, lon, heading, speed, timestamp: Date.now(), _lastExtrapolated: Date.now() });
 
                     const coord = ol.proj.fromLonLat([lon, lat]);
                     const rotation = heading * Math.PI / 180;
