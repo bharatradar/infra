@@ -26,12 +26,7 @@
             animation: sweep 12s linear infinite;
         }
         .radar-blip {
-            transition: all 0.3s ease;
-        }
-        .radar-blip.blip-lit {
-            box-shadow: 0 0 20px rgba(21, 163, 74, 1), 0 0 40px rgba(21, 163, 74, 0.6);
-            opacity: 1;
-            transform: scale(1.5);
+            will-change: transform, opacity, box-shadow;
         }
     </style>
 </head>
@@ -207,6 +202,8 @@
         (function initRadarBlips() {
             const blips = document.querySelectorAll('.radar-blip');
             const sweepPeriod = 12000;
+            const decayMs = 2500;
+            const threshold = 4;
             const center = { x: 25, y: 50 };
             blips.forEach(el => {
                 const left = parseFloat(el.style.left);
@@ -216,16 +213,33 @@
                 let angle = Math.atan2(dx, -dy) * 180 / Math.PI;
                 if (angle < 0) angle += 360;
                 el.dataset.angle = angle;
+                el.dataset.lastSweep = '0';
             });
             let sweepStart = performance.now();
             function update() {
-                const elapsed = (performance.now() - sweepStart) % sweepPeriod;
+                const now = performance.now();
+                const elapsed = (now - sweepStart) % sweepPeriod;
                 const sweepAngle = (elapsed / sweepPeriod) * 360;
                 blips.forEach(el => {
                     let diff = parseFloat(el.dataset.angle) - sweepAngle;
                     if (diff > 180) diff -= 360;
                     if (diff < -180) diff += 360;
-                    el.classList.toggle('blip-lit', Math.abs(diff) < 12);
+                    if (Math.abs(diff) < threshold) {
+                        el.dataset.lastSweep = now;
+                    }
+                    const timeSinceSweep = now - parseFloat(el.dataset.lastSweep);
+                    let intensity = 1 - (timeSinceSweep / decayMs);
+                    if (intensity < 0) intensity = 0;
+                    if (intensity > 1) intensity = 1;
+                    const glow = Math.round(intensity * 40);
+                    const shadow = intensity > 0
+                        ? `0 0 ${glow}px rgba(21,163,74,${intensity}), 0 0 ${glow * 2}px rgba(21,163,74,${intensity * 0.5})`
+                        : 'none';
+                    const opacity = 0.15 + intensity * 0.85;
+                    const scale = 0.6 + intensity * 1.4;
+                    el.style.boxShadow = shadow;
+                    el.style.opacity = opacity;
+                    el.style.transform = `scale(${scale})`;
                 });
                 requestAnimationFrame(update);
             }
