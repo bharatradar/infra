@@ -552,7 +552,8 @@ function getAircraftStyle(alt, rotation, zoom, isSelected, typeCode, hex) {
                     fill: new ol.style.Fill({ color: color }),
                     stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0.6)', width: 1.5 }),
                     points: 3, radius: 10 * finalScale, radius2: 0,
-                    rotation: Math.PI / 2 - rotation, rotateWithView: true
+                    rotation: rotation, rotateWithView: true
+
                 })
             });
         }
@@ -565,14 +566,13 @@ function getAircraftStyle(alt, rotation, zoom, isSelected, typeCode, hex) {
                     fill: new ol.style.Fill({ color: color }),
                     stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0.6)', width: 1.5 }),
                     points: 3, radius: 10 * finalScale, radius2: 0,
-                    rotation: Math.PI / 2 - rotation, rotateWithView: true
+                    rotation: rotation, rotateWithView: true
                 })
             });
         }
 
         const noRotate = shape.noRotate || false;
-        const rotRad = noRotate ? 0 : (Math.PI / 2 - rotation);
-
+        const rotRad = noRotate ? 0 : rotation;
         const cacheKey = `${color}_${shapeName}_${finalScale.toFixed(2)}_${rotRad.toFixed(3)}_${isSelected}`;
         if (_styleCache.has(cacheKey)) {
             return _styleCache.get(cacheKey);
