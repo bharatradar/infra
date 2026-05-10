@@ -4,7 +4,7 @@ resources:
 - telegram-bot.yaml
 - ai-agents.yaml
 - flight-tracker.yaml
-- schedule-downloader-cronjob.yaml
+- schedule-downloader.yaml
 - api/default
 - external/default
 - hub/default
