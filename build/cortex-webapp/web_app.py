@@ -745,6 +745,19 @@ async def auth_callback(code: str):
                         email = "authenticated"
                         name = "User"
                 
+                # Create DB user BEFORE setting cookie
+                try:
+                    async with db_pool.acquire() as conn:
+                        await conn.execute("""
+                            INSERT INTO api_users (email, name, tier, google_id) 
+                            VALUES ($1, $2, 'free', 'google') 
+                            ON CONFLICT (email) DO NOTHING
+                        """, email, name)
+                        logger.info(f"[AUTH] User created/verified: {email}")
+                except Exception as ue:
+                    logger.error(f"[AUTH] Auto-create user error: {ue}")
+                    return RedirectResponse("/login?auth=error", status_code=302)
+                
                 session_value = f"google_{email}_{datetime.now().timestamp()}"
                 redirect = RedirectResponse(url="/dashboard", status_code=302)
                 redirect.set_cookie(
@@ -756,18 +769,6 @@ async def auth_callback(code: str):
                     path="/",
                     domain="cortex.bharatradar.com"
                 )
-                
-                # Auto-create user in api_users
-                try:
-                    async with db_pool.acquire() as conn:
-                        await conn.execute("""
-                            INSERT INTO api_users (email, name, tier, google_id) 
-                            VALUES ($1, $2, 'free', 'google') 
-                            ON CONFLICT (email) DO NOTHING
-                        """, email, name)
-                        logger.info(f"[AUTH] User created/verified: {email}")
-                except Exception as ue:
-                    logger.error(f"[AUTH] Auto-create user error: {ue}")
                 
                 return redirect
     except Exception as e:
@@ -1471,7 +1472,20 @@ async def get_current_user_profile(request: Request):
                 WHERE LOWER(email) = LOWER($1)
             """, user_email)
             if not user:
-                return JSONResponse(status_code=404, content={"error": "User not found"})
+                # Fallback: auto-create if cookie exists but DB record missing
+                name = user_email.split('@')[0]
+                await conn.execute("""
+                    INSERT INTO api_users (email, name, tier, google_id)
+                    VALUES ($1, $2, 'free', 'google')
+                    ON CONFLICT (email) DO NOTHING
+                """, user_email, name)
+                user = await conn.fetchrow("""
+                    SELECT email, name, callsign, tier, contributor_status, contributor_since, created_at
+                    FROM api_users
+                    WHERE LOWER(email) = LOWER($1)
+                """, user_email)
+                if not user:
+                    return JSONResponse(status_code=404, content={"error": "User not found"})
 
             result = dict(user)
             for ts_field in ('created_at', 'contributor_since'):

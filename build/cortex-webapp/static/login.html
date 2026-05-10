@@ -26,6 +26,9 @@
 </head>
 <body class="flex items-center justify-center min-h-screen">
     <div class="login-card rounded-2xl p-8 shadow-2xl max-w-md w-full mx-4">
+        <div id="auth-error" class="hidden mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-center">
+            <i class="fas fa-exclamation-triangle mr-2"></i>Authentication failed. Please try again.
+        </div>
         <div class="text-center mb-8">
             <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/20 mb-4">
                 <i class="fa-solid fa-radar text-blue-500 text-3xl"></i>
@@ -59,5 +62,10 @@
             </p>
         </div>
     </div>
+    <script>
+        if (new URLSearchParams(window.location.search).get('auth') === 'error') {
+            document.getElementById('auth-error').classList.remove('hidden');
+        }
+    </script>
 </body>
 </html>

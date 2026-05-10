@@ -18,6 +18,20 @@
         }
         .fn-box sup { color: #23c074; margin-right: 4px; }
         .hidden { display: none; }
+        @keyframes sweep {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        .animate-radar-sweep {
+            animation: sweep 12s linear infinite;
+        }
+        @keyframes radar-pulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+        .blip {
+            animation: radar-pulse 3s ease-in-out infinite;
+        }
     </style>
 </head>
 <body>
@@ -43,23 +57,59 @@
     </header>
 
     <main>
-        <section class="hero">
-            <div class="hero-live-stats">
-                <a href="https://map.bharatradar.com" class="live-stat" title="View on Live Map">
-                    <span class="live-stat-value js-aircraft-count">—</span>
-                    <span class="live-stat-label">Live Aircraft</span>
-                </a>
-                <span class="live-stat-divider"></span>
-                <a href="https://mlat.bharatradar.com" class="live-stat" title="View on MLAT Map">
-                    <span class="live-stat-value js-feeder-count">—</span>
-                    <span class="live-stat-label">Active Feeders</span>
-                </a>
+        <section class="hero" style="position: relative; overflow: hidden; background: #0b1120;">
+            <div style="position: absolute; inset: 0; pointer-events: none;">
+                <div style="position: absolute; inset: 0; display: grid; grid-template-columns: repeat(6, 1fr);">
+                    <div style="border-right: 1px solid rgba(21,163,74,0.1);"></div>
+                    <div style="border-right: 1px solid rgba(21,163,74,0.1);"></div>
+                    <div style="border-right: 1px solid rgba(21,163,74,0.1);"></div>
+                    <div style="border-right: 1px solid rgba(21,163,74,0.1);"></div>
+                    <div style="border-right: 1px solid rgba(21,163,74,0.1);"></div>
+                    <div style="border-right: 1px solid rgba(21,163,74,0.1);"></div>
+                </div>
+                <div style="position: absolute; left: 25%; top: 50%; width: 0; height: 0;">
+                    <div style="position: absolute; transform: translate(-50%,-50%); width: 200px; height: 200px; border-radius: 50%; border: 1px solid rgba(21,163,74,0.2);"></div>
+                    <div style="position: absolute; transform: translate(-50%,-50%); width: 450px; height: 450px; border-radius: 50%; border: 1px solid rgba(21,163,74,0.15);"></div>
+                    <div style="position: absolute; transform: translate(-50%,-50%); width: 700px; height: 700px; border-radius: 50%; border: 1px solid rgba(21,163,74,0.1);"></div>
+                    <div style="position: absolute; transform: translate(-50%,-50%); width: 1000px; height: 1000px; border-radius: 50%; border: 1px solid rgba(21,163,74,0.05);"></div>
+                    <div style="position: absolute; transform: translate(-50%,-50%); width: 1200px; height: 1px; background: rgba(21,163,74,0.2);"></div>
+                    <div style="position: absolute; transform: translate(-50%,-50%); height: 1200px; width: 1px; background: rgba(21,163,74,0.2);"></div>
+                    <div class="animate-radar-sweep" style="position: absolute; transform: translate(-50%,-50%); width: 1000px; height: 1000px; border-radius: 50%; background: conic-gradient(from 0deg, transparent 94%, rgba(21,163,74,0.3) 100%);"></div>
+                    <div style="position: absolute; transform: translate(-50%,-50%); width: 8px; height: 8px; background: #15a34a; border-radius: 50%; box-shadow: 0 0 15px rgba(21,163,74,1);"></div>
+                </div>
+                <div class="blip" style="position: absolute; left: 35%; top: 40%;">
+                    <div style="width: 6px; height: 6px; background: #4ade80; transform: rotate(45deg);"></div>
+                    <div style="margin-top: 4px; margin-left: 8px; font-size: 10px; font-family: monospace; color: #15a34a; line-height: 1.2;">
+                        <div>6E2134</div>
+                        <div>320KT / 24000FT</div>
+                    </div>
+                </div>
+                <div class="blip" style="position: absolute; left: 60%; top: 65%; animation-delay: 1.5s;">
+                    <div style="width: 6px; height: 6px; background: #4ade80; transform: rotate(45deg);"></div>
+                    <div style="margin-top: 4px; margin-left: 8px; font-size: 10px; font-family: monospace; color: #15a34a; line-height: 1.2; opacity: 0.7;">
+                        <div>UK812</div>
+                        <div>410KT / 36000FT</div>
+                    </div>
+                </div>
             </div>
-            <h1>India's Open ADS-B Flight Tracking Network</h1>
-            <p>Community-powered, open-source aircraft tracking across India. All data is free and open for everyone.<sup class="fn-mark">*</sup></p>
-            <div class="hero-buttons">
-                <a href="https://map.bharatradar.com" class="btn btn-primary">View Live Map</a>
-                <a href="/docs/get-started/become-a-feeder/" class="btn btn-secondary">Become a Feeder</a>
+            <div style="position: relative; z-index: 10;">
+                <div class="hero-live-stats">
+                    <a href="https://map.bharatradar.com" class="live-stat" title="View on Live Map">
+                        <span class="live-stat-value js-aircraft-count">—</span>
+                        <span class="live-stat-label">Live Aircraft</span>
+                    </a>
+                    <span class="live-stat-divider"></span>
+                    <a href="https://mlat.bharatradar.com" class="live-stat" title="View on MLAT Map">
+                        <span class="live-stat-value js-feeder-count">—</span>
+                        <span class="live-stat-label">Active Feeders</span>
+                    </a>
+                </div>
+                <h1>India's Open ADS-B Flight Tracking Network</h1>
+                <p>Community-powered, open-source aircraft tracking across India. All data is free and open for everyone.<sup class="fn-mark">*</sup></p>
+                <div class="hero-buttons">
+                    <a href="https://map.bharatradar.com" class="btn btn-primary">View Live Map</a>
+                    <a href="/docs/get-started/become-a-feeder/" class="btn btn-secondary">Become a Feeder</a>
+                </div>
             </div>
         </section>
 
