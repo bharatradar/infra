@@ -865,42 +865,42 @@ function interpolateAircraftPositions() {
             
             if (!state || !target) return;
             
-            // --- Velocity Extrapolation ---
-            // Between API polls, predict position using heading + speed
-            // so aircraft glide smoothly along their flight path
             const dtSinceUpdate = (now - target.timestamp) / 1000;
             
-            if (dtSinceUpdate > 0.5) {
-                const speedKt = target.speed || state.speed || 0;
-                const headingDeg = target.heading || state.heading || 0;
-                
-                if (speedKt > 5) {  // Only extrapolate if moving meaningfully
-                    const headingRad = headingDeg * Math.PI / 180;
-                    const lastExtrapTs = target._lastExtrapolated || target.timestamp;
-                    const extrapDt = (now - lastExtrapTs) / 1000;
-                    
-                    if (extrapDt > 0) {
-                        // Distance traveled in nautical miles
-                        const distNm = (speedKt * extrapDt) / 3600;
+            // Lerp state toward API target (raw position, never extrapolated)
+            let lat = lerp(state.lat, target.lat, TRANSITION_SPEED);
+            let lon = lerp(state.lon, target.lon, TRANSITION_SPEED);
+            let heading = lerp(state.heading, target.heading, TRANSITION_SPEED);
+            let speed = lerp(state.speed, target.speed, TRANSITION_SPEED);
+            
+            // --- Velocity Extrapolation on STATE (not target) ---
+            // Once converged near the API position, predict forward using
+            // heading + speed so aircraft glide between 2s poll updates.
+            // The target stays at the raw API position — when new data
+            // arrives, the state smoothly corrects without "jumping back".
+            const distToTarget = Math.sqrt((lat - target.lat) ** 2 + (lon - target.lon) ** 2);
+            if (distToTarget < 0.002 && dtSinceUpdate > 0.8) {
+                const extrapSpeed = speed || target.speed || 0;
+                const extrapHeading = heading || target.heading || 0;
+                if (extrapSpeed > 5) {
+                    const extrapDt = (now - (target._lastStateExtrap || target.timestamp)) / 1000;
+                    if (extrapDt > 0 && extrapDt < 5) {
+                        const headingRad = extrapHeading * Math.PI / 180;
+                        const distNm = (extrapSpeed * extrapDt) / 3600;
                         const dLat = distNm * Math.cos(headingRad) / 60;
-                        const latRad = target.lat * Math.PI / 180;
+                        const latRad = lat * Math.PI / 180;
                         const lonFactor = Math.cos(latRad);
                         const dLon = lonFactor > 0.01
                             ? distNm * Math.sin(headingRad) / (lonFactor * 60)
                             : 0;
-                        
-                        target.lat += dLat;
-                        target.lon += dLon;
-                        target._lastExtrapolated = now;
+                        lat += dLat;
+                        lon += dLon;
                     }
+                    target._lastStateExtrap = now;
                 }
+            } else {
+                target._lastStateExtrap = now;
             }
-            
-            // Smoothly interpolate position towards (extrapolated) target
-            const lat = lerp(state.lat, target.lat, TRANSITION_SPEED);
-            const lon = lerp(state.lon, target.lon, TRANSITION_SPEED);
-            const heading = lerp(state.heading, target.heading, TRANSITION_SPEED);
-            const speed = lerp(state.speed, target.speed, TRANSITION_SPEED);
             
             // Update feature
             const coord = ol.proj.fromLonLat([lon, lat]);
@@ -964,7 +964,7 @@ function updateOLAircraft(flights) {
                     const typeCode = (aircraftDB[hex] && aircraftDB[hex].type) || fl.ac_type || '';
                     
                     // Store API target for smooth transition
-                    aircraftTarget.set(hex, { lat, lon, heading, speed, timestamp: Date.now(), _lastExtrapolated: Date.now() });
+                    aircraftTarget.set(hex, { lat, lon, heading, speed, timestamp: Date.now() });
 
                     const coord = ol.proj.fromLonLat([lon, lat]);
                     const rotation = heading * Math.PI / 180;
@@ -1390,6 +1390,9 @@ function toggleHeatmap() { showingHeatmap = document.getElementById('toggle-heat
 
 async function fetchATC() {
     try {
+        // Always update viewport before fetching to ensure accurate center + radius
+        updateMapViewport();
+        
         const f = getFilters();
         let flights = [];
         
