@@ -482,6 +482,14 @@ app = FastAPI(
     openapi_url=None
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://bharatradar.com", "https://www.bharatradar.com", "https://cortex.bharatradar.com"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Manually serve docs at /* so they work behind nginx/FRP proxy
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui_html():
