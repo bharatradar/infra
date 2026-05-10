@@ -27,6 +27,7 @@
         }
         .radar-blip {
             will-change: transform, opacity, box-shadow;
+            border-radius: 50%;
         }
     </style>
 </head>
@@ -202,8 +203,8 @@
         (function initRadarBlips() {
             const blips = document.querySelectorAll('.radar-blip');
             const sweepPeriod = 12000;
-            const decayMs = 2500;
-            const threshold = 4;
+            const decayPerFrame = 1 / (60 * sweepPeriod / 1000);
+            const minAlpha = 0.35;
             const center = { x: 25, y: 50 };
             blips.forEach(el => {
                 const left = parseFloat(el.style.left);
@@ -213,34 +214,39 @@
                 let angle = Math.atan2(dx, -dy) * 180 / Math.PI;
                 if (angle < 0) angle += 360;
                 el.dataset.angle = angle;
-                el.dataset.lastSweep = '0';
+                el.dataset.alpha = minAlpha;
             });
             let sweepStart = performance.now();
+            let lastSweepAngle = -1;
             function update() {
                 const now = performance.now();
                 const elapsed = (now - sweepStart) % sweepPeriod;
                 const sweepAngle = (elapsed / sweepPeriod) * 360;
                 blips.forEach(el => {
-                    let diff = parseFloat(el.dataset.angle) - sweepAngle;
-                    if (diff > 180) diff -= 360;
-                    if (diff < -180) diff += 360;
-                    if (Math.abs(diff) < threshold) {
-                        el.dataset.lastSweep = now;
+                    const blipAngle = parseFloat(el.dataset.angle);
+                    let alpha = parseFloat(el.dataset.alpha);
+                    let crossed = false;
+                    if (lastSweepAngle >= 0) {
+                        if (lastSweepAngle < sweepAngle) {
+                            if (blipAngle >= lastSweepAngle && blipAngle <= sweepAngle) crossed = true;
+                        } else {
+                            if (blipAngle >= lastSweepAngle || blipAngle <= sweepAngle) crossed = true;
+                        }
                     }
-                    const timeSinceSweep = now - parseFloat(el.dataset.lastSweep);
-                    let intensity = 1 - (timeSinceSweep / decayMs);
-                    if (intensity < 0) intensity = 0;
-                    if (intensity > 1) intensity = 1;
-                    const glow = Math.round(intensity * 40);
-                    const shadow = intensity > 0
-                        ? `0 0 ${glow}px rgba(21,163,74,${intensity}), 0 0 ${glow * 2}px rgba(21,163,74,${intensity * 0.5})`
-                        : 'none';
-                    const opacity = 0.15 + intensity * 0.85;
-                    const scale = 0.6 + intensity * 1.4;
-                    el.style.boxShadow = shadow;
-                    el.style.opacity = opacity;
-                    el.style.transform = `scale(${scale})`;
+                    if (crossed) {
+                        alpha = 1.0;
+                    } else {
+                        alpha = Math.max(minAlpha, alpha - decayPerFrame);
+                    }
+                    el.dataset.alpha = alpha;
+                    const glow = Math.round(alpha * 30);
+                    el.style.boxShadow = alpha > minAlpha
+                        ? `0 0 ${glow}px rgba(21,163,74,${alpha}), 0 0 ${glow * 2}px rgba(21,163,74,${alpha * 0.5})`
+                        : `0 0 2px rgba(21,163,74,${minAlpha})`;
+                    el.style.opacity = alpha;
+                    el.style.transform = `scale(${0.5 + alpha * 0.8})`;
                 });
+                lastSweepAngle = sweepAngle;
                 requestAnimationFrame(update);
             }
             requestAnimationFrame(update);
