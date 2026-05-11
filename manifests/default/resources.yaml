@@ -76,6 +76,7 @@ metadata:
   name: homepage
   annotations:
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+    traefik.ingress.kubernetes.io/router.entrypoints: web
     nginx.ingress.kubernetes.io/configuration-snippet: |
       location /discord {
         return 302 https://discord.gg/3wPfmyNFRq;
@@ -118,6 +119,7 @@ metadata:
   name: globe-reapi
   annotations:
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
   tls:
   - hosts:
@@ -141,6 +143,7 @@ metadata:
   name: tar1090
   annotations:
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+    traefik.ingress.kubernetes.io/router.entrypoints: web
     nginx.ingress.kubernetes.io/configuration-snippet: |
       location /graphs1090 {
         return 302 https://bharatradar.com;
@@ -270,6 +273,7 @@ metadata:
   name: map
   annotations:
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
   tls:
   - hosts:
@@ -308,6 +312,7 @@ metadata:
   name: map-table
   annotations:
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+    traefik.ingress.kubernetes.io/router.entrypoints: web
     nginx.ingress.kubernetes.io/rewrite-target: /synctable/all/$2
 spec:
   tls:
