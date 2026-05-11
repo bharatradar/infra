@@ -42,7 +42,6 @@ AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7  # 7 days
 
 # Routes that don't require authentication
 PUBLIC_ROUTES = [
-    "/",
     "/login",
     "/logout",
     "/auth/",
@@ -60,8 +59,15 @@ PUBLIC_ROUTES = [
     "/login",
     "/auth/google",
     "/auth/callback",
-    # ATC radar data (no auth for dashboard display)
-    "/api/atc/live",
+    # Dashboard data endpoints (no auth for public dashboard display)
+    "/api/aircraft/",
+    "/api/atc/",
+    "/api/ops/",
+    "/api/exec/",
+    "/api/delay/",
+    "/api/drilldown/",
+    "/api/telemetry/",
+    "/api/config",
     "/api/filters",
     "/static/",
     "/favicon.ico",

@@ -299,7 +299,9 @@ function switchTab(target) {
     // Start polling for active tab only
     if (target === 'atc') {
         fetchATC();
-        tabTimers.atc = setInterval(fetchATC, FRONTEND_CONFIG.atc_poll_interval_ms);
+        if (!(FRONTEND_CONFIG.ws_use_for_atc && FRONTEND_CONFIG.ws_enabled)) {
+            tabTimers.atc = setInterval(fetchATC, FRONTEND_CONFIG.atc_poll_interval_ms);
+        }
     } else if (target === 'ops') {
         fetchOps();
         tabTimers.ops = setInterval(fetchOps, FRONTEND_CONFIG.ops_poll_interval_ms);

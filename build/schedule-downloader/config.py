@@ -14,6 +14,18 @@ def _env(key, default=None):
     """Get environment variable with optional default."""
     return os.environ.get(key, default)
 
+def _parse_port(val, default=6379):
+    """Parse port from plain number or tcp://host:port format (K8s service env)."""
+    if not val:
+        return default
+    val = str(val)
+    if val.startswith("tcp://"):
+        val = val.split(":")[-1]
+    try:
+        return int(val)
+    except ValueError:
+        return default
+
 class Config:
     DEBUG_MODE = True
     APP_NAME = "raga_flight_status"
@@ -128,11 +140,11 @@ class Config:
         "user": _env("DB_USER", "flight_db_user"),
         "password": _env("DB_PASSWORD", "flight_db_password"),
         "host": _env("DB_HOST", "localhost"),
-        "port": _env("DB_PORT", "5432")
+        "port": str(_parse_port(_env("DB_PORT"), 5432))
     }
     REDIS_PARAMS = {
         "host": _env("REDIS_HOST", "127.0.0.1"),
-        "port": int(_env("REDIS_PORT", "6379")),
+        "port": _parse_port(_env("REDIS_PORT"), 6379),
         "db": int(_env("REDIS_DB", "0")),
         "decode_responses": True
     }
@@ -353,6 +365,18 @@ DB_PARAMS = {
     "client_encoding": "UTF8"
 }
 
+def _parse_port(val, default):
+    """Parse port from plain number or tcp://host:port format."""
+    if val is None:
+        return default
+    s = str(val)
+    if '://' in s:
+        return int(s.split(':')[-1])
+    try:
+        return int(s)
+    except (ValueError, TypeError):
+        return default
+
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_PORT = _parse_port(os.getenv("REDIS_PORT"), 6379)
 REDIS_DB = int(os.getenv("REDIS_DB", 0))
