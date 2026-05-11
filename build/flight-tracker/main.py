@@ -26,19 +26,7 @@ class ZstdPatch:
 
 sys.modules['zstd'] = ZstdPatch()
 
-if not os.path.exists("binCraft_decoder.py"):
-    url = "https://raw.githubusercontent.com/acarsGuy/binCraft-decoder/main/binCraft_decoder.py"
-    try:
-        with urllib.request.urlopen(url) as response:
-            content = response.read().decode('utf-8')
-    except Exception as e:
-        url = "https://raw.githubusercontent.com/acarsGuy/binCraft-decoder/master/binCraft_decoder.py"
-        with urllib.request.urlopen(url) as response:
-            content = response.read().decode('utf-8')
-            
-    with open("binCraft_decoder.py", "w", encoding="utf-8") as f:
-        f.write(content)
-
+# Use bundled binCraft_decoder.py (fixed version with correct lat/lon and altitude/rate mapping)
 import binCraft_decoder
 from config import Config
 from utils import (
