@@ -193,7 +193,7 @@ async def _execute_tool_local(tool_name: str, params: dict) -> str:
         
         rp = getattr(Config, 'REDIS_PARAMS', {})
         r = redis.Redis(
-            host=rp.get('host', '192.168.200.15'), 
+            host=rp.get('host', 'localhost'), 
             port=rp.get('port', 6379),
             password=rp.get('password'),
             decode_responses=True

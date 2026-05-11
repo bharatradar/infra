@@ -67,7 +67,7 @@ spec:
         args: ["--manual"]
         env:
         - name: DB_HOST
-          value: "192.168.200.15"
+          value: "127.0.0.1"
         - name: DB_PORT
           value: "5432"
         - name: DB_NAME

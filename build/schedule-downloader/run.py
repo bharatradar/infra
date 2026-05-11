@@ -1,3 +1,4 @@
+import os
 from route_schedule_downloader import download_schedules
 
 if __name__ == "__main__":
@@ -8,11 +9,11 @@ if __name__ == "__main__":
     
     async def main():
         db_pool = await asyncpg.create_pool(
-            host="192.168.200.15",
-            port=5432,
-            database="flight_db",
-            user="flight_db_user",
-            password="flight_db_password"
+            host=os.environ.get("DB_HOST", "localhost"),
+            port=int(os.environ.get("DB_PORT", 5432)),
+            database=os.environ.get("DB_NAME", "flight_db"),
+            user=os.environ.get("DB_USER", "flight_db_user"),
+            password=os.environ.get("DB_PASSWORD", "flight_db_password")
         )
         db = AsyncDatabaseManager(db_pool)
         async with aiohttp.ClientSession() as session:
