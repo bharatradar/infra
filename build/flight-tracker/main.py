@@ -440,32 +440,70 @@ class FlightMonitor:
             
         valid_flights = []
         alt_values = []
+        filtered_reasons = {"no_hex": 0, "ground": 0, "invalid_alt": 0, "no_position": 0}
+        
         for ac in aircraft_list:
             hex_id = ac.get('hex')
             alt_baro = ac.get('alt_baro')
+            alt_geom = ac.get('alt_geom')
             alt_values.append(alt_baro)
             
-            # Skip if no hex, or if grounded (alt = "ground"), or if altitude is 0 or None
+            # Skip if no hex
             if not hex_id:
+                filtered_reasons["no_hex"] += 1
                 continue
-            if alt_baro is None or alt_baro == "ground":
-                continue
-            if isinstance(alt_baro, (int, float)) and alt_baro <= 0:
+            
+            # Determine best altitude value
+            alt = None
+            
+            # Try alt_baro first (barometric altitude is preferred)
+            if alt_baro is not None and alt_baro != "ground":
+                if isinstance(alt_baro, (int, float)):
+                    # Accept small negative values (sensor noise, up to -1000 ft)
+                    # but reject extreme negative values that indicate data errors
+                    if alt_baro >= -1000:
+                        alt = int(alt_baro)
+                    else:
+                        # Extreme negative - try to use absolute value if it makes sense
+                        # (some decoders might have signed/unsigned issues)
+                        if abs(alt_baro) <= 50000:  # Max reasonable altitude 50k ft
+                            alt = int(abs(alt_baro))
+                            logger.debug(f"🔄 Altitude fix for {hex_id}: converted {alt_baro} to {alt}")
+            
+            # Fallback to alt_geom (GPS altitude) if baro is invalid
+            if alt is None and alt_geom is not None and alt_geom != "ground":
+                if isinstance(alt_geom, (int, float)) and alt_geom >= -1000:
+                    alt = int(alt_geom)
+                    logger.debug(f"🔄 Using alt_geom for {hex_id}: {alt}")
+            
+            # Skip if still no valid altitude
+            if alt is None:
+                if alt_baro == "ground" or alt_geom == "ground":
+                    filtered_reasons["ground"] += 1
+                else:
+                    filtered_reasons["invalid_alt"] += 1
                 continue
             
             # Extract all required fields
             callsign = (ac.get('flight') or '').strip() or hex_id
             lat = to_f(ac.get('lat'))
             lon = to_f(ac.get('lon'))
-            alt = int(alt_baro) if isinstance(alt_baro, (int, float)) else 0
+            
+            # Skip if no valid position
+            if not lat or not lon:
+                filtered_reasons["no_position"] += 1
+                continue
+            
             speed = int(ac.get('gs', 0) or 0) if ac.get('gs') else 0
             heading = to_f(ac.get('track')) if ac.get('track') else 0.0
             
-            if lat and lon:
-                # Include empty route columns - will be populated by gap_filler later
-                valid_flights.append((hex_id, callsign, lat, lon, alt, speed, heading, None, None, None, None, None, None, None, None, None))
+            # Include empty route columns - will be populated by gap_filler later
+            valid_flights.append((hex_id, callsign, lat, lon, alt, speed, heading, None, None, None, None, None, None, None, None, None))
         
-        logger.warning(f"⚠️ SYNC: processing {len(aircraft_list)} aircraft, valid={len(valid_flights)}, alt_samples={alt_values[:3]}")
+        total_filtered = sum(filtered_reasons.values())
+        logger.warning(f"⚠️ SYNC: processing {len(aircraft_list)} aircraft, valid={len(valid_flights)}, filtered={total_filtered}, alt_samples={alt_values[:3]}")
+        if total_filtered > 0:
+            logger.debug(f"🔍 Filter reasons: {filtered_reasons}")
         
         if valid_flights:
             try:
