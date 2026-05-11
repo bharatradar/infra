@@ -97,10 +97,6 @@ metadata:
         return 302 https://bharatradar.com;
       }
 spec:
-  tls:
-  - hosts:
-    - bharatradar.com
-    secretName: bharatradar-tls
   rules:
   - host: bharatradar.com
     http:
@@ -119,12 +115,7 @@ metadata:
   name: globe-reapi
   annotations:
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
-    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
-  tls:
-  - hosts:
-    - map.bharatradar.com
-    secretName: bharatradar-tls
   rules:
   - host: map.bharatradar.com
     http:
@@ -143,17 +134,12 @@ metadata:
   name: tar1090
   annotations:
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
-    traefik.ingress.kubernetes.io/router.entrypoints: web
     nginx.ingress.kubernetes.io/configuration-snippet: |
       location /graphs1090 {
         return 302 https://bharatradar.com;
       }
       location /globeRates.json { return 200 "{\"refresh\": 500}" ;}
 spec:
-  tls:
-  - hosts:
-    - map.bharatradar.com
-    secretName: bharatradar-tls
   rules:
   - host: map.bharatradar.com
     http:
@@ -205,10 +191,6 @@ metadata:
   annotations:
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
 spec:
-  tls:
-  - hosts:
-    - api.bharatradar.com
-    secretName: bharatradar-tls
   rules:
   - host: api.bharatradar.com
     http:
@@ -228,10 +210,6 @@ metadata:
   annotations:
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
 spec:
-  tls:
-  - hosts:
-    - my.bharatradar.com
-    secretName: bharatradar-tls
   rules:
   - host: my.bharatradar.com
     http:
@@ -251,10 +229,6 @@ metadata:
   annotations:
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
 spec:
-  tls:
-  - hosts:
-    - history.bharatradar.com
-    secretName: bharatradar-tls
   rules:
   - host: history.bharatradar.com
     http:
@@ -273,12 +247,7 @@ metadata:
   name: map
   annotations:
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
-    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
-  tls:
-  - hosts:
-    - mlat.bharatradar.com
-    secretName: bharatradar-tls
   rules:
   - host: mlat.bharatradar.com
     http:
@@ -312,13 +281,8 @@ metadata:
   name: map-table
   annotations:
     external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
-    traefik.ingress.kubernetes.io/router.entrypoints: web
     nginx.ingress.kubernetes.io/rewrite-target: /synctable/all/$2
 spec:
-  tls:
-  - hosts:
-    - mlat.bharatradar.com
-    secretName: bharatradar-tls
   rules:
   - host: mlat.bharatradar.com
     http:
