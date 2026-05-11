@@ -2621,11 +2621,11 @@ async def proxy_tar1090(feeder_id: int, path: str, request: Request):
 
         # Special handling for aircraft.json API - needs 'all' parameter for re-api
         if target_path == 'data/aircraft.json' or target_path.endswith('/data/aircraft.json'):
-            target_url = f"http://localhost/tar1090/re-api/aircraft.json?all&filter_uuid={station_uuid}"
+            target_url = f"http://planes-readsb/tar1090/re-api/aircraft.json?all&filter_uuid={station_uuid}"
         elif target_path.startswith('re-api/'):
             # Forward re-api calls with filter_uuid appended
             re_api_path = target_path[7:]  # strip 're-api/'
-            target_url = f"http://localhost/tar1090/re-api/{re_api_path}"
+            target_url = f"http://planes-readsb/tar1090/re-api/{re_api_path}"
             # Use raw query string to preserve parameter format (e.g., binCraft without =)
             qs = request.url.query or ""
             if qs:
@@ -2633,7 +2633,7 @@ async def proxy_tar1090(feeder_id: int, path: str, request: Request):
             else:
                 target_url += "?filter_uuid=" + station_uuid
         else:
-            target_url = f"http://localhost/feeder/{station_uuid}/{target_path}"
+            target_url = f"http://planes-readsb/{target_path}"
             qs = request.url.query or ""
             if qs:
                 target_url += "?" + qs
