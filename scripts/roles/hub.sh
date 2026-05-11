@@ -650,6 +650,16 @@ role_hub_create_secrets() {
         log_success "Flight DB credentials secret created"
     fi
 
+    # Sync flight_db password from K8s secret to local PostgreSQL
+    if command -v psql &>/dev/null; then
+        local flight_db_password
+        flight_db_password=$(kubectl get secret flight-db-credentials -n bharatradar -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null)
+        if [ -n "$flight_db_password" ]; then
+            log_info "Syncing flight_db_user password to local PostgreSQL..."
+            sudo -u postgres psql -c "ALTER USER flight_db_user WITH PASSWORD '${flight_db_password}';" 2>/dev/null && log_success "flight_db password synced to PostgreSQL" || log_warn "Could not sync flight_db password (PostgreSQL may be remote or user postgres lacks access)"
+        fi
+    fi
+
     # Redis credentials secret
     if ! kubectl get secret redis-credentials -n bharatradar &>/dev/null; then
         kubectl create secret generic redis-credentials \
@@ -658,6 +668,19 @@ role_hub_create_secrets() {
             --from-literal=password="${REDIS_PASSWORD}" \
             -n bharatradar 2>/dev/null || true
         log_success "Redis credentials secret created"
+    fi
+
+    # Sync Redis password from K8s secret to local Redis
+    if command -v redis-cli &>/dev/null; then
+        local redis_pass
+        redis_pass=$(kubectl get secret redis-credentials -n bharatradar -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null)
+        if [ -n "$redis_pass" ]; then
+            log_info "Syncing Redis password to local Redis..."
+            redis-cli -a "${redis_pass}" CONFIG SET requirepass "${redis_pass}" 2>/dev/null && {
+                redis-cli -a "${redis_pass}" CONFIG REWRITE 2>/dev/null
+                log_success "Redis password synced"
+            } || log_warn "Could not sync Redis password (Redis may be remote or password rejected)"
+        fi
     fi
 
     # Telegram bot credentials secret
