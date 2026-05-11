@@ -71,6 +71,7 @@ PUBLIC_ROUTES = [
     "/api/filters",
     "/static/",
     "/favicon.ico",
+    "/api/feeders/",
     # API docs (public access)
     "/docs",
     "/redoc",
