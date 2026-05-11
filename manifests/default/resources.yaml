@@ -180,16 +180,6 @@ spec:
 #  - digital signature
 #  - key encipherment
 #  - server auth
-#---
-apiVersion: v1
-kind: Secret
-metadata:
-  name: bharatradar-tls
-type: kubernetes.io/tls
-data:
-  # Dummy self-signed cert for now (replace with real cert when cert-manager enabled)
-  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURCVENDQWUyZ0F3SUJBZ0lJZGVtb3
-  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2UUlCQVNDQllDaGR
 ---
 apiVersion: v1
 kind: ConfigMap
