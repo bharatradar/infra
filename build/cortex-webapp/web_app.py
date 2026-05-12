@@ -963,80 +963,70 @@ async def api_aircraft_radar(
     lon: float = Query(...),
     radius: float = Query(default=100.0)
 ):
-    """Return aircraft within radius miles of given lat/lon for radar display"""
-    # Try Redis first (faster, avoids DB round-trip)
+    """Return aircraft within radius miles of given lat/lon — Redis only."""
     try:
         r = await web_app_db.get_redis_client()
         exists = await r.exists(Config.REDIS_LIVE_FLIGHTS_KEY)
-        if exists:
-            all_flights = await r.hgetall(Config.REDIS_LIVE_FLIGHTS_KEY)
-            if all_flights:
-                result = []
-                lat_rad = radians(lat)
-                lon_rad = radians(lon)
-                for hex_id, data in all_flights.items():
-                    try:
-                        ac = json.loads(data)
-                    except:
-                        continue
-                    if not ac.get('lat') or not ac.get('lon'):
-                        continue
-                    ac_lat = ac['lat']
-                    ac_lon = ac['lon']
-                    # Fix swapped lat/lon from binCraft decoder bug
-                    if abs(ac_lat) > 60 and abs(ac_lon) < 60:
-                        ac_lat, ac_lon = ac_lon, ac_lat
-                    ac_lat_rad = radians(ac_lat)
-                    ac_lon_rad = radians(ac_lon)
-                    dlat = ac_lat_rad - lat_rad
-                    dlon = ac_lon_rad - lon_rad
-                    a = sin(dlat/2)**2 + cos(ac_lat_rad) * cos(lat_rad) * sin(dlon/2)**2
-                    c = 2 * atan2(sqrt(a), sqrt(1-a))
-                    dist = 3959 * c
-                    if dist <= radius:
-                        result.append({
-                            "hexid": hex_id,
-                            "callsign": ac.get('callsign', ''),
-                            "lat": ac_lat,
-                            "lon": ac_lon,
-                            "alt": ac.get('alt', 0),
-                            "speed": ac.get('speed', 0) or ac.get('gs', 0),
-                            "heading": ac.get('heading', 0)
-                        })
-                result.sort(key=lambda x: x.get('alt', 0), reverse=True)
-                return _enrich_flights(result[:500])
-    except Exception as e:
-        logger.warning(f"aircraft/radar Redis error, falling back to DB: {e}")
-
-    # Fallback to PostgreSQL
-    try:
-        pool = web_app_db.get_db_pool(db_pool)
-        if pool is None:
-            logger.warning("aircraft/radar: db_pool is None, creating new pool")
-            import asyncpg
-            pool = await asyncpg.create_pool(**Config.DB_PARAMS)
-        if pool is None:
-            logger.error("aircraft/radar error: Could not get database pool")
+        if not exists:
             return []
-        async with pool.acquire() as conn:
-            rows = await conn.fetch("""
-                SELECT hexid, callsign, lon AS lat, lat AS lon, alt, speed, heading, last_seen
-                FROM flights_in_air
-                WHERE last_seen > NOW() - INTERVAL '30 seconds'
-                  AND lat IS NOT NULL AND lon IS NOT NULL
-                  AND (3959 * acos(LEAST(1, GREATEST(-1,
-                    cos(radians($1)) * cos(radians(lon)) * cos(radians(lat) - radians($2)) +
-                    sin(radians($1)) * sin(radians(lon))
-                  )))) <= $3
-                ORDER BY last_seen DESC
-                LIMIT 500
-            """, lat, lon, radius)
-            return _enrich_flights([dict(r) for r in rows])
+        all_flights = await r.hgetall(Config.REDIS_LIVE_FLIGHTS_KEY)
+        if not all_flights:
+            return []
+        result = []
+        lat_rad = radians(lat)
+        lon_rad = radians(lon)
+        for hex_id, data in all_flights.items():
+            try:
+                ac = json.loads(data)
+            except:
+                continue
+            if not ac.get('lat') or not ac.get('lon'):
+                continue
+            ac_lat = ac['lat']
+            ac_lon = ac['lon']
+            if abs(ac_lat) > 60 and abs(ac_lon) < 60:
+                ac_lat, ac_lon = ac_lon, ac_lat
+            dist = _haversine_miles(lat, lon, ac_lat, ac_lon)
+            if dist > radius:
+                continue
+            route = {}
+            callsign = ac.get('callsign', '')
+            if callsign:
+                route_data = await r.hgetall(f"flight_route:{callsign}")
+                if route_data:
+                    route = {
+                        'origin_icao': route_data.get('origin_icao', ''),
+                        'dest_icao': route_data.get('dest_icao', ''),
+                        'origin_iata': route_data.get('origin_iata', ''),
+                        'dest_iata': route_data.get('dest_iata', ''),
+                        'ac_type': route_data.get('ac_type', ''),
+                        'reg': route_data.get('reg', ''),
+                        'airline_icao': route_data.get('airline_icao', ''),
+                        'airline_iata': route_data.get('airline_iata', ''),
+                    }
+            result.append({
+                "hexid": hex_id,
+                "callsign": callsign,
+                "lat": ac_lat,
+                "lon": ac_lon,
+                "alt": ac.get('alt', 0),
+                "speed": ac.get('speed', 0) or ac.get('gs', 0),
+                "heading": ac.get('heading', 0),
+                **route,
+            })
+        result.sort(key=lambda x: x.get('alt', 0), reverse=True)
+        return _enrich_flights(result[:500])
     except Exception as e:
-        logger.error(f"aircraft/radar DB fallback error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"aircraft/radar error: {e}")
         return []
+
+
+def _haversine_miles(lat1, lon1, lat2, lon2):
+    R = 3959
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+    return R * 2 * atan2(sqrt(a), sqrt(1 - a))
 
 @app.get("/api/atc/congestion")
 async def api_atc_congestion():

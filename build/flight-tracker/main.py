@@ -36,6 +36,15 @@ from utils import (
     CALLSIGN_CACHE
 )
 from db import AsyncDatabaseManager
+from fr24_data import (
+    load_airport_maps,
+    load_airline_iata_map,
+    fetch_airline_data,
+    resolve_airport,
+    get_airline_iata,
+    resolve_callsign_iata,
+    SEEN_AIRCRAFT_INFO
+)
 
 log_level = logging.DEBUG if getattr(Config, 'DEBUG_MODE', False) else logging.INFO
 logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -116,6 +125,9 @@ class FlightMonitor:
         # In-memory route cache (fallback when Redis unavailable)
         self.route_memory_cache = {}
         self.route_memory_ttl = 86400  # 24 hours
+
+        # Aircraft info memory cache to avoid redundant DB writes
+        self.aircraft_info_cache = set()
         
         self.load_airlines()
 
@@ -130,20 +142,24 @@ class FlightMonitor:
 
     async def get_cached_route(self, callsign):
         try:
-            cache_key = f"route:{callsign.upper()}"
-            cached = await self.redis.get(cache_key)
+            cache_key = f"flight_route:{callsign.upper()}"
+            cached = await self.redis.hgetall(cache_key)
             if cached:
-                data = orjson.loads(cached)
-                return data.get('origin'), data.get('dest')
+                return cached.get('origin_icao'), cached.get('dest_icao')
         except Exception as e:
             logger.warning(f"Route cache read error: {e}")
         return None, None
 
     async def set_cached_route(self, callsign, origin, dest):
         try:
-            cache_key = f"route:{callsign.upper()}"
-            cache_data = orjson.dumps({'origin': origin, 'dest': dest, 'cached_at': time.time()})
-            await self.redis.setex(cache_key, 86400, cache_data)  # 24hr TTL
+            cache_key = f"flight_route:{callsign.upper()}"
+            route_data = {
+                'origin_icao': origin or '',
+                'dest_icao': dest or '',
+                'fetched_at': str(time.time()),
+                'fetched_date': time.strftime('%Y-%m-%d', time.gmtime(time.time())),
+            }
+            await self.redis.hset(cache_key, mapping=route_data)
             logger.info(f"💾 Cached route for {callsign}: {origin} -> {dest}")
         except Exception as e:
             logger.warning(f"Route cache write error: {e}")
@@ -173,6 +189,13 @@ class FlightMonitor:
             del self.route_memory_cache[k]
         if expired:
             logger.info(f"🧹 Cleaned {len(expired)} expired route entries from memory cache")
+
+    async def load_aircraft_info_cache(self):
+        try:
+            self.aircraft_info_cache = await self.db.load_all_aircraft_info()
+            logger.info(f"Loaded {len(self.aircraft_info_cache)} aircraft_info entries into memory cache")
+        except Exception as e:
+            logger.error(f"Failed to load aircraft_info cache: {e}")
 
     async def download_static_data(self):
         os.makedirs("data", exist_ok=True)
@@ -495,10 +518,7 @@ class FlightMonitor:
         
         if valid_flights:
             try:
-                await self.db.bulk_upsert_flights_in_air(valid_flights)
-                logger.warning(f"💾 SYNC: {len(valid_flights)} flights upserted to flights_in_air")
-                
-                # Cache to Redis for fast API reads
+                # Redis cache only — no PostgreSQL flights_in_air write
                 await self._cache_flights_to_redis(valid_flights)
             except Exception as e:
                 logger.error(f"❌ SYNC ERROR: {e}")
@@ -537,6 +557,16 @@ class FlightMonitor:
             pipeline.expire(meta_key, Config.REDIS_FLIGHTS_TTL)
             
             await pipeline.execute()
+            
+            # Publish each flight for FR24 enrichment
+            for fl in flights_list:
+                hex_id, callsign, *_ = fl
+                if callsign and callsign != hex_id:
+                    await self.redis.publish(
+                        "flight_enrichment",
+                        f"{hex_id}|{callsign}"
+                    )
+            
             logger.info(f"✅ Cached {len(flights_list)} flights to Redis")
         except Exception as e:
             logger.error(f"❌ Redis cache error: {e}")
@@ -700,119 +730,6 @@ class FlightMonitor:
 
         return None, None
 
-    async def gap_filler_worker(self):
-        while True:
-            try:
-                active_planes = await self.db.get_planes_missing_enrichment()
-                for row in active_planes:
-                    hex_id, raw_cs = row['hexid'], row['callsign']
-                    orig, dest = await self.fetch_flight_details(hex_id, raw_cs)
-                    if orig or dest:
-                        await self.db.log_event(hex_id, raw_cs, "ENRICHMENT", f"Pre-fetch: {orig}->{dest}", origin=orig, destination=dest)
-                        try:
-                            await self.db.update_enriched_route(hex_id, raw_cs, orig, dest)
-                            logger.info(f"✅ update_enriched_route succeeded for {raw_cs}")
-                        except Exception as e:
-                            logger.error(f"❌ update_enriched_route failed for {raw_cs}: {e}")
-                        
-                        # Get airport coordinates and update flights_in_air
-                        if orig and dest:
-                            logger.info(f"📝 orig and dest both present for {raw_cs}: {orig} -> {dest}")
-                            origin_lat, origin_lon = None, None
-                            dest_lat, dest_lon = None, None
-                            origin_iata, dest_iata = None, None
-                            callsign_iata = None
-                            
-                            # Get origin airport data from Config.TARGET_AIRPORTS
-                            if orig in Config.TARGET_AIRPORTS:
-                                ap_data = Config.TARGET_AIRPORTS[orig]
-                                origin_lat = float(ap_data.get('lat', 0)) if ap_data.get('lat') else None
-                                origin_lon = float(ap_data.get('lon', 0)) if ap_data.get('lon') else None
-                                origin_iata = ap_data.get('iata')
-                            # Get destination airport data from Config.TARGET_AIRPORTS
-                            if dest in Config.TARGET_AIRPORTS:
-                                ap_data = Config.TARGET_AIRPORTS[dest]
-                                dest_lat = float(ap_data.get('lat', 0)) if ap_data.get('lat') else None
-                                dest_lon = float(ap_data.get('lon', 0)) if ap_data.get('lon') else None
-                                dest_iata = ap_data.get('iata')
-                            
-                            # Update flights_in_air with route data
-                            logger.info(f"📝 About to update flights_in_air for {raw_cs} ({hex_id}): {orig} -> {dest}")
-                            await self.db.update_flight_in_air_route(
-                                hex_id, raw_cs, orig, dest, 
-                                origin_iata, dest_iata,
-                                origin_lat, origin_lon, dest_lat, dest_lon,
-                                callsign_iata
-                            )
-                        
-                        if orig:
-                            await self.db.link_actual_flight_to_schedule(orig, 'DEPARTURES', raw_cs, hex_id, time.time(), route_airport=dest)
-
-                    await asyncio.sleep(getattr(Config, 'ENRICHMENT_FETCH_DELAY_SEC', 2))
-
-                inc_arr = await self.db.get_incomplete_arrivals()
-                for row in inc_arr:
-                    hex_id, raw_cs = row['hex_id'], row['callsign']
-                    org, _ = await self.fetch_flight_details(hex_id, raw_cs)
-                    if org: await self.db.update_arrival_broadcast(row['id'], hex_id, org)
-                    await asyncio.sleep(getattr(Config, 'ENRICHMENT_FETCH_DELAY_SEC', 2))
-
-                await self.db.cleanup_stale_ground_ops(hours=4)
-
-            except Exception as e: logger.error(f"Gap Filler/TTL Error: {e}")
-            await asyncio.sleep(getattr(Config, 'GAP_FILLER_INTERVAL_SEC', 10))
-
-    async def route_enrichment_worker(self):
-        """Background worker to populate route data in flights_in_air table"""
-        logger.info("🗺️ Route Enrichment Worker Started")
-        while True:
-            try:
-                async with self.db.pool.acquire() as conn:
-                    # Find flights missing route data
-                    rows = await conn.fetch("""
-                        SELECT hexid, callsign FROM flights_in_air 
-                        WHERE origin_icao IS NULL 
-                        LIMIT 10
-                    """)
-                    
-                    for row in rows:
-                        hex_id, raw_cs = row['hexid'], row['callsign']
-                        try:
-                            orig, dest = await self.fetch_flight_details(hex_id, raw_cs)
-                            if orig and dest:
-                                origin_lat, origin_lon = None, None
-                                dest_lat, dest_lon = None, None
-                                origin_iata, dest_iata = None, None
-                                
-                                if orig in Config.TARGET_AIRPORTS:
-                                    ap_data = Config.TARGET_AIRPORTS[orig]
-                                    origin_lat = float(ap_data.get('lat', 0)) if ap_data.get('lat') else None
-                                    origin_lon = float(ap_data.get('lon', 0)) if ap_data.get('lon') else None
-                                    origin_iata = ap_data.get('iata')
-                                
-                                if dest in Config.TARGET_AIRPORTS:
-                                    ap_data = Config.TARGET_AIRPORTS[dest]
-                                    dest_lat = float(ap_data.get('lat', 0)) if ap_data.get('lat') else None
-                                    dest_lon = float(ap_data.get('lon', 0)) if ap_data.get('lon') else None
-                                    dest_iata = ap_data.get('iata')
-                                
-                                await self.db.update_flight_in_air_route(
-                                    hex_id, raw_cs, orig, dest,
-                                    origin_iata, dest_iata,
-                                    origin_lat, origin_lon, dest_lat, dest_lon,
-                                    None  # callsign_iata
-                                )
-                                logger.info(f"✅ Route enriched for {raw_cs}: {orig} -> {dest}")
-                        except Exception as e:
-                            logger.warning(f"Route enrichment failed for {raw_cs}: {e}")
-                        
-                        await asyncio.sleep(1)  # Rate limit
-                        
-            except Exception as e:
-                logger.error(f"Route Enrichment Error: {e}")
-            
-            await asyncio.sleep(30)  # Run every 30 seconds
-
     async def janitor_worker(self):
         logger.info(f"🧹 Background Janitor Service Active (Runs every {getattr(Config, 'JANITOR_INTERVAL_SEC', 900)}s)")
         while True:
@@ -829,6 +746,89 @@ class FlightMonitor:
                     logger.debug("🧹 Janitor Routine: Cleared recent telemetry bounces.")
             except Exception as e:
                 logger.error(f"❌ Janitor Worker Error: {e}")
+
+    async def fr24_enrichment_consumer(self):
+        logger.info("FR24 Enrichment Consumer Started")
+        pubsub = self.redis.pubsub()
+        await pubsub.subscribe("flight_enrichment")
+        pending_airlines = set()
+        last_process = time.time()
+        debounce = getattr(Config, 'FR24_ENRICHMENT_DEBOUNCE_SEC', 5)
+        load_airport_maps()
+        load_airline_iata_map()
+        async for message in pubsub.listen():
+            if message["type"] != "message":
+                continue
+            try:
+                hex_id, callsign = message["data"].split("|", 1)
+                if len(callsign) < 3:
+                    continue
+                airline = callsign[:3].upper()
+                cached = await self.redis.exists(f"flight_route:{callsign}")
+                if not cached:
+                    pending_airlines.add(airline)
+                now = time.time()
+                if pending_airlines and (now - last_process) >= debounce:
+                    for airline_code in sorted(pending_airlines):
+                        await self._process_airline_batch(airline_code)
+                        await asyncio.sleep(1)
+                    pending_airlines.clear()
+                    last_process = now
+            except Exception as e:
+                logger.error(f"FR24 Consumer error: {e}")
+
+    async def _process_airline_batch(self, airline_code):
+        aircraft_list = await fetch_airline_data(self.session, airline_code)
+        if not aircraft_list:
+            return
+        now = time.time()
+        for ac in aircraft_list:
+            callsign = ac['callsign_icao']
+            hex_id = ac['hex_id']
+            if not callsign:
+                continue
+            orig_icao, orig_lat, orig_lon = resolve_airport(ac['origin_iata'])
+            dest_icao, dest_lat, dest_lon = resolve_airport(ac['dest_iata'])
+            airline_iata = get_airline_iata(ac['airline_icao'])
+            if not airline_iata and ac['flight_number_iata']:
+                match = re.match(r'^([A-Z]+)', ac['flight_number_iata'])
+                if match:
+                    airline_iata = match.group(1)
+            route_data = {
+                'callsign_icao': callsign,
+                'flight_number_iata': ac['flight_number_iata'] or '',
+                'airline_icao': ac['airline_icao'] or '',
+                'airline_iata': airline_iata or '',
+                'origin_icao': orig_icao or '',
+                'origin_iata': ac['origin_iata'] or '',
+                'origin_lat': str(orig_lat or ''),
+                'origin_lon': str(orig_lon or ''),
+                'dest_icao': dest_icao or '',
+                'dest_iata': ac['dest_iata'] or '',
+                'dest_lat': str(dest_lat or ''),
+                'dest_lon': str(dest_lon or ''),
+                'hex_id': hex_id,
+                'ac_type': ac['ac_type'] or '',
+                'reg': ac['registration'] or '',
+                'fetched_at': str(now),
+                'fetched_date': time.strftime('%Y-%m-%d', time.gmtime(now)),
+            }
+            await self.redis.hset(f"flight_route:{callsign}", mapping=route_data)
+            if hex_id and ac.get('registration') and hex_id not in SEEN_AIRCRAFT_INFO:
+                SEEN_AIRCRAFT_INFO.add(hex_id)
+                await self.db.upsert_aircraft_info(
+                    hex_id=hex_id,
+                    registration=ac['registration'],
+                    ac_type=ac['ac_type'],
+                    airline_icao=ac['airline_icao']
+                )
+            await self.db.check_and_update_schedule(
+                callsign=callsign,
+                flight_number=ac['flight_number_iata'],
+                origin_icao=orig_icao,
+                dest_icao=dest_icao
+            )
+        logger.info(f"Cached {len(aircraft_list)} routes for airline {airline_code}")
 
     async def websocket_broadcaster(self):
         logger.info(f"📡 WebSocket Broadcaster Active (Broadcasts every {getattr(Config, 'WEBSOCKET_BROADCAST_INTERVAL_SEC', 1)}s)")
@@ -1187,15 +1187,9 @@ class FlightMonitor:
         tasks = [self._update_single_flight(hex_id, live_map.get(hex_id), current_time) for hex_id in list(self.tracked_flights.keys())]
         
         if tasks:
-            results = await asyncio.gather(*tasks)
-            bulk_upsert_list = [r for r in results if r is not None]
-            if bulk_upsert_list:
-                await self.db.bulk_upsert_flights_in_air(bulk_upsert_list)
-            
-        await self.db.cleanup_stale_flights()                    
+            await asyncio.gather(*tasks)                    
 
     async def _update_single_flight(self, hex_id, live, current_time):
-        upsert_tuple = None
         async with self.processing_semaphore:
             tracked_flight = self.tracked_flights.get(hex_id)
             if not tracked_flight: return None
@@ -1235,7 +1229,8 @@ class FlightMonitor:
                 last_influx = tracked_flight.get('last_influx_time', 0)
                 if current_time - last_influx >= getattr(Config, 'INFLUXDB_WRITE_INTERVAL_SEC', 30):
                     if c_lat != 0.0 and c_lon != 0.0:
-                        await self.db.log_telemetry(hex_id, tracked_flight['callsign'], c_lat, c_lon, c_alt, c_speed, c_heading)
+                        cs_iata = resolve_callsign_iata(tracked_flight.get('callsign', ''))
+                        await self.db.log_telemetry(hex_id, tracked_flight['callsign'], c_lat, c_lon, c_alt, c_speed, c_heading, cs_iata)
                         tracked_flight['last_influx_time'] = current_time
 
                 g_info = await self.db.get_ground_info(hex_id)
@@ -1325,34 +1320,6 @@ class FlightMonitor:
                             
                             is_on_ground_db = False
                 
-                # 🌟 FIX: THE PRE-FLIGHT GUARD
-                # Ensures that a plane in pre_flight cannot fall into the airborne landing trap
-                if not is_on_ground_db and tracked_flight['status'] not in ['landed', 'grounded', 'pre_flight']:
-                    # Get route data from tracked_flight if available
-                    orig = tracked_flight.get('origin')
-                    dest = tracked_flight.get('destination')
-                    orig_iata, dest_iata = None, None
-                    orig_lat, orig_lon = None, None
-                    dest_lat, dest_lon = None, None
-                    
-                    if orig and dest:
-                        # Look up airport data from Config.TARGET_AIRPORTS
-                        if orig in Config.TARGET_AIRPORTS:
-                            ap_data = Config.TARGET_AIRPORTS[orig]
-                            orig_iata = ap_data.get('iata')
-                            orig_lat = float(ap_data.get('lat', 0)) if ap_data.get('lat') else None
-                            orig_lon = float(ap_data.get('lon', 0)) if ap_data.get('lon') else None
-                        if dest in Config.TARGET_AIRPORTS:
-                            ap_data = Config.TARGET_AIRPORTS[dest]
-                            dest_iata = ap_data.get('iata')
-                            dest_lat = float(ap_data.get('lat', 0)) if ap_data.get('lon') else None
-                            dest_lon = float(ap_data.get('lon', 0)) if ap_data.get('lon') else None
-                    
-                    # callsign_iata not currently populated - route_memory_cache stores (origin, dest, timestamp)
-                    callsign_iata = None
-                    
-                    upsert_tuple = (hex_id, tracked_flight['callsign'], c_lat, c_lon, c_alt, c_speed, c_heading, orig, dest, orig_iata, dest_iata, orig_lat, orig_lon, dest_lat, dest_lon, callsign_iata)
-                
                 if is_on_ground_db:
                     over_asphalt, active_rwy = self.check_runway_position(ap_icao, c_lat, c_lon, c_heading)
                     is_taking_off = False
@@ -1436,13 +1403,13 @@ class FlightMonitor:
                                     break
                         if c_alt > (dep_elev + 3000.0) or dist_from_dep > 15.0:
                             tracked_flight['status'] = 'airborne'
-                        return upsert_tuple
+                        return None
                         
                     if tracked_flight['status'] == 'pre_flight':
                         # Catch planes that lost ground DB but are now genuinely flying
                         if c_alt > 3000.0 and c_speed > 150.0:
                             tracked_flight['status'] = 'airborne'
-                        return upsert_tuple
+                        return None
                     
                     if tracked_flight['status'] == 'airborne' and (c_vrate < -200 or (c_alt < getattr(Config, 'APPROACH_ALT_THRESH_FT', 20000) and c_speed < 250 and c_vrate <= 0)):
                         closest_ap, closest_dist = None, 9999
@@ -1498,7 +1465,7 @@ class FlightMonitor:
                                 orig_str = f" (From: {orig})" if orig else ""
                                 custom_alert = f"🛬 <b>APPROACHING:</b> Flight {tracked_flight['callsign']}{orig_str} is approaching {dest_code}.{eta_msg}"
                                 await self.queue_event_redis("approaching", self.tracked_flights[hex_id], custom_msg=custom_alert)
-                                return upsert_tuple 
+                                return None 
 
                     nearby_airports = []
                     try:
@@ -1643,7 +1610,7 @@ class FlightMonitor:
                                 else:
                                     await self.db.log_wake_up(hex_id, tracked_flight['callsign'], icao_target)
                                     tracked_flight['status'] = 'grounded'
-                                return upsert_tuple 
+                                return None 
             else:
                 timeout_sec = getattr(Config, 'ASSUMED_LANDING_TIMEOUT_SEC', 180)
                 if current_time - tracked_flight['last_seen'] > timeout_sec: 
@@ -1679,7 +1646,7 @@ class FlightMonitor:
                     del self.tracked_flights[hex_id]
                     return None
 
-        return upsert_tuple
+        return None
 
     async def radar_producer(self):
         fetch_interval = getattr(Config, 'RADAR_FETCH_INTERVAL_SEC', 10)
@@ -1724,6 +1691,7 @@ class FlightMonitor:
         
         await self.db.reset_system_state(self.redis)
         await self.load_airports_to_redis()
+        await self.load_aircraft_info_cache()
         
         async with aiohttp.ClientSession() as session:
             self.session = session
@@ -1733,9 +1701,8 @@ class FlightMonitor:
             
             tasks = [
                 asyncio.create_task(self.scheduled_data_updater()),
-                asyncio.create_task(self.gap_filler_worker()),
-                asyncio.create_task(self.route_enrichment_worker()),
                 asyncio.create_task(self.janitor_worker()),
+                asyncio.create_task(self.fr24_enrichment_consumer()),
                 asyncio.create_task(self.radar_producer()),
                 asyncio.create_task(self.radar_consumer()),
             ]

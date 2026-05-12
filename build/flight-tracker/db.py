@@ -5,7 +5,7 @@ import asyncpg
 import re
 import os
 import csv
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from config import Config
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 from influxdb_client import Point
@@ -331,70 +331,19 @@ class AsyncDatabaseManager:
             return None
 
     async def upsert_flight_in_air(self, hexid, callsign, lat, lon, alt, speed, heading):
-        try:
-            async with self.pool.acquire() as conn:
-                await conn.execute("""
-                    INSERT INTO flights_in_air (hexid, callsign, lat, lon, alt, speed, heading, last_seen)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() AT TIME ZONE 'UTC')
-                    ON CONFLICT (hexid) DO UPDATE
-                    SET callsign = EXCLUDED.callsign, lat = EXCLUDED.lat, lon = EXCLUDED.lon,
-                        alt = EXCLUDED.alt, speed = EXCLUDED.speed, heading = EXCLUDED.heading,
-                        last_seen = NOW() AT TIME ZONE 'UTC'
-                """, hexid, callsign, lat, lon, alt, speed, heading)
-        except Exception as e:
-            logger.warning(f"Failed to upsert flight in air {callsign}: {e}")
+        pass  # DEPRECATED: flights_in_air no longer used (Redis-only)
 
     async def bulk_upsert_flights_in_air(self, flights_list):
-        if not flights_list: return
-        try:
-            async with self.pool.acquire() as conn:
-                await conn.executemany("""
-                    INSERT INTO flights_in_air (hexid, callsign, lat, lon, alt, speed, heading, last_seen, origin_icao, dest_icao, origin_iata, dest_iata, origin_lat, origin_lon, dest_lat, dest_lon, callsign_iata)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() AT TIME ZONE 'UTC', $8, $9, $10, $11, $12, $13, $14, $15, $16)
-                    ON CONFLICT (hexid) DO UPDATE 
-                    SET callsign = EXCLUDED.callsign, lat = EXCLUDED.lat, lon = EXCLUDED.lon, 
-                        alt = EXCLUDED.alt, speed = EXCLUDED.speed, heading = EXCLUDED.heading, 
-                        last_seen = NOW() AT TIME ZONE 'UTC',
-                        origin_icao = COALESCE(EXCLUDED.origin_icao, flights_in_air.origin_icao),
-                        dest_icao = COALESCE(EXCLUDED.dest_icao, flights_in_air.dest_icao),
-                        origin_iata = COALESCE(EXCLUDED.origin_iata, flights_in_air.origin_iata),
-                        dest_iata = COALESCE(EXCLUDED.dest_iata, flights_in_air.dest_iata),
-                        origin_lat = COALESCE(EXCLUDED.origin_lat, flights_in_air.origin_lat),
-                        origin_lon = COALESCE(EXCLUDED.origin_lon, flights_in_air.origin_lon),
-                        dest_lat = COALESCE(EXCLUDED.dest_lat, flights_in_air.dest_lat),
-                        dest_lon = COALESCE(EXCLUDED.dest_lon, flights_in_air.dest_lon),
-                        callsign_iata = COALESCE(EXCLUDED.callsign_iata, flights_in_air.callsign_iata)
-                """, flights_list)
-        except Exception as e:
-            logger.error(f"❌ [DB ERROR] bulk_upsert_flights_in_air failed: {e}")
+        pass  # DEPRECATED: flights_in_air no longer used (Redis-only)
 
     async def update_flight_in_air_route(self, hex_id, callsign, origin_icao, dest_icao, origin_iata, dest_iata, origin_lat, origin_lon, dest_lat, dest_lon, callsign_iata):
-        """Update flights_in_air with route data (origin/destination, coords, iata)"""
-        try:
-            async with self.pool.acquire() as conn:
-                result = await conn.execute("""
-                    UPDATE flights_in_air 
-                    SET origin_icao = $1, dest_icao = $2, origin_iata = $3, dest_iata = $4,
-                        origin_lat = $5, origin_lon = $6, dest_lat = $7, dest_lon = $8, callsign_iata = $9
-                    WHERE hexid = $10
-                """, origin_icao, dest_icao, origin_iata, dest_iata, origin_lat, origin_lon, dest_lat, dest_lon, callsign_iata, hex_id)
-                logger.info(f"💾 Updated flights_in_air route for {callsign} ({hex_id}): {origin_icao} -> {dest_icao} | Rows affected: {result}")
-        except Exception as e:
-            logger.error(f"❌ Failed to update flight route for {callsign} ({hex_id}): {e}")
+        pass  # DEPRECATED: flights_in_air no longer used (Redis-only)
 
     async def cleanup_stale_flights(self):
-        try:
-            async with self.pool.acquire() as conn:
-                await conn.execute("DELETE FROM flights_in_air WHERE last_seen < (NOW() AT TIME ZONE 'UTC') - INTERVAL '3 minutes'")
-        except Exception as e:
-            logger.warning(f"Failed to cleanup stale flights: {e}")
+        pass  # DEPRECATED: flights_in_air no longer used (Redis-only)
 
     async def remove_flight_from_air(self, hexid):
-        try:
-            async with self.pool.acquire() as conn:
-                await conn.execute("DELETE FROM flights_in_air WHERE hexid = $1", hexid)
-        except Exception as e:
-            logger.warning(f"Failed to remove flight from air {hexid}: {e}")
+        pass  # DEPRECATED: flights_in_air no longer used (Redis-only)
 
     async def get_historical_route(self, hex_id, callsign=None):
         try:
@@ -760,12 +709,13 @@ class AsyncDatabaseManager:
         except Exception as e:
             logger.error(f"❌ [DB ERROR] link_actual_flight_to_schedule failed for {callsign}: {e}")
 
-    async def log_telemetry(self, hex_id, callsign, lat, lon, alt, speed, heading):
+    async def log_telemetry(self, hex_id, callsign, lat, lon, alt, speed, heading, callsign_iata=None):
         if not self.influx_client: return
         try:
             p = Point("flight_path") \
                 .tag("hex_id", hex_id) \
                 .tag("callsign", callsign) \
+                .tag("callsign_iata", callsign_iata or '') \
                 .field("lat", float(lat)) \
                 .field("lon", float(lon)) \
                 .field("alt", float(alt)) \
@@ -775,6 +725,69 @@ class AsyncDatabaseManager:
             await self.influx_write_api.write(bucket=Config.INFLUXDB_BUCKET, record=p)
         except Exception as e:
             logger.warning(f"Failed to write telemetry to InfluxDB for {callsign}: {e}")
+
+    async def upsert_aircraft_info(self, hex_id, registration=None, ac_type=None, airline_icao=None):
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO aircraft_info (hex_id, registration, type, airline_icao, updated_at)
+                    VALUES ($1, $2, $3, $4, NOW() AT TIME ZONE 'UTC')
+                    ON CONFLICT (hex_id) DO UPDATE
+                    SET registration = COALESCE($2, aircraft_info.registration),
+                        type = COALESCE($3, aircraft_info.type),
+                        airline_icao = COALESCE($4, aircraft_info.airline_icao),
+                        updated_at = NOW() AT TIME ZONE 'UTC'
+                """, hex_id.upper(), registration, ac_type, airline_icao)
+        except Exception as e:
+            logger.warning(f"Failed to upsert aircraft_info {hex_id}: {e}")
+
+    async def load_all_aircraft_info(self):
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT hex_id, registration, type, airline_icao FROM aircraft_info"
+                )
+                seen = set()
+                for r in rows:
+                    seen.add(r['hex_id'].upper())
+                logger.info(f"Loaded {len(seen)} aircraft_info entries into memory")
+                return seen
+        except Exception as e:
+            logger.error(f"Failed to load aircraft_info: {e}")
+            return set()
+
+    async def check_and_update_schedule(self, callsign, flight_number, origin_icao, dest_icao):
+        if not callsign or not origin_icao or not dest_icao:
+            return
+        try:
+            async with self.pool.acquire() as conn:
+                today = datetime.now(timezone.utc).date()
+                row = await conn.fetchrow("""
+                    SELECT id, route_airport FROM flight_schedules
+                    WHERE callsign = $1
+                      AND scheduled_time::date = $2
+                    LIMIT 1
+                """, callsign, today)
+                if row:
+                    if row['route_airport'] != dest_icao:
+                        await conn.execute("""
+                            UPDATE flight_schedules
+                            SET route_airport = $1, updated_at = NOW(),
+                                updated_from = 'fr24_enrichment'
+                            WHERE id = $2
+                        """, dest_icao, row['id'])
+                        logger.info(f"Updated schedule {callsign}: {origin_icao}->{dest_icao}")
+                else:
+                    await conn.execute("""
+                        INSERT INTO flight_schedules
+                            (airport_code, direction, flight_number, callsign,
+                             route_airport, scheduled_time, created_from)
+                        VALUES ($1, 'DEPARTURES', $2, $3, $4, NOW(), 'fr24_enrichment')
+                        ON CONFLICT DO NOTHING
+                    """, origin_icao, flight_number or callsign, callsign, dest_icao)
+                    logger.info(f"Inserted new schedule {callsign}: {origin_icao}->{dest_icao}")
+        except Exception as e:
+            logger.warning(f"Failed to check/update schedule for {callsign}: {e}")
 
     async def bulk_refresh_schedules(self, airport_code, min_timestamp, records_list):
         airport_code = await self._resolve_icao(airport_code)

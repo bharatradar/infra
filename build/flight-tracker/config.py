@@ -62,6 +62,7 @@ class Config:
 
 
     # 🛑 BOOT BEHAVIOR
+    # NOT USED - legacy flag, no current FR24 blocking startup logic
     FR24_BLOCKING_STARTUP = False
     
     # ⏱️ SYSTEM & ALERT CONFIG
@@ -93,6 +94,7 @@ class Config:
     API_ADSB_DB_CALLSIGN = "https://api.adsbdb.com/v0/callsign/"
     
     FLIGHTRADAR24_SEARCH = "https://www.flightradar24.com/v1/search/web/find"
+    # NOT USED - was used by legacy get_route_from_fr24() HTML scraping. Replaced by FR24_DATA_URL airline batching.
     FLIGHTRADAR24_FLIGHTS = "https://www.flightradar24.com/data/flights/"
     
     # FlightAware / piaware for route extraction
@@ -150,6 +152,11 @@ class Config:
     REDIS_LIVE_FLIGHTS_KEY = "live_flights"
     REDIS_LIVE_FLIGHTS_META_KEY = "live_flights_meta"
     REDIS_FLIGHTS_TTL = 30  # seconds
+
+    # FR24 Route Enrichment
+    FR24_DATA_URL = _env("FR24_DATA_URL", "https://data-cloud.flightradar24.com/zones/fcgi/data.js")
+    FR24_ENRICHMENT_DEBOUNCE_SEC = int(_env("FR24_ENRICHMENT_DEBOUNCE_SEC", "5"))
+    REDIS_FLIGHT_ROUTE_PREFIX = "flight_route"
 
     # --- WebSocket Configuration ---
     WS_ENABLED = _env("WS_ENABLED", "true").lower() == "true"

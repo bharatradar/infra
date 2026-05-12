@@ -410,6 +410,7 @@ CREATE TABLE IF NOT EXISTS aircraft_info (
     hex_id VARCHAR(10) PRIMARY KEY,
     registration VARCHAR(20),
     type VARCHAR(20),
+    airline_icao VARCHAR(5),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

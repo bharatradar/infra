@@ -511,6 +511,7 @@ async def get_route_from_adsbdb(callsign: str, iata_flight: str, hex_id: str, se
     return None, None
 
 
+# NOT USED - legacy FR24 HTML scraping. Replaced by fr24_data.py airline batching
 async def get_route_from_fr24(callsign: str, iata_flight: str, session: aiohttp.ClientSession = None) -> tuple:
     """
     Get route (origin, destination) from FlightRadar24 HTML (utility function).

@@ -17,7 +17,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY main.py config.py db.py utils.py binCraft_decoder.py ./
+COPY main.py config.py db.py utils.py fr24_data.py binCraft_decoder.py ./
 COPY data/ ./data/
 
 # Create logs directory
