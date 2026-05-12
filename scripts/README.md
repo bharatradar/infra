@@ -6,38 +6,20 @@ Automated installation and management for the BharatRadar ADS-B/MLAT platform.
 
 ```
                      Cloudflare DNS → map.bharatradar.com
-                                           |
-                            ┌──────────────┴──────────────┐
-                            │      Keepalived VIP         │
-                            │    (auto-failover)          │
-                            └──────┬───────────────┬──────┘
-                                   │               │
-               ┌─────────────────────────┐ ┌─────────────────────────┐
-               │   HUB (K3s server)      │ │   HA SERVER (K3s)       │
-               │   192.168.200.10 (i7)  │ │   192.168.200.155 (i5)  │
-               │   MASTER keepalived     │ │   BACKUP keepalived     │
-               │   planes api mlat hub   │ │   joins same DB         │
-               │   haproxy redis mlat-map│ │                         │
-               └───────────┬─────────────┘ └─────────────┬───────────┘
-                           │         shared PostgreSQL   │
-                           │              │              │
-                           v              v              v
-               ┌───────────────────────────────────────────────────────┐
-               │  SHARED SERVICES (Pi)                                 │
-               │  192.168.200.127                                      │
-               │  PostgreSQL ←───────────────────────── DB Standby (opt)│
-               │  Redis                                                  │
-               │  InfluxDB                                               │
-               └─────────────────────────────────────────────────────────┘
-                                       ▲
-                                       │ feeds to FRP server
-     FEEDER PI (not K3s, standalone)   │
-     192.168.200.127                   │
-     readsb → feed.bharatradar.com:30004 (via AWS FRP)
-     mlat-client → feed.bharatradar.com:31090 (via AWS FRP)
-
-     WORKER NODE (K3s agent, optional)
-     joins via Hub:6443, runs scheduled pods
+                                            |
+                                            v
+                ┌───────────────────────────────────────────┐
+                │   HUB (45.88.189.38)                      │
+                │   K3s server + Shared Services             │
+                │   PostgreSQL, Redis, InfluxDB, MinIO       │
+                │   All pods: planes, api, mlat, hub, etc.  │
+                └───────────────────────────────────────────┘
+                                        ▲
+                                        │ feeds directly
+      FEEDER PI (not K3s, standalone)   │
+      192.168.200.127                   │
+      readsb → feed.bharatradar.com:30004
+      mlat-client → feed.bharatradar.com:31090
 ```
 
 ## Quick Start
@@ -55,30 +37,17 @@ curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharat
 Run the appropriate command on each machine:
 
 ```bash
-# Step 1: Shared Services (PostgreSQL + Redis + InfluxDB)
-# Always prompts for primary or standby
+# Step 1: Shared Services + Hub (all on same server)
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
 
 # Fresh install (clear stale checkpoints from failed run)
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --fresh shared-services
 
-# Step 2: Primary Hub (first K3s server, creates cluster)
+# Step 2: Hub (creates K3s cluster, deploys all services)
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- hub
-
-# Step 3a: HA Server (second K3s server, shares control plane)
-curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- ha-server
-
-# Step 3b: Worker Node (K3s agent, runs pods only)
-curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- worker
-
-# DB Standby (PostgreSQL streaming replica for failover)
-curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- db-standby
 
 # Feeder Pi (RTL-SDR receiver, standalone)
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- feeder
-
-# FRP Server (Cloud/VPS with public IP)
-curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- frp-server
 ```
 
 ### Local Install
@@ -93,8 +62,6 @@ sudo ./bharatradar-install
 
 # Or specify role directly
 sudo ./bharatradar-install hub
-sudo ./bharatradar-install ha-server
-sudo ./bharatradar-install worker
 ```
 
 ### Post-Install Commands
@@ -223,24 +190,18 @@ Checkpoint / Resume (automatic on all roles):
 
 ## Node Roles
 
-| Feature | Shared Services | Hub | HA Server | Worker | DB Standby | Feeder Pi | FRP Server |
-|---------|-----------------|-----|-----------|--------|------------|-----------|------------|
-| OS | Debian/RPi OS | Ubuntu/Debian | Ubuntu/Debian | Any Linux | Debian/Ubuntu | Raspberry Pi OS | Ubuntu/Debian |
-| K3s | No | Server | Server | Agent | No | No | No |
-| Services | PostgreSQL, Redis, InfluxDB | All (planes, api, mlat, etc.) | Joins same DB, no separate deploy | Runs scheduled pods | PostgreSQL replica | readsb + mlat-client | frps, nginx |
-| Keepalived | No | MASTER (optional) | BACKUP (optional) | No | No | No | No |
-| Hardware | Raspberry Pi or any | Powerful machine (i7+) | Any server | Any | Same as primary DB | Raspberry Pi + RTL-SDR | Cloud VPS / AWS EC2 |
-| Public IP | No | Optional | No | No | No | No | Required |
+| Feature | Hub | Feeder Pi |
+|---------|-----|-----------|
+| OS | Ubuntu/Debian | Raspberry Pi OS |
+| K3s | Yes (Server) | No |
+| Services | All (PostgreSQL, Redis, InfluxDB, MinIO, planes, api, mlat, etc.) | readsb + mlat-client |
+| Hardware | Server machine | Raspberry Pi + RTL-SDR |
+| Public IP | Yes (45.88.189.38) | No |
 
 ## Recommended Setup Order
 
-1. **Shared Services** → on Raspberry Pi (installs PostgreSQL, Redis, InfluxDB)
-2. **Primary Hub** → on Core i7 (creates K3s cluster, deploys all services)
-3. **HA Server** → on Mac Mini or second server (joins cluster, enables failover)
-4. **Worker** → on any additional machine (runs pods)
-5. **Feeder Pi** → on RTL-SDR machine (sends ADS-B data to cluster)
-
-Optional: **DB Standby** for PostgreSQL replica, **FRP Server** for public access if behind NAT.
+1. **Shared Services + Hub** → on the same server (45.88.189.38) — installs PostgreSQL, Redis, InfluxDB, MinIO, creates K3s cluster, deploys all services
+2. **Feeder Pi** → on RTL-SDR machine (sends ADS-B data to cluster)
 
 ## Requirements
 

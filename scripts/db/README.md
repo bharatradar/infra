@@ -38,18 +38,18 @@ Edit `database.env` with your credentials:
 
 ```bash
 # PostgreSQL
-POSTGRES_HOST=192.168.200.15
+POSTGRES_HOST=45.88.189.38
 POSTGRES_PORT=5432
 POSTGRES_DB=flight_db
 POSTGRES_USER=flight_db_user
 POSTGRES_PASSWORD=your_password
 
 # Redis
-REDIS_HOST=192.168.200.15
+REDIS_HOST=45.88.189.38
 REDIS_PORT=6379
 
 # InfluxDB (optional)
-INFLUXDB_URL=http://192.168.200.15:8086
+INFLUXDB_URL=http://45.88.189.38:8086
 INFLUXDB_TOKEN=your_token
 INFLUXDB_ORG=Vellur
 INFLUXDB_BUCKET=flight_radar_telemetry

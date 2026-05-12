@@ -25,35 +25,18 @@ This auto-detects your SDR, installs readsb + mlat-client, and connects to `feed
                     Cloudflare (DNS only)
                             |
                             v
-                    AWS EC2 frps + nginx
-                 (feed.bharatradar.com)
-                    /            |            \
-            port 30004    port 31090    HTTP/HTTPS tunnels
-                   |             |              |
-                   v             v              v
-         ┌─────────────────────────────────────────────┐
-│       PRIMARY HUB (Ubuntu i7)               │
-│       192.168.200.10 (MASTER)               │
-│       VIP: 192.168.200.150                  │
-         │                                             │
-         │  ingest  hub  planes  api  mlat  mlat-map   │
-         │  telegram-bot  flight-tracker  schedule-downloader
-         │  external  reapi  history  website          │
-         └──────────────┬──────────────────────────────┘
-                        │ k3s join (shared PostgreSQL)
-                        v
-         ┌─────────────────────────────────────────────┐
-         │       HA SERVER (Ubuntu i7, Backup)         │
-         │       192.168.200.186 (BACKUP)              │
-         │       VIP: 192.168.200.150 (on failover)    │
-         └─────────────────────────────────────────────┘
-                        │ k3s join
-                        v
-         ┌─────────────────────────────┐
-         │  BR-AGGRIGATOR (Pi, agent)  │
-         │  192.168.200.15            │
-         │  PostgreSQL, Redis, MinIO   │
-         └─────────────────────────────┘
+                    ┌─────────────────────────────┐
+                    │   HUB (45.88.189.38)         │
+                    │  K3s server + Shared Services│
+                    │  PostgreSQL, Redis, InfluxDB │
+                    │  MinIO, all K3s pods         │
+                    │                              │
+                    │  ingest  hub  planes  api    │
+                    │  mlat  mlat-map  history     │
+                    │  telegram-bot  flight-tracker│
+                    │  schedule-downloader  website│
+                    │  reapi  external              │
+                    └─────────────────────────────┘
 
     FEEDER PI (not K3s)
     192.168.200.127
@@ -82,9 +65,7 @@ Hub Cluster:
 
 | Node | IP | OS | Role | Arch | K3s |
 |------|----|----|------|------|-----|
-| **Primary Hub** | 192.168.200.10 | Ubuntu 24.04 (Core i7) | K3s server, MASTER keepalived | amd64 | Yes |
-| **HA Server** | 192.168.200.186 | Ubuntu 24.04 (Core i5) | K3s server, BACKUP keepalived | amd64 | Yes |
-| **br-aggrigator** | 192.168.200.15 | Debian 12 (Raspberry Pi) | K3s agent, shared services | arm64 | Yes |
+| **Hub** | 45.88.189.38 | Ubuntu | K3s server + Shared Services | amd64 | Yes |
 | **Feeder Pi** | 192.168.200.127 | Raspberry Pi OS | RTL-SDR + readsb + mlat-client (not K3s) | arm64 | No |
 
 ### Services
@@ -141,7 +122,7 @@ kubectl create secret generic influxdb-credentials \
   --from-literal=token=<INFLUX_TOKEN> -n bharatradar
 ```
 
-### Shared Services (192.168.200.15)
+### Shared Services (on Hub — 45.88.189.38)
 
 | Service | Port | Purpose |
 |---------|------|---------|
@@ -385,7 +366,7 @@ Step 4: Primary Hub ─────────► Step 5: HA Server (optional) 
 
 > **IMPORTANT:** `feed.bharatradar.com` MUST be DNS only (grey cloud). Cloudflare proxy blocks raw TCP connections needed for ADS-B beast feeds.
 
-#### Step 2: Shared Services (br-aggrigator Pi — 192.168.200.15)
+#### Step 2: Shared Services (on Hub — 45.88.189.38)
 
 **What this does:** Installs PostgreSQL (database), Redis (caching), InfluxDB (metrics), and MinIO (file storage) on a Raspberry Pi or any Linux machine.
 
@@ -420,7 +401,7 @@ Create these A records in your DNS provider (Cloudflare recommended). Replace `<
 
 > **Critical:** `feed.bharatradar.com` must be **DNS only** (grey cloud). Cloudflare proxy blocks raw TCP connections for ADS-B beast feeds.
 
-#### Step 1: Shared Services (br-aggrigator Pi — 192.168.200.15)
+#### Step 1: Shared Services (on Hub — 45.88.189.38)
 
 ```bash
 curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- shared-services
@@ -436,7 +417,7 @@ To drop and recreate all data:
 
 ```bash
 # SSH to the database server
-ssh bharatradar@192.168.200.15
+ssh bharatradat@45.88.189.38
 
 # Drop all tables
 PGPASSWORD='raga@098' psql -h localhost -U flight_db_user -d flight_db -c "
@@ -657,18 +638,18 @@ BASE_DOMAIN=bharatradar.com
 READSB_LAT=18.480718   # Your latitude
 READSB_LON=73.898235   # Your longitude
 TIMEZONE=Asia/Kolkata
-REDIS_HOST=192.168.200.15
+REDIS_HOST=45.88.189.38
 REDIS_PORT=6379
 REDIS_PASSWORD=<REDIS_PASSWORD_FROM_STEP_2>
 GHCR_USERNAME=your-github-username
 GHCR_PASSWORD=your-github-pat-with-packages-read-scope
 USE_EXTERNAL_DB=true
-DB_HOST=192.168.200.15
+DB_HOST=45.88.189.38
 DB_PORT=5432
 DB_DBNAME=k3s
 DB_DBUSER=k3s
 DB_DBPASS=<DB_PASSWORD_FROM_STEP_2>
-MINIO_ENDPOINT=192.168.200.15:9000
+MINIO_ENDPOINT=45.88.189.38:9000
 MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=<MINIO_PASSWORD_FROM_STEP_2>
 FRP_ENABLED=false
@@ -753,15 +734,14 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
-### Step 4: Primary Hub (K3s Server) [Option A - WITH FRP]
+### Step 4: Primary Hub (K3s Server)
 
-**What this does:** Installs K3s Kubernetes cluster, Keepalived for virtual IP failover, FRP client for tunneling, and deploys all ADS-B/MLAT services.
+**What this does:** Installs K3s Kubernetes cluster and deploys all ADS-B/MLAT services on a server with direct public IP.
 
 **You need these before starting:**
 - Credentials from Step 2 (PostgreSQL, Redis, MinIO)
-- FRP token from Step 3
 
-**On the Primary Hub node (192.168.200.10), create `/tmp/hub.env`:**
+**On the Hub node (45.88.189.38), create `/tmp/hub.env`:**
 ```bash
 cat > /tmp/hub.env << 'EOF'
 ROLE=hub
@@ -769,25 +749,20 @@ BASE_DOMAIN=bharatradar.com
 READSB_LAT=18.480718   # Your latitude (Pune = 18.480718)
 READSB_LON=73.898235   # Your longitude
 TIMEZONE=Asia/Kolkata
-REDIS_HOST=192.168.200.15
+REDIS_HOST=45.88.189.38
 REDIS_PORT=6379
 REDIS_PASSWORD=<REDIS_PASSWORD_FROM_STEP_2>
 GHCR_USERNAME=your-github-username
 GHCR_PASSWORD=your-github-pat-with-packages-read-scope
 USE_EXTERNAL_DB=true
-DB_HOST=192.168.200.15
+DB_HOST=45.88.189.38
 DB_PORT=5432
 DB_DBNAME=k3s
 DB_DBUSER=k3s
 DB_DBPASS=<DB_PASSWORD_FROM_STEP_2>
-MINIO_ENDPOINT=192.168.200.15:9000
+MINIO_ENDPOINT=45.88.189.38:9000
 MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=<MINIO_PASSWORD_FROM_STEP_2>
-FRP_ENABLED=true
-FRP_SERVER=<YOUR_AWS_PUBLIC_IP>
-FRP_TOKEN=<FRP_TOKEN_FROM_STEP_3>
-KEEPALIVED_ENABLED=true
-KEEPALIVED_VIP=192.168.200.150
 EOF
 ```
 
@@ -802,32 +777,18 @@ sudo kubectl get pods -n bharatradar
 sudo kubectl get nodes
 ```
 
-#### Step 5: HA Server (Optional - for failover)
-
-**What this does:** Adds a second K3s server that takes over if the Primary fails. Keeps the virtual IP (192.168.200.150) alive.
-Create `/tmp/ha.env`:
+**Install:**
 ```bash
-cat > /tmp/ha.env << 'EOF'
-ROLE=ha-server
-BASE_DOMAIN=bharatradar.com
-DB_HOST=192.168.200.15
-DB_PORT=5432
-DB_DBNAME=k3s
-DB_DBUSER=k3s
-DB_DBPASS=<from-shared-services>
-K3S_CLUSTER_TOKEN=K10...your-token...
-PRIMARY_HUB_IP=192.168.200.10
-KEEPALIVED_ENABLED=true
-KEEPALIVED_VIP=192.168.200.150
-KEEPALIVED_STATE=BACKUP
-KEEPALIVED_PRIORITY=90
-EOF
+curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/hub.env hub
 ```
 
-Install:
+**After installation, verify:**
 ```bash
-curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/ha.env ha-server
+sudo kubectl get pods -n bharatradar
+sudo kubectl get nodes
 ```
+
+
 
 #### Step 6: Feeder Pi (Data Source)
 
@@ -865,8 +826,8 @@ kubectl get pods -n bharatradar
 # Check nodes
 kubectl get nodes -o wide
 
-# Check VIP on Primary
-ip addr show | grep 192.168.200.150
+# Check IP
+ip addr show
 
 # Test endpoints
 curl -s -o /dev/null -w "%{http_code}" https://map.bharatradar.com/
@@ -879,17 +840,14 @@ curl -s -o /dev/null -w "%{http_code}" https://my.bharatradar.com/
 curl -s https://map.bharatradar.com/data/aircraft.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Aircraft: {len(d.get(chr(97)+chr(105)+chr(114)+chr(99)+chr(114)+chr(97)+chr(102)+chr(116)),[]))}')"
 ```
 
-### Failover Test
+### Cluster Health
 
 ```bash
-# On Primary Hub: simulate failure
-sudo systemctl stop k3s keepalived
+# Check all nodes
+kubectl get nodes
 
-# On HA Server: verify VIP moved
-ip addr show | grep 192.168.200.150
-
-# Restore Primary
-sudo systemctl start k3s keepalived
+# Check pods
+kubectl get pods -n bharatradar
 ```
 
 ### Useful Commands
@@ -956,7 +914,7 @@ Standard procedure for fixing issues, building new images, tagging, and redeploy
 
 - Docker with buildx multi-arch support
 - kubectl configured for local preview
-- SSH access to Hub (192.168.200.10) with sudo
+- SSH access to Hub (45.88.189.38) with sudo
 - Git tag version format: `vYYYY.MM.DD.XX` (e.g., `v2025.05.07.01`)
 
 ### Step-by-Step
@@ -1029,18 +987,18 @@ git tag -a ${VERSION} -m "Release ${VERSION}: description of changes"
 ```bash
 cd /Users/Shared/bharatradar/infra
 kustomize build manifests/default | \
-  sshpass -p 'raga@098' ssh \
+  ssh \
   -o StrictHostKeyChecking=no \
-  bharatradar@192.168.200.10 \
+  bharatradat@45.88.189.38 \
   'sudo kubectl apply -f -'
 ```
 
-#### 7. Verify Rollout
+### 7. Verify Rollout
 
 ```bash
-sshpass -p 'raga@098' ssh \
+ssh \
   -o StrictHostKeyChecking=no \
-  bharatradar@192.168.200.10 \
+  bharatradat@45.88.189.38 \
   'sudo kubectl get pods -n bharatradar -w'
 ```
 
@@ -1078,9 +1036,9 @@ git tag -a ${VERSION} -m "Release ${VERSION}: multi-image update"
 
 # Deploy
 kustomize build manifests/default | \
-  sshpass -p 'raga@098' ssh \
+  ssh \
   -o StrictHostKeyChecking=no \
-  bharatradar@192.168.200.10 \
+  bharatradat@45.88.189.38 \
   'sudo kubectl apply -f -'
 ```
 
@@ -1091,9 +1049,9 @@ kustomize build manifests/default | \
 # Edit manifests/default/<component>.yaml
 
 # Or rollback deployment directly on K3s
-sshpass -p 'raga@098' ssh \
+  ssh \
   -o StrictHostKeyChecking=no \
-  bharatradar@192.168.200.10 \
+  bharatradat@45.88.189.38 \
   'sudo kubectl rollout undo deployment/<component> -n bharatradar'
 ```
 
@@ -1227,7 +1185,7 @@ Also set the redirect URI via env var:
 
 ```bash
 # SSH to hub server
-ssh bharatradar@192.168.200.10
+ssh bharatradat@45.88.189.38
 
 # Apply the manifest
 sudo kubectl apply -f manifests/default/webapp.yaml

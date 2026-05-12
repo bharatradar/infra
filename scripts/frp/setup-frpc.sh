@@ -36,7 +36,7 @@ Examples:
   sudo $0
 
   # Automated setup
-  sudo $0 --server 13.48.249.103 --token "your-token" --domain bharatradar.com
+  sudo $0 --server 45.88.189.38 --token "your-token" --domain bharatradar.com
 
 EOF
     exit 0

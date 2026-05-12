@@ -53,12 +53,11 @@ Examples:
   # Create hub node
   sudo $0 create --role hub --domain bharatradar.com --lat 18.48 --lon 73.89
 
-  # Create hub with FRP tunnel
-  sudo $0 create --role hub --domain bharatradar.com --lat 18.48 --lon 73.89 \
-    --frp-server 13.48.249.103 --frp-token "your-token"
+  # Create hub (public IP, no FRP needed)
+  sudo $0 create --role hub --domain bharatradar.com --lat 18.48 --lon 73.89
 
   # Create feeder node
-  sudo $0 create --role feeder --hub-ip 192.168.200.10
+  sudo $0 create --role feeder --hub-ip 45.88.189.38
 
   # Show info
   sudo $0 info

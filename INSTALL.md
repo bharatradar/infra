@@ -37,35 +37,18 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
                     Cloudflare (DNS only)
                             |
                             v
-                    AWS EC2 frps + nginx
-                 (feed.bharatradar.com)
-                    /            |            \
-            port 30004    port 31090    HTTP/HTTPS tunnels
-                   |             |              |
-                   v             v              v
-         ┌─────────────────────────────────────────────┐
-         │       PRIMARY HUB (Ubuntu i7)               │
-         │       192.168.200.10 (MASTER)              │
-         │       VIP: 192.168.200.150                  │
-         │                                             │
-         │  ingest  hub  planes  api  mlat  mlat-map   │
-         │  telegram-bot  flight-tracker  schedule-downloader
-         │  external  reapi  history  website          │
-         └──────────────┬──────────────────────────────┘
-                        │ k3s join (shared PostgreSQL)
-                        v
-         ┌─────────────────────────────────────────────┐
-         │       HA SERVER (Ubuntu i7, Backup)         │
-         │       192.168.200.186 (BACKUP)              │
-         │       VIP: 192.168.200.150 (on failover)    │
-         └─────────────────────────────────────────────┘
-                        │ k3s join
-                        v
-         ┌─────────────────────────────┐
-         │  BR-AGGRIGATOR (Pi, agent)  │
-         │  192.168.200.15            │
-         │  PostgreSQL, Redis, MinIO   │
-         └─────────────────────────────┘
+                    ┌─────────────────────────────┐
+                    │     HUB (45.88.189.38)       │
+                    │  K3s server + Shared Services│
+                    │  PostgreSQL, Redis, InfluxDB │
+                    │  MinIO, all K3s pods         │
+                    │                              │
+                    │  ingest  hub  planes  api    │
+                    │  mlat  mlat-map  history     │
+                    │  telegram-bot  flight-tracker│
+                    │  schedule-downloader  website│
+                    │  reapi  external              │
+                    └─────────────────────────────┘
 
     FEEDER PI (not K3s)
     192.168.200.127
@@ -77,9 +60,7 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
 
 | Node | IP | Role | OS | Arch | K3s |
 |------|----|------|----|------|-----|
-| **Primary Hub** | 192.168.200.10 | K3s server (MASTER), all services | Ubuntu 24.04 | amd64 | Yes |
-| **HA Server** | 192.168.200.186 | K3s server (BACKUP), failover | Ubuntu 24.04 | amd64 | Yes |
-| **br-aggrigator** | 192.168.200.15 | K3s agent, shared services | Debian 12 (Pi) | arm64 | Yes |
+| **Hub** | 45.88.189.38 | K3s server + Shared Services (PostgreSQL, Redis, InfluxDB, MinIO) | Ubuntu | amd64 | Yes |
 | **Feeder Pi** | 192.168.200.127 | RTL-SDR + readsb + mlat-client | Raspberry Pi OS | arm64 | No |
 
 ### Services
@@ -97,7 +78,7 @@ Complete guide to deploying the BharatRadar ADS-B/MLAT aggregator platform with 
 | **history** | `ghcr.io/bharatradar/history` | 8080, 80 | Historical data (amd64 only) |
 | **website** | `ghcr.io/bharatradar/website` | 80 | Homepage |
 
-### Shared Services (192.168.200.15)
+### Shared Services (on Hub — 45.88.189.38)
 
 | Service | Port | Purpose |
 |---------|------|---------|
@@ -201,7 +182,7 @@ sudo scripts/frp/setup-frps.sh \
 ```bash
 # On Hub
 sudo scripts/frp/setup-frpc.sh \
-  --server 13.48.249.103 \
+  --server <FRP_SERVER_IP> \
   --token "your-secret-token" \
   --domain bharatradar.com
 ```
@@ -275,26 +256,24 @@ BASE_DOMAIN=bharatradar.com
 READSB_LAT=18.480718
 READSB_LON=73.898235
 TIMEZONE=Asia/Kolkata
-REDIS_HOST=192.168.200.15
+REDIS_HOST=45.88.189.38
 REDIS_PORT=6379
 REDIS_PASSWORD=your-redis-password
 GHCR_USERNAME=your-github-user
 GHCR_PASSWORD=your-github-pat
 USE_EXTERNAL_DB=true
-DB_HOST=192.168.200.15
+DB_HOST=45.88.189.38
 DB_PORT=5432
 DB_DBNAME=k3s
 DB_DBUSER=k3s
 DB_DBPASS=your-db-password
-MINIO_ENDPOINT=192.168.200.15:9000
+MINIO_ENDPOINT=45.88.189.38:9000
 MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=your-minio-password
-FRP_ENABLED=false
-KEEPALIVED_ENABLED=false
 EOF
 ```
 
-**Example: Hub with Keepalived VIP (recommended if you plan to add a second server)**
+**Example: Hub with external DB (single server)**
 ```bash
 cat > /tmp/hub.env << 'EOF'
 ROLE=hub
@@ -302,33 +281,20 @@ BASE_DOMAIN=bharatradar.com
 READSB_LAT=18.480718
 READSB_LON=73.898235
 TIMEZONE=Asia/Kolkata
-REDIS_HOST=192.168.200.15
+REDIS_HOST=45.88.189.38
 REDIS_PORT=6379
 REDIS_PASSWORD=your-redis-password
 GHCR_USERNAME=your-github-user
 GHCR_PASSWORD=your-github-pat
 USE_EXTERNAL_DB=true
-DB_HOST=192.168.200.15
+DB_HOST=45.88.189.38
 DB_PORT=5432
 DB_DBNAME=k3s
 DB_DBUSER=k3s
 DB_DBPASS=your-db-password
-MINIO_ENDPOINT=192.168.200.15:9000
+MINIO_ENDPOINT=45.88.189.38:9000
 MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=your-minio-password
-FRP_ENABLED=false
-KEEPALIVED_ENABLED=true
-KEEPALIVED_VIP=192.168.200.150
-EOF
-```
-
-**Example: Worker**
-```bash
-cat > /tmp/worker.env << 'EOF'
-ROLE=worker
-HUB_IP=192.168.200.10
-K3S_TOKEN=K10xxxxxxxx::server:xxxxxxxx
-BASE_DOMAIN=bharatradar.com
 EOF
 ```
 
@@ -415,98 +381,11 @@ sudo ./bharatradar-install <role>
 
 ---
 
-## Adding a Second Hub (HA Server)
-
-### Prerequisites
-
-- Second machine on the same LAN (Ubuntu/Debian, amd64 or arm64)
-- Same PostgreSQL external datastore as the Primary Hub
-- Keepalived VIP already configured on the Primary Hub (`KEEPALIVED_ENABLED=true`)
-
-### Setup
-
-**1. Get the K3s cluster token from the Primary Hub:**
-
-```bash
-ssh user@192.168.200.10 'sudo cat /var/lib/rancher/k3s/server/node-token'
-```
-
-**2. Create the config file on the HA Server:**
-
-```bash
-cat > /tmp/ha.env << 'EOF'
-ROLE=ha-server
-BASE_DOMAIN=bharatradar.com
-DB_HOST=192.168.200.15
-DB_PORT=5432
-DB_DBNAME=k3s
-DB_DBUSER=k3s
-DB_DBPASS=your-db-password
-K3S_CLUSTER_TOKEN=K10xxxxxxxx::server:xxxxxxxx
-PRIMARY_HUB_IP=192.168.200.10
-KEEPALIVED_ENABLED=true
-KEEPALIVED_VIP=192.168.200.150
-KEEPALIVED_STATE=BACKUP
-EOF
-```
-
-**3. Run the installer:**
-
-```bash
-curl -Ls https://raw.githubusercontent.com/bharatradar/infra/main/scripts/bharatradar-install | sudo bash -s -- --conf-file /tmp/ha.env ha-server
-```
-
-### Failover Behavior
-
-| Step | Time | What happens |
-|------|------|-------------|
-| Primary Hub fails | 0s | Keepalived detects loss of MASTER |
-| VIP moves to backup | ~3s | Backup node becomes MASTER, claims `192.168.200.150` |
-| kube-proxy routes traffic | ~3s | `externalTrafficPolicy: Cluster` forwards beast/MLAT to pod on dead primary |
-| K3s reschedules pods | ~30-60s | ingest-readsb and mlat-mlat-server recreated on backup |
-| Feeder Pi reconnects | Auto | readsb and mlat-client auto-reconnect to feed.bharatradar.com |
-
-**Result:**
-- Web/API/map traffic: **0s downtime**
-- Beast/MLAT data: **~30-60s interruption** (until pods reschedule)
-
-### Load Balancing vs Active-Standby
-
-| Traffic Type | Behavior |
-|-------------|----------|
-| **HTTP/HTTPS** (map, API, mlat-map, history) | ✅ **Load balanced** — Traefik ingress runs on all nodes, distributes across both hubs |
-| **Beast (port 30004)** | ❌ **Active-standby only** — VIP is on ONE node at a time |
-| **MLAT (port 31090)** | ❌ **Active-standby only** — VIP is on ONE node at a time |
-
-To get active-active load balancing for beast/MLAT, you would need separate public IPs per hub or a cloud load balancer with health checks.
-
 ---
 
 ## Future Enhancements
 
-### DaemonSet for Instant Failover (Planned)
-
-**Current limitation:** The ~30-60s pod reschedule window for beast/MLAT during failover.
-
-**Planned improvement:** Convert `ingest-readsb` and `mlat-mlat-server` from **Deployment** to **DaemonSet** (one pod per node).
-
-**Benefits:**
-- Instant failover — pod already running on the backup node
-- Zero reschedule delay
-- Simpler mental model
-
-**Challenges:**
-- `hub-readsb` must connect to ALL ingest pods simultaneously (not just one)
-- Requires a headless service to discover all node IPs
-- `hub-readsb --net-connector` needs to target multiple endpoints
-
-**Implementation approach:**
-1. Change `ingest-readsb` from Deployment → DaemonSet
-2. Change `mlat-mlat-server` from Deployment → DaemonSet
-3. `hub-readsb` connects to `ingest-readsb-headless` (returns all pod IPs via DNS)
-4. `hub-readsb` opens a beast connection to each ingest node independently
-
----
+(no HA Server currently — single-server setup)
 
 ## Silent Configuration Reference
 
@@ -541,7 +420,7 @@ Below are all environment variables accepted by each role for silent installatio
 | `DB_DBNAME` | `k3s` | No | PostgreSQL database name |
 | `DB_DBUSER` | `k3s` | No | PostgreSQL username |
 | `DB_DBPASS` | — | If `USE_EXTERNAL_DB=true` | PostgreSQL password |
-| `MINIO_ENDPOINT` | — | No | MinIO host:port (e.g., `192.168.200.15:9000`) |
+| `MINIO_ENDPOINT` | — | No | MinIO host:port (e.g., `45.88.189.38:9000`) |
 | `MINIO_ROOT_USER` | `minioadmin` | No | MinIO access key |
 | `MINIO_ROOT_PASSWORD` | — | If using MinIO | MinIO secret key |
 | `RCLONE_CONFIG_PATH` | — | No | Path to existing rclone.conf (alternative to MinIO) |
@@ -553,25 +432,13 @@ Below are all environment variables accepted by each role for silent installatio
 
 ### HA Server (`ha-server`)
 
-| Variable | Default | Required | Description |
-|----------|---------|----------|-------------|
-| `BASE_DOMAIN` | — | Yes | Base domain |
-| `DB_HOST` | — | Yes | PostgreSQL host IP |
-| `DB_PORT` | `5432` | No | PostgreSQL port |
-| `DB_DBNAME` | `k3s` | No | PostgreSQL database name |
-| `DB_DBUSER` | `k3s` | No | PostgreSQL username |
-| `DB_DBPASS` | — | Yes | PostgreSQL password |
-| `K3S_CLUSTER_TOKEN` | — | Yes | K3s cluster token from Primary Hub |
-| `PRIMARY_HUB_IP` | — | Yes | Primary Hub IP address |
-| `KEEPALIVED_ENABLED` | `false` | No | `true` to enable Keepalived |
-| `KEEPALIVED_VIP` | — | If enabled | Virtual IP address |
-| `KEEPALIVED_STATE` | `BACKUP` | No | `MASTER` or `BACKUP` |
+Not currently used — single-server setup.
 
 ### Worker (`worker`)
 
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
-| `HUB_IP` | — | Yes | Primary Hub IP |
+| `HUB_IP` | — | Yes | Hub IP (e.g., 45.88.189.38) |
 | `K3S_TOKEN` | — | Yes | K3s join token |
 | `BASE_DOMAIN` | — | Yes | Base domain |
 
@@ -610,7 +477,7 @@ Below are all environment variables accepted by each role for silent installatio
 
 ## Step-by-Step Installation
 
-### Step 1: Shared Services (br-aggrigator Pi — 192.168.200.15)
+### Step 1: Shared Services (on Hub — 45.88.189.38)
 
 This installs PostgreSQL, Redis, InfluxDB, and MinIO. These are prerequisites for the K3s cluster.
 
@@ -644,7 +511,7 @@ sudo kubectl create job manual-run --from=cronjob/schedule-downloader -n bharatr
 **To enable automatic scheduled runs (daily at 22:00 UTC):**
 ```bash
 # Connect to PostgreSQL
-psql -h 192.168.200.15 -U flight_db_user -d flight_db
+psql -h 45.88.189.38 -U flight_db_user -d flight_db
 
 # Enable scheduler
 UPDATE download_config SET scheduler_enabled = TRUE, updated_at = NOW() WHERE id = 1;
@@ -751,7 +618,7 @@ sudo kubectl create secret tls bharatradar-tls \
   -n bharatradar
 
 # Create rclone secret for history service (MinIO)
-echo -e "[bharatradar]\ntype = s3\nprovider = MinIO\naccess_key_id = minioadmin\nsecret_access_key = <from-shared-services>\nendpoint = http://192.168.200.15:9000\nacl = private" | \
+echo -e "[bharatradar]\ntype = s3\nprovider = MinIO\naccess_key_id = minioadmin\nsecret_access_key = <from-shared-services>\nendpoint = http://45.88.189.38:9000\nacl = private" | \
   sudo kubectl create secret generic bharatradar-rclone \
   --from-file=rclone.conf=/dev/stdin -n bharatradar
 ```
@@ -779,20 +646,17 @@ See [FRP Server Setup](#frp-server-setup-awscloud) below.
 
 See [FRP Client Setup](#frp-client-setup-hub-node) below.
 
-### Step 8: Join Aggregator Node (br-aggrigator Pi as K3s agent)
+### Step 8: Join Additional Nodes (Optional)
 
 ```bash
 # On Hub - get join token
 sudo cat /var/lib/rancher/k3s/server/node-token
 
-# On br-aggrigator Pi (192.168.200.15)
+# On new node
 curl -sfL https://get.k3s.io | \
-  K3S_URL=https://192.168.200.10:6443 \
-  K3S_TOKEN=K10xxxxxxxxx \
+  K3S_URL=https://45.88.189.38:6443 \
+  K3S_TOKEN=<token-from-hub> \
   sh -
-
-# Verify on Hub
-sudo kubectl get nodes -o wide
 ```
 
 ### Step 9: Set up Feeder Pi
@@ -932,7 +796,7 @@ The FRP client runs on the Hub and creates tunnels for web traffic and feeder da
 cd infra
 
 sudo scripts/frp/setup-frpc.sh \
-  --server 13.48.249.103 \
+  --server 45.88.189.38 \
   --token "your-secret-token" \
   --domain bharatradar.com
 ```
@@ -948,7 +812,7 @@ sudo cp "frp_${FRP_VERSION}_linux_${ARCH}/frpc" /usr/local/bin/
 
 # 2. Configure frpc (update IPs to match your cluster)
 sudo tee /etc/frpc.toml << 'EOF'
-serverAddr = "13.48.249.103"
+serverAddr = "45.88.189.38"
 serverPort = 7000
 log.level = "info"
 
@@ -1399,7 +1263,7 @@ sudo journalctl -u readsb --since "1 min ago" | grep "hex:"
 sudo journalctl -u bharat-feeder --since "1 min ago"
 
 # On Hub: Check frpc can reach FRP server
-nc -zv 13.48.249.103 7000
+nc -zv 45.88.189.38 7000
 
 # On Hub: Check frpc logs
 journalctl -u frpc --since "5 minutes ago"

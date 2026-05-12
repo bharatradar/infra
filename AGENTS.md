@@ -12,9 +12,7 @@ Data flow: user → ingest → hub → planes
 ### Nodes
 | Node | IP | Role | OS | Arch |
 |------|----|------|----|------|
-| Hub | 192.168.200.10 | K3s server (MASTER) | Ubuntu 24.04 (Core i7) | amd64 |
-| HA Server | 192.168.200.186 | K3s server (BACKUP) | Ubuntu 24.04 | amd64 |
-| br-aggrigator | 192.168.200.15 | K3s agent + Shared Services (PostgreSQL, Redis, InfluxDB, MinIO) | Debian 12 (Raspberry Pi) | arm64 |
+| Hub | 45.88.189.38 | K3s server + Shared Services (PostgreSQL, Redis, InfluxDB, MinIO) | Ubuntu | amd64 |
 | Feeder Pi | 192.168.200.127 | RTL-SDR readsb + mlat-client (not K3s) | Raspberry Pi OS | arm64 |
 
 Services (manifests/default):
@@ -76,15 +74,10 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 - Requires `--net-api-port=30152` on reapi-readsb deployment
 
 ## Feeder
-- Feeder Pi (192.168.200.127) connects directly to `feed.bharatradar.com:30004`
+- Feeder Pi (192.168.200.127) connects to `feed.bharatradar.com:30004`
 - Uses `bharat-feeder` systemd service (readsb --net-only --net-connector)
 - Uses `bharat-mlat` systemd service (mlat-client → feed.bharatradar.com:31090)
 - Not part of Kubernetes cluster
-
-## FRP
-- Server on AWS EC2 (13.48.249.103): frps
-- Client on Hub (192.168.200.10): frpc
-- Proxies: TCP 30004/30005/31090 + HTTP/HTTPS for web + mlat-map
 
 ## Owner
 @bharatradar/sre
@@ -102,31 +95,17 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 ## TODO / Future Enhancements
 
 ### High Priority
-- ~~**Remove FRP tunnel**~~ → **Alternative: Feeder direct connect or FRP on both nodes**
-  - Current: FRP tunnel masks feeder IPs, breaking `my.bharatradar.com` UUID lookup
-  - Options: (a) Move feeders to direct cluster IP, (b) Run frpc on HA Server too for full failover, (c) Use a public load balancer instead of FRP
-  - Note: `my.bharatradar.com` now redirects correctly to `map.bharatradar.com`, but UUID filter only works when API sees real feeder IP
 - **Feeder self-registration script**: A bash script for feeders to get their UUID without relying on IP lookup:
   1. Script runs on feeder Pi
   2. Queries Redis or API for all connected feeders
   3. Matches local MAC address or hostname to UUID
   4. Prints personalized map URL (`map.bharatradar.com/?filter_uuid=<uuid>`)
-  5. Useful for feeders behind CGNAT, proxies, or when FRP is active
-- **FRP Client on HA Server**: Currently frpc only runs on Primary Hub. If Primary fails, the FRP tunnel dies even though K3s fails over. Need to run frpc on HA Server with Keepalived VIP binding so the tunnel always follows the active node.
+  5. Useful for feeders behind CGNAT or proxies
 
 ### Medium Priority
-- **Shared Storage for PVCs**: Use Longhorn, NFS, or Ceph to replace local-path provisioner.
-  - Affected pods: `planes-readsb` (planes-state PVC), `mlat-mlat-server` (mlat PVC)
-  - Currently: PVCs are node-bound; pods cannot reschedule to HA Server during failover
-  - With shared storage: Full stateful failover including map history and MLAT sync state
-- **DaemonSet for Beast/MLAT**: Run `ingest-readsb` and `mlat-mlat-server` as DaemonSets on both Hub nodes.
-  - Eliminates 30-60s pod reschedule window during node failover
-  - Each node runs its own local instance; VIP determines which one receives traffic
-  - Requires shared storage for state persistence across nodes
-- **Traefik IP Forwarding**: Configure Traefik to preserve `X-Real-IP` and `X-Forwarded-For` headers from the AWS nginx proxy.
+- **Traefik IP Forwarding**: Configure Traefik to preserve `X-Real-IP` and `X-Forwarded-For` headers.
   - Currently: API sees Traefik pod IPs (`10.42.x.x`) instead of real client IPs
-  - Fix: Enable `forwardedHeaders.trustedIPs` in Traefik Helm values to trust the AWS server IP
-  - This would at least fix IP lookups for direct API calls (though FRP still masks feeder IPs)
+  - Fix: Enable `forwardedHeaders.trustedIPs` in Traefik Helm values
 
 ### Low Priority / Infrastructure
 - **Automated API Image Rebuild**: The `api:5.0.0` image relies on runtime patches (`build/api/patch.py`) to replace hardcoded `adsb.lol` references.
@@ -136,29 +115,19 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 - **Version Pinning**: K3s installer downloads latest stable by default.
   - Pin to a specific version (e.g., `v1.35.4+k3s1`) for reproducible deployments
   - Update the installer to use `INSTALL_K3S_VERSION` env var consistently across all roles
-- **AWS nginx Config as Code**: The nginx server blocks on the AWS EC2 server are manually configured.
-  - Templatize the nginx config in the repo (e.g., `scripts/aws/nginx-subdomains.conf`)
-  - Add certbot expansion commands to the frp-server installer role
-  - Document subdomain addition procedure in install.md
-- **Keepalived Interface Selection**: The HA Server auto-detected `wlp3s0` (WiFi) instead of the wired interface.
-  - Add `KEEPALIVED_INTERFACE` override option to the config
-  - Default to the interface with the default route, but allow explicit override
-- **Cleanup: Remove haproxy references**: The old haproxy deployment was removed from the architecture but some docs still mention it.
-  - Audit all docs and remove stale haproxy references
-  - Update architecture diagrams to show direct LoadBalancer services instead
 
 ## Adding a New Subdomain (e.g., cortex.bharatradar.com)
 
 When adding a new web service that needs its own subdomain, you need to configure THREE things:
 
 ### 1. DNS (Cloudflare)
-Add an A record pointing to your public server IP:
+Add an A record pointing to your server IP:
 ```
-cortex.bharatradar.com → 13.48.249.103
+cortex.bharatradar.com → 45.88.189.38
 ```
 
 ### 2. SSL Certificate (Let's Encrypt via Certbot)
-On the **public-facing server** (AWS EC2 or wherever frps/nginx runs):
+On the **server** (45.88.189.38), run certbot directly (no FRP needed since K3s is on a public IP):
 ```bash
 # Install certificate
 sudo certbot --nginx -d cortex.bharatradar.com --non-interactive --agree-tos --email your-email@example.com
@@ -166,57 +135,11 @@ sudo certbot --nginx -d cortex.bharatradar.com --non-interactive --agree-tos --e
 # Auto-renewal is set up by certbot
 ```
 
-### 3. nginx Configuration
-On the **public-facing server**, add a server block:
+### 3. nginx/Traefik Configuration
+The server has a direct public IP, so Traefik (K3s ingress) handles routing directly.
+Configure the K3s Ingress with TLS via cert-manager or pass the cert through.
 
-```nginx
-server {
-    listen 80;
-    server_name cortex.bharatradar.com;
-    return 301 https://$server_name$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name cortex.bharatradar.com;
-
-    ssl_certificate /etc/letsencrypt/live/cortex.bharatradar.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/cortex.bharatradar.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;  # FRP vhost HTTP port
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-Enable and reload:
-```bash
-sudo ln -sf /etc/nginx/sites-available/cortex /etc/nginx/sites-enabled/cortex
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-### 4. FRP Tunnel (frpc.toml on local server)
-On the **local K3s server** (Hub at 192.168.200.10), add to `/etc/frpc.toml`:
-```toml
-# In the [[proxies]] section with the web-ui proxy, add the domain:
-customDomains = [
-    "map.bharatradar.com",
-    "mlat.bharatradar.com",
-    # ... other domains ...
-    "cortex.bharatradar.com"  # <-- ADD HERE
-]
-```
-
-Then restart frpc:
-```bash
-sudo systemctl restart frpc
-```
-
-### 5. K3s Ingress
+### 4. K3s Ingress
 Create a Kubernetes Ingress in your manifests:
 ```yaml
 apiVersion: networking.k8s.io/v1
@@ -249,16 +172,13 @@ kubectl apply -f manifests/default/cortex-webapp/ingress.yaml
 ### Summary Checklist
 - [ ] DNS A record added to Cloudflare
 - [ ] SSL certificate issued via certbot
-- [ ] nginx server block configured
-- [ ] Domain added to frpc.toml customDomains
-- [ ] K3s Ingress created
+- [ ] K3s Ingress created with TLS
 - [ ] Service deployed and running in K3s
 
 ### Troubleshooting
 - **ERR_CERT_COMMON_NAME_INVALID**: SSL cert doesn't include the subdomain. Re-run certbot.
-- **404 from nginx**: frpc.toml doesn't have the domain in customDomains.
 - **404 from K3s**: Ingress host doesn't match, or service name/port is wrong.
-- **Connection refused**: frpc isn't running, or K3s service isn't exposing the right port.
+- **Connection refused**: K3s service isn't exposing the right port.
 
 ## Optional Components (Future)
 
@@ -294,14 +214,12 @@ kubectl get svc -n monitoring -l app.kubernetes.io/name=grafana
 - Password: (get from secret)
 
 **Troubleshooting:**
-- If 404 from FRP: Add subdomain to `customDomains` in `/etc/frpc.toml` on K3s server
-- Restart frpc after config change: `sudo systemctl restart frpc`
+- If 404 from Traefik: Check K3s Ingress host matches domain
 
-**Subdomain format for FRP** - needs to match exactly between:
-1. AWS nginx server_name
-2. AWS certbot certificate
-3. K3s frpc.toml customDomains
-4. K3s Ingress host
+**Subdomain format** - needs to match exactly between:
+1. Cloudflare DNS
+2. SSL certificate
+3. K3s Ingress host
 ```
 
 **Default login:** admin / prom-operator (change after first login)
@@ -371,7 +289,7 @@ EOF
 #   cert-manager.io/cluster-issuer: letsencrypt-prod
 ```
 
-**Current setup:** TLS terminates on AWS EC2 (certbot) → K3s receives plain HTTP via FRP. This is fine for now.
+**Current setup:** TLS terminates on server (certbot) → Traefik (K3s) handles routing directly.
 
 ---
 
