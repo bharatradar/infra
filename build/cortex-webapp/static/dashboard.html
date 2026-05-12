@@ -60,20 +60,45 @@
         
         /* Mobile responsive fixes */
         @media (max-width: 768px) {
+            main { margin-top: 88px !important; }
+            #main-content { padding: 0.5rem !important; padding-top: 0.5rem !important; }
+            #sidebar { padding-top: 88px !important; }
+
             /* Prevent horizontal overflow */
             body, main, #main-content {
                 overflow-x: hidden !important;
             }
             
-            /* Fix map container on mobile */
+            /* Make map taller on mobile */
             #atc-map-container {
-                min-height: 300px !important;
-                max-height: 50vh !important;
+                min-height: 65vh !important;
+                max-height: 75vh !important;
             }
             
-            /* Ensure stats cards fit on small screens */
+            /* Compact stats cards on mobile */
             .grid.grid-cols-2 {
-                gap: 0.5rem !important;
+                gap: 0.4rem !important;
+            }
+            .grid.grid-cols-2.md\:grid-cols-4.gap-3.sm\:gap-4 .theme-bg-sidebar {
+                padding: 0.5rem !important;
+            }
+            .grid.grid-cols-2.md\:grid-cols-4.gap-3.sm\:gap-4 .p-3 {
+                padding: 0.3rem !important;
+            }
+            .grid.grid-cols-2.md\:grid-cols-4.gap-3.sm\:gap-4 .text-2xl {
+                font-size: 1rem !important;
+            }
+            .grid.grid-cols-2.md\:grid-cols-4.gap-3.sm\:gap-4 .text-xs {
+                font-size: 9px !important;
+            }
+            .grid.grid-cols-2.md\:grid-cols-4.gap-3.sm\:gap-4 .text-xl {
+                font-size: 1rem !important;
+            }
+            .grid.grid-cols-2.md\:grid-cols-4.gap-3.sm\:gap-4 .rounded-lg {
+                border-radius: 0.375rem !important;
+            }
+            .grid.grid-cols-2.md\:grid-cols-4.gap-3.sm\:gap-4 .p-4 {
+                padding: 0.4rem !important;
             }
             
             /* Side panel stack on mobile */
@@ -83,16 +108,25 @@
             
             .flex-1.flex.gap-4 .flex-\[3\] {
                 flex: none !important;
-                min-height: 300px !important;
+                min-height: 65vh !important;
             }
             
             .flex-1.flex.gap-4 .flex-1.flex.flex-col.gap-4 {
                 display: none !important; /* Hide side panel on mobile to focus on map */
             }
-            
-            /* Fullscreen mobile specific */
-            #fullscreen-radar {
-                display: flex !important;
+
+            /* Move floating controls higher so they're visible on small screens */
+            .absolute.top-4.right-4.z-10 {
+                top: 0.25rem !important;
+                right: 0.25rem !important;
+            }
+            .absolute.top-4.right-4.z-10 .px-3 {
+                padding-left: 0.4rem !important;
+                padding-right: 0.4rem !important;
+            }
+            .absolute.top-4.right-4.z-10 .py-1\.5 {
+                padding-top: 0.15rem !important;
+                padding-bottom: 0.15rem !important;
             }
         }
 
@@ -230,70 +264,78 @@
 </head>
 <body class="theme-bg-body theme-text h-screen flex overflow-hidden font-sans selection:bg-blue-500 selection:text-white">
 
-    <header class="fixed top-0 left-0 right-0 h-[88px] sm:h-16 theme-bg-header border-b theme-border flex flex-col sm:flex-row items-center justify-center sm:justify-between px-3 sm:px-6 z-50 shadow-lg gap-2 sm:gap-0">
-        
-        <div class="flex items-center justify-between w-full sm:w-auto">
-            <div class="flex items-center gap-3 sm:gap-4">
-                <button onclick="toggleSidebar()" class="md:hidden theme-text-muted hover-theme-text transition">
-                    <i class="fa-solid fa-bars text-xl"></i>
-                </button>
-                <div class="flex items-center gap-2 sm:gap-3">
-                    <div class="relative flex h-3 w-3">
-                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                      <span class="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-                    </div>
-                    <a href="https://bharatradar.com" class="text-base sm:text-xl font-black tracking-widest uppercase theme-text-logo hover:opacity-80 transition">
-                        BharatRadar
-                    </a>
+    <header class="fixed top-0 left-0 right-0 h-12 sm:h-14 theme-bg-header border-b theme-border flex items-center justify-between px-2 sm:px-6 z-50 shadow-lg">
+        <div class="flex items-center gap-2 sm:gap-4">
+            <button onclick="toggleSidebar()" class="md:hidden theme-text-muted hover-theme-text transition">
+                <i class="fa-solid fa-bars text-lg"></i>
+            </button>
+            <div class="flex items-center gap-2 sm:gap-3">
+                <div class="relative flex h-2.5 w-2.5">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
                 </div>
+                <a href="https://bharatradar.com" class="text-sm sm:text-lg font-black tracking-widest uppercase theme-text-logo hover:opacity-80 transition">
+                    BharatRadar
+                </a>
             </div>
         </div>
         
-        <div class="flex items-center gap-2 sm:gap-6 w-full sm:w-auto justify-between sm:justify-end">
-            <div class="relative flex-1 sm:w-48">
-                <div class="absolute inset-y-0 left-0 flex items-center pl-2 sm:pl-3 pointer-events-none">
-                    <i class="fa-solid fa-location-dot theme-text-muted text-[10px] sm:text-xs"></i>
+        <div class="flex items-center gap-1 sm:gap-3">
+            <div class="relative hidden md:block w-36">
+                <div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none">
+                    <i class="fa-solid fa-location-dot theme-text-muted text-[10px]"></i>
                 </div>
-                <select id="filter-airport" onchange="applyFilters()" class="theme-bg-input border theme-border theme-text-secondary text-xs sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-6 sm:pl-8 py-1.5 sm:py-2 appearance-none outline-none font-bold">
+                <select id="filter-airport" onchange="applyFilters()" class="theme-bg-input border theme-border theme-text-secondary text-[11px] rounded-lg block w-full pl-6 py-1.5 appearance-none outline-none font-bold">
                     <option value="ALL">🌐 ALL Airports</option>
                 </select>
             </div>
-            
-            <div class="relative flex-1 sm:w-48">
-                <div class="absolute inset-y-0 left-0 flex items-center pl-2 sm:pl-3 pointer-events-none">
-                    <i class="fa-solid fa-plane theme-text-muted text-[10px] sm:text-xs"></i>
+            <div class="relative hidden md:block w-36">
+                <div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none">
+                    <i class="fa-solid fa-plane theme-text-muted text-[10px]"></i>
                 </div>
-                <select id="filter-airline" onchange="applyFilters()" class="theme-bg-input border theme-border theme-text-secondary text-xs sm:text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-6 sm:pl-8 py-1.5 sm:py-2 appearance-none outline-none font-bold">
+                <select id="filter-airline" onchange="applyFilters()" class="theme-bg-input border theme-border theme-text-secondary text-[11px] rounded-lg block w-full pl-6 py-1.5 appearance-none outline-none font-bold">
                     <option value="ALL">✈️ ALL Airlines</option>
                 </select>
             </div>
-
-            <button onclick="toggleFullscreen()" class="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded transition shadow-[0_0_15px_rgba(37,99,235,0.3)] shrink-0" title="Fullscreen Radar">
-                <i class="fa-solid fa-expand"></i>
-            </button>
-
-            <a href="/profile" class="bg-green-600 hover:bg-green-500 text-white p-2 rounded transition shrink-0" title="My Feeders">
+            <a href="/profile" class="bg-green-600 hover:bg-green-500 text-white p-1.5 sm:p-2 rounded transition shrink-0 text-xs sm:text-sm" title="My Feeders">
                 <i class="fa-solid fa-satellite-dish"></i>
             </a>
-
-            <a href="/api-access" class="bg-orange-600 hover:bg-orange-500 text-white p-2 rounded transition shrink-0" title="API Access">
+            <a href="/api-access" class="bg-orange-600 hover:bg-orange-500 text-white p-1.5 sm:p-2 rounded transition shrink-0 text-xs sm:text-sm" title="API Access">
                 <i class="fa-solid fa-key"></i>
             </a>
-
-            <a href="/profile" class="bg-purple-600 hover:bg-purple-500 text-white p-2 rounded transition shrink-0" title="My Profile">
+            <a href="/profile" class="bg-purple-600 hover:bg-purple-500 text-white p-1.5 sm:p-2 rounded transition shrink-0 text-xs sm:text-sm" title="My Profile">
                 <i class="fa-solid fa-user"></i>
             </a>
-
-            <button id="theme-toggle" type="button" class="theme-btn-toggle" aria-label="Toggle theme">
-                <svg class="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-                <svg class="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
+            <button id="theme-toggle" type="button" class="theme-btn-toggle !p-1.5 sm:!p-2" aria-label="Toggle theme">
+                <svg class="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                <svg class="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
             </button>
-
-            <a href="/logout" class="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded transition shrink-0" title="Logout">
+            <a href="/logout" class="bg-gray-700 hover:bg-gray-600 text-white p-1.5 sm:p-2 rounded transition shrink-0 text-xs sm:text-sm" title="Logout">
                 <i class="fa-solid fa-right-from-bracket"></i>
             </a>
         </div>
     </header>
+
+    <!-- Mobile filter bar (hidden on desktop) -->
+    <div id="mobile-filter-bar" class="fixed top-12 left-0 right-0 h-10 theme-bg-header border-b theme-border items-center gap-2 px-2 z-40 flex md:hidden">
+        <div class="relative flex-1">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none">
+                <i class="fa-solid fa-location-dot theme-text-muted text-[9px]"></i>
+            </div>
+            <select id="filter-airport-mobile" onchange="document.getElementById('filter-airport').value=this.value;applyFilters()" class="theme-bg-input border theme-border theme-text-secondary text-[10px] rounded-lg block w-full pl-5 py-1 appearance-none outline-none font-bold">
+                <option value="ALL">🌐 ALL Airports</option>
+            </select>
+        </div>
+        <div class="relative flex-1">
+            <div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none">
+                <i class="fa-solid fa-plane theme-text-muted text-[9px]"></i>
+            </div>
+            <select id="filter-airline-mobile" onchange="document.getElementById('filter-airline').value=this.value;applyFilters()" class="theme-bg-input border theme-border theme-text-secondary text-[10px] rounded-lg block w-full pl-5 py-1 appearance-none outline-none font-bold">
+                <option value="ALL">✈️ ALL Airlines</option>
+            </select>
+        </div>
+    </div>
+
     <script>
         (function() {
             var btn = document.getElementById('theme-toggle');
@@ -316,7 +358,7 @@
 
     <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden md:hidden"></div>
 
-    <aside id="sidebar" class="fixed inset-y-0 left-0 top-[88px] sm:top-16 w-64 theme-bg-sidebar border-r theme-border transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out z-40 flex flex-col">
+    <aside id="sidebar" class="fixed top-0 left-0 bottom-0 w-64 theme-bg-sidebar border-r theme-border transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out z-40 flex flex-col pt-12 sm:pt-14">
         <nav class="flex-1 overflow-y-auto py-6 space-y-1">
             <div class="px-4 mb-2 text-xs font-bold tracking-widest theme-text-muted uppercase">Live Operations</div>
             <a href="#" id="nav-atc" onclick="switchTab('atc')" class="nav-active flex items-center px-4 py-3 text-white theme-bg-input border-l-4 border-blue-500 transition group">
@@ -355,7 +397,7 @@
         </div>
     </aside>
 
-    <main class="flex-1 md:ml-64 mt-[88px] sm:mt-16 overflow-hidden relative theme-bg-body">
+    <main class="flex-1 md:ml-64 mt-14 overflow-hidden relative theme-bg-body">
         <div class="absolute inset-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6" id="main-content">
             
             <div id="view-atc" class="h-full flex flex-col">
@@ -427,36 +469,47 @@
                         <div class="flex-[3] theme-bg-sidebar border theme-border rounded-xl overflow-hidden shadow-lg relative min-h-[400px]" id="atc-map-container">
                             <div id="radar-popup" class="hidden absolute theme-bg-sidebar/95 border border-cyan-500 rounded-lg p-3 shadow-xl text-xs z-10 min-w-[200px] pointer-events-none"></div>
                             
-                            <!-- tar1090-style Legend Overlay -->
-                            <div class="absolute bottom-4 left-4 z-10 theme-bg-sidebar/90 backdrop-blur border theme-border p-3 rounded-lg shadow-xl text-xs flex flex-col gap-2 max-w-[180px]">
-                                <div class="font-bold theme-text-muted uppercase tracking-wider text-[10px] mb-1 border-b theme-border pb-1">Data Source</div>
-                                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:rgb(42,83,99)"></span><span class="theme-text-secondary">ADS-B</span></div>
-                                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:rgb(41,95,62)"></span><span class="theme-text-secondary">UAT / ADS-R</span></div>
-                                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:rgb(96,87,46)"></span><span class="theme-text-secondary">MLAT</span></div>
-                                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:rgb(99,42,63)"></span><span class="theme-text-secondary">TIS-B</span></div>
-                                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:rgb(42,42,99)"></span><span class="theme-text-secondary">Mode-S</span></div>
-                                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:rgb(39,83,39)"></span><span class="theme-text-secondary">ADS-C</span></div>
-                                <div class="font-bold theme-text-muted uppercase tracking-wider text-[10px] mt-1 mb-1 border-b theme-border pb-1">Altitude</div>
-                                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#bfbfbf"></span><span class="theme-text-secondary">Unknown</span></div>
-                                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#4d4d66"></span><span class="theme-text-secondary">Ground</span></div>
-                                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#d98e26"></span><span class="theme-text-secondary">0 - 2k ft</span></div>
-                                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#d9d926"></span><span class="theme-text-secondary">2 - 8k ft</span></div>
-                                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#26d94a"></span><span class="theme-text-secondary">8 - 20k ft</span></div>
-                                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#26d9d9"></span><span class="theme-text-secondary">20 - 35k ft</span></div>
-                                <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#d926d9"></span><span class="theme-text-secondary">35k+ ft</span></div>
+                            <!-- tar1090-style Legend Overlay (collapsible) -->
+                            <div id="map-legend" class="absolute top-4 left-4 z-10 theme-bg-sidebar/90 backdrop-blur border theme-border rounded-lg shadow-xl text-xs max-w-[180px]">
+                                <div onclick="toggleLegend()" class="flex items-center justify-between px-3 py-2 cursor-pointer select-none hover:theme-bg-input transition rounded-t-lg border-b theme-border">
+                                    <span class="font-bold theme-text-muted uppercase tracking-wider text-[10px]">Legend</span>
+                                    <i id="legend-chevron" class="fa-solid fa-chevron-up theme-text-muted text-[10px] transition-transform" style="transform:rotate(180deg)"></i>
+                                </div>
+                                <div id="legend-body" class="px-3 pb-3 flex-col gap-1.5" style="display:none">
+                                    <div class="font-bold theme-text-muted uppercase tracking-wider text-[10px] pt-1 border-t theme-border pb-1">Data Source</div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:rgb(42,83,99)"></span><span class="theme-text-secondary">ADS-B</span></div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:rgb(41,95,62)"></span><span class="theme-text-secondary">UAT / ADS-R</span></div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:rgb(96,87,46)"></span><span class="theme-text-secondary">MLAT</span></div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:rgb(99,42,63)"></span><span class="theme-text-secondary">TIS-B</span></div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:rgb(42,42,99)"></span><span class="theme-text-secondary">Mode-S</span></div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:rgb(39,83,39)"></span><span class="theme-text-secondary">ADS-C</span></div>
+                                    <div class="font-bold theme-text-muted uppercase tracking-wider text-[10px] mt-1 pt-1 border-t theme-border pb-1">Altitude</div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#bfbfbf"></span><span class="theme-text-secondary">Unknown</span></div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#4d4d66"></span><span class="theme-text-secondary">Ground</span></div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#d98e26"></span><span class="theme-text-secondary">0 - 2k ft</span></div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#d9d926"></span><span class="theme-text-secondary">2 - 8k ft</span></div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#26d94a"></span><span class="theme-text-secondary">8 - 20k ft</span></div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#26d9d9"></span><span class="theme-text-secondary">20 - 35k ft</span></div>
+                                    <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:#d926d9"></span><span class="theme-text-secondary">35k+ ft</span></div>
+                                </div>
                             </div>
 
-                            <!-- Layer Switcher -->
-                            <div class="absolute top-4 right-4 z-10 flex flex-col gap-2">
+                            <!-- Layer Switcher (collapsible) -->
+                            <div id="layer-switcher" class="absolute top-4 right-4 z-10 flex flex-col gap-2 max-w-[130px] sm:max-w-none">
                                 <div class="theme-bg-sidebar/90 backdrop-blur border theme-border rounded-lg shadow-xl overflow-hidden">
-                                    <div class="px-3 py-1.5 theme-bg-input theme-text-muted text-[10px] font-bold uppercase tracking-wider border-b theme-border">Base Map</div>
-                                    <button onclick="switchMapLayer('carto_dark')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition bg-gray-700" data-layer="carto_dark">CARTO Dark</button>                                    
-                                    <button onclick="switchMapLayer('carto_dark_all')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="carto_dark_all">CARTO Dark All</button>
-                                    <button onclick="switchMapLayer('carto_light_all')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="carto_light_all">CARTO Light All</button>
-                                    <button onclick="switchMapLayer('carto_voyager')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="carto_voyager">CARTO Light</button>
-                                    <button onclick="switchMapLayer('osm')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="osm">OpenStreetMap</button>
-                                    <button onclick="switchMapLayer('openfreemap_bright')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="openfreemap_bright">OpenFreeMap</button>
-                                    <button onclick="switchMapLayer('esri_satellite')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="esri_satellite">ESRI Satellite</button>
+                                    <div onclick="toggleLayerSwitcher()" class="flex items-center justify-between px-3 py-1.5 cursor-pointer select-none hover:theme-bg-input transition border-b theme-border">
+                                        <span class="theme-text-muted text-[10px] font-bold uppercase tracking-wider">Base Map</span>
+                                        <i id="layers-chevron" class="fa-solid fa-chevron-up theme-text-muted text-[10px] transition-transform" style="transform:rotate(180deg)"></i>
+                                    </div>
+                                    <div id="layers-body" style="display:none">
+                                        <button onclick="switchMapLayer('carto_dark')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition bg-gray-700" data-layer="carto_dark">CARTO Dark</button>                                    
+                                        <button onclick="switchMapLayer('carto_dark_all')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="carto_dark_all">CARTO Dark All</button>
+                                        <button onclick="switchMapLayer('carto_light_all')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="carto_light_all">CARTO Light All</button>
+                                        <button onclick="switchMapLayer('carto_voyager')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="carto_voyager">CARTO Light</button>
+                                        <button onclick="switchMapLayer('osm')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="osm">OpenStreetMap</button>
+                                        <button onclick="switchMapLayer('openfreemap_bright')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="openfreemap_bright">OpenFreeMap</button>
+                                        <button onclick="switchMapLayer('esri_satellite')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="esri_satellite">ESRI Satellite</button>
+                                    </div>
                                 </div>
                                 <button onclick="toggleMapDimming()" id="btn-dim-map" class="theme-bg-sidebar/90 backdrop-blur border theme-border theme-text-secondary px-3 py-1.5 rounded-lg text-xs hover:theme-bg-input transition shadow-xl">
                                     <i class="fa-solid fa-moon mr-1"></i> Dim Map
@@ -976,6 +1029,8 @@
         <div id="fullscreen-map-container" class="absolute top-10 left-[320px] right-0 bottom-0">
             <div id="fs-radar-popup" class="hidden absolute theme-bg-sidebar/95 border border-cyan-500 rounded-lg p-3 shadow-xl text-xs z-30 min-w-[200px] pointer-events-none" style="top:0;left:0;"></div>
         </div>
+        <!-- Mobile panel overlay -->
+        <div id="fs-panel-overlay" onclick="toggleFullscreenPanel()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[5] hidden md:hidden"></div>
         <!-- Mobile panel toggle -->
         <button id="fs-panel-toggle" onclick="toggleFullscreenPanel()" class="absolute top-12 left-2 z-20 theme-bg-sidebar/90 border theme-border theme-text-secondary w-8 h-8 rounded flex items-center justify-center text-xs hover:theme-bg-input transition md:hidden">
             <i class="fa-solid fa-bars"></i>

@@ -68,29 +68,35 @@
         });
     </script>
     <style>
+        /* Sidebar */
+        #sidebar { transition: transform 0.3s ease-in-out; }
+        #sidebar-overlay { transition: opacity 0.3s ease-in-out; }
         body { padding-top: 0px; }
         @media (min-width: 640px) {
-            #layout_container { margin-top: 64px; height: calc(100% - 64px); }
+            #layout_container { margin-top: 56px; height: calc(100% - 56px); }
         }
         @media (max-width: 639px) {
-            #layout_container { margin-top: 88px; height: calc(100% - 88px); }
+            #layout_container { margin-top: 48px; height: calc(100% - 48px); }
         }
     </style>
   </head>
 
   <body>
     <!-- Header -->
-    <header class="fixed top-0 left-0 right-0 h-[88px] sm:h-16 theme-bg-header border-b theme-border flex flex-col sm:flex-row items-center justify-center sm:justify-between px-3 sm:px-6 z-50 shadow-lg gap-2 sm:gap-0">
-        <div class="flex items-center gap-3">
-            <div class="relative flex h-3 w-3">
+    <header class="fixed top-0 left-0 right-0 h-12 sm:h-14 theme-bg-header border-b theme-border flex items-center justify-between px-2 sm:px-4 z-50 shadow-lg">
+        <div class="flex items-center gap-2 sm:gap-3">
+            <button onclick="toggleSidebar()" class="theme-text-muted hover-theme-text transition md:hidden">
+                <i class="fa-solid fa-bars text-lg"></i>
+            </button>
+            <div class="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3">
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span class="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-blue-500"></span>
             </div>
-            <a href="https://bharatradar.com" class="text-base sm:text-xl font-black tracking-widest uppercase theme-text-logo">
+            <a href="https://bharatradar.com" class="text-sm sm:text-lg font-black tracking-widest uppercase theme-text-logo">
                 BharatRadar
             </a>
         </div>
-        <ul id="site-nav" class="flex items-center gap-4 sm:gap-6">
+        <ul id="site-nav" class="hidden sm:flex items-center gap-4">
             <li><a href="https://map.bharatradar.com" class="theme-text-muted hover-theme-text transition text-sm sm:text-base"><i class="fa-solid fa-globe"></i> <span class="hidden sm:inline">Map</span></a></li>
             <li><a href="https://api.bharatradar.com" class="theme-text-muted hover-theme-text transition text-sm sm:text-base"><i class="fa-solid fa-code"></i> <span class="hidden sm:inline">API</span></a></li>
             <li><a href="https://mlat.bharatradar.com" class="theme-text-muted hover-theme-text transition text-sm sm:text-base"><i class="fa-solid fa-location-dot"></i> <span class="hidden sm:inline">MLAT</span></a></li>
@@ -123,6 +129,59 @@
                 });
             }
         })();
+    </script>
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden md:hidden"></div>
+    <aside id="sidebar" class="fixed top-0 left-0 bottom-0 w-64 theme-bg-header border-r theme-border transform -translate-x-full transition-transform duration-300 ease-in-out z-40 flex flex-col pt-12 sm:pt-14 shadow-2xl md:hidden">
+        <nav class="flex-1 overflow-y-auto py-6 space-y-1 px-4">
+            <div class="mb-3 text-xs font-bold tracking-widest theme-text-muted uppercase">Navigation</div>
+            <a href="https://map.bharatradar.com" class="flex items-center px-4 py-3 text-white theme-bg-input/50 rounded-lg transition gap-3">
+                <i class="fa-solid fa-globe w-5 text-center text-blue-400"></i>
+                <span class="font-semibold tracking-wide">Live Map</span>
+            </a>
+            <a href="https://api.bharatradar.com" class="flex items-center px-4 py-3 theme-text-muted hover:theme-bg-input hover-theme-text rounded-lg transition gap-3">
+                <i class="fa-solid fa-code w-5 text-center"></i>
+                <span class="font-semibold tracking-wide">API</span>
+            </a>
+            <a href="https://mlat.bharatradar.com" class="flex items-center px-4 py-3 theme-text-muted hover:theme-bg-input hover-theme-text rounded-lg transition gap-3">
+                <i class="fa-solid fa-location-dot w-5 text-center"></i>
+                <span class="font-semibold tracking-wide">MLAT Map</span>
+            </a>
+            <a href="https://cortex.bharatradar.com" class="flex items-center px-4 py-3 theme-text-muted hover:theme-bg-input hover-theme-text rounded-lg transition gap-3">
+                <i class="fa-solid fa-user-astronaut w-5 text-center"></i>
+                <span class="font-semibold tracking-wide">Portal</span>
+            </a>
+            <a href="https://bharatradar.com/docs/" class="flex items-center px-4 py-3 theme-text-muted hover:theme-bg-input hover-theme-text rounded-lg transition gap-3">
+                <i class="fa-solid fa-book w-5 text-center"></i>
+                <span class="font-semibold tracking-wide">Docs</span>
+            </a>
+            <a href="https://github.com/bharatradar" class="flex items-center px-4 py-3 theme-text-muted hover:theme-bg-input hover-theme-text rounded-lg transition gap-3">
+                <i class="fa-brands fa-github w-5 text-center"></i>
+                <span class="font-semibold tracking-wide">GitHub</span>
+            </a>
+            <div class="border-t theme-border my-4"></div>
+            <button onclick="toggleSidebar()" class="w-full flex items-center px-4 py-3 theme-text-muted hover:theme-bg-input hover-theme-text rounded-lg transition gap-3">
+                <i class="fa-solid fa-xmark w-5 text-center"></i>
+                <span class="font-semibold tracking-wide">Close</span>
+            </button>
+        </nav>
+        <div class="p-4 border-t theme-border text-xs theme-text-muted font-mono text-center">
+            BharatRadar Engine v3.0
+        </div>
+    </aside>
+    <script>
+        var sidebarOpen = false;
+        function toggleSidebar() {
+            var sidebar = document.getElementById('sidebar');
+            var overlay = document.getElementById('sidebar-overlay');
+            sidebarOpen = !sidebarOpen;
+            if (sidebarOpen) {
+                sidebar.style.transform = 'translateX(0)';
+                overlay.classList.remove('hidden');
+            } else {
+                sidebar.style.transform = '';
+                overlay.classList.add('hidden');
+            }
+        }
     </script>
     <!-- BODY_ANCHOR -->
     <div id="layout_container">

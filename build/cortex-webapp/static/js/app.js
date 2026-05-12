@@ -341,10 +341,14 @@ async function loadFilterOptions() {
         const apSelect = document.getElementById('filter-airport');
         apSelect.innerHTML = '<option value="ALL">🌐 ALL Airports</option>';
         data.airports.forEach(ap => apSelect.add(new Option(ap.display, ap.code)));
+        const apMobile = document.getElementById('filter-airport-mobile');
+        if (apMobile) { apMobile.innerHTML = apSelect.innerHTML; }
         
         const alSelect = document.getElementById('filter-airline');
         alSelect.innerHTML = '<option value="ALL">✈️ ALL Airlines</option>';
         data.airlines.forEach(al => alSelect.add(new Option(al.display, al.code)));
+        const alMobile = document.getElementById('filter-airline-mobile');
+        if (alMobile) { alMobile.innerHTML = alSelect.innerHTML; }
     } catch(e) { console.error("Filter Load Error:", e); }
 }
 
@@ -690,10 +694,7 @@ async function initMainMap() {
                 baseMapLayers.esri_satellite,
                 baseMapLayers.openfreemap_bright
             ],
-            controls: ol.control.defaults.defaults({ zoom: false, rotate: false }).extend([
-                new ol.control.Zoom({ className: 'ol-zoom hidden' }),
-                new ol.control.ScaleLine()
-            ])
+            controls: ol.control.defaults.defaults({ zoom: false, rotate: false, attribution: false })
         });
 
         // Aircraft vector layer
@@ -789,6 +790,24 @@ function switchMapLayer(layerName) {
             btn.classList.remove('bg-gray-700');
         }
     });
+}
+
+function toggleLegend() {
+    const body = document.getElementById('legend-body');
+    const chevron = document.getElementById('legend-chevron');
+    if (!body || !chevron) return;
+    const hidden = body.style.display === 'none';
+    body.style.display = hidden ? 'flex' : 'none';
+    chevron.style.transform = hidden ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+
+function toggleLayerSwitcher() {
+    const body = document.getElementById('layers-body');
+    const chevron = document.getElementById('layers-chevron');
+    if (!body || !chevron) return;
+    const hidden = body.style.display === 'none';
+    body.style.display = hidden ? 'block' : 'none';
+    chevron.style.transform = hidden ? 'rotate(0deg)' : 'rotate(180deg)';
 }
 
 function toggleMapDimming() {
@@ -2198,6 +2217,11 @@ function toggleFullscreen() {
         if (mapContainer) {
             mapContainer.style.left = (fullscreenPanelOpen && window.innerWidth > 768) ? '320px' : '0';
         }
+        // Reset overlay and toggle icon based on panel state
+        const overlay = document.getElementById('fs-panel-overlay');
+        const toggleBtn = document.getElementById('fs-panel-toggle');
+        if (overlay) overlay.classList.add('hidden');
+        if (toggleBtn) toggleBtn.innerHTML = fullscreenPanelOpen ? '<i class="fa-solid fa-xmark"></i>' : '<i class="fa-solid fa-bars"></i>';
 
         // Initialize map if not done
         if (!fullscreenOlInitialized) {
@@ -2207,6 +2231,10 @@ function toggleFullscreen() {
         }
     } else {
         radarDiv.classList.add('hidden');
+        const overlay = document.getElementById('fs-panel-overlay');
+        if (overlay) overlay.classList.add('hidden');
+        const toggleBtn = document.getElementById('fs-panel-toggle');
+        if (toggleBtn) toggleBtn.innerHTML = '<i class="fa-solid fa-bars"></i>';
         setTimeout(() => map?.updateSize(), 200);
     }
 }
@@ -2217,6 +2245,7 @@ function toggleFullscreenPanel() {
     const panel = document.getElementById('fullscreen-panel');
     const mapContainer = document.getElementById('fullscreen-map-container');
     const toggleBtn = document.getElementById('fs-panel-toggle');
+    const overlay = document.getElementById('fs-panel-overlay');
     const isMobile = window.innerWidth <= 768;
 
     fullscreenPanelOpen = !fullscreenPanelOpen;
@@ -2224,11 +2253,14 @@ function toggleFullscreenPanel() {
     if (fullscreenPanelOpen) {
         panel.style.transform = 'translateX(0)';
         if (mapContainer && !isMobile) mapContainer.style.left = '320px';
+        if (toggleBtn) toggleBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+        if (overlay && isMobile) overlay.classList.remove('hidden');
     } else {
         panel.style.transform = 'translateX(-100%)';
         if (mapContainer && !isMobile) mapContainer.style.left = '0';
+        if (toggleBtn) toggleBtn.innerHTML = '<i class="fa-solid fa-bars"></i>';
+        if (overlay) overlay.classList.add('hidden');
     }
-    if (toggleBtn) toggleBtn.innerHTML = '<i class="fa-solid fa-bars"></i>';
     setTimeout(() => fullscreenMap?.updateSize(), 300);
 }
 

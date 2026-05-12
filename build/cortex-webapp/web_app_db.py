@@ -137,13 +137,29 @@ async def init_web_app_db(db_pool):
 async def fetch_filter_options(db_pool):
     async with db_pool.acquire() as conn:
         airports = await conn.fetch("SELECT icao, lat, lon FROM airports")
-        airlines = await conn.fetch("SELECT DISTINCT SUBSTRING(callsign FROM 1 FOR 3) as code FROM flights_in_air WHERE callsign IS NOT NULL")
         ap_list = [{"code": r['icao'], "display": fmt_apt(r['icao']), "lat": r['lat'], "lon": r['lon']} for r in airports if r['icao']]
-        al_list = [{"code": r['code'], "display": fmt_aln(r['code'])} for r in airlines if len(r['code']) >= 2]
-        return {
-            "airports": sorted(ap_list, key=lambda x: x["display"]),
-            "airlines": sorted(al_list, key=lambda x: x["display"])
-        }
+
+    airline_codes = set()
+    try:
+        r = await get_redis_client()
+        redis_key = Config.REDIS_LIVE_FLIGHTS_KEY
+        all_flights = await r.hgetall(redis_key)
+        for hex_id, data in all_flights.items():
+            try:
+                fl = orjson.loads(data)
+                cs = fl.get('callsign', '') or fl.get('flight', '')
+                if cs and len(cs) >= 2:
+                    airline_codes.add(cs[:3].upper())
+            except:
+                pass
+    except Exception as e:
+        logger.warning(f"fetch_filter_options: Redis error reading airlines: {e}")
+
+    al_list = [{"code": code, "display": fmt_aln(code)} for code in sorted(airline_codes)]
+    return {
+        "airports": sorted(ap_list, key=lambda x: x["display"]),
+        "airlines": al_list
+    }
 
 async def fetch_live_flights(db_pool, airline, airport):
     # Try Redis first
