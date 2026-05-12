@@ -5,6 +5,7 @@ redis
 fastapi
 uvicorn[standard]
 influxdb-client
+aiocsv
 pydantic
 python-jose
 cryptography
