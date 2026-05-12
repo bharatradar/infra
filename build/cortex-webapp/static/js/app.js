@@ -579,25 +579,29 @@ function getAircraftStyle(alt, rotation, zoom, isSelected, typeCode, hex) {
             _styleCache.clear();
         }
 
-        // Generate SVG data URI using tar1090's svgShapeToURI
-        let svgSrc;
-        if (typeof svgShapeToURI === 'function') {
-            svgSrc = svgShapeToURI(shape, color, 'rgba(0,0,0,0.6)', 0.7, finalScale * shapeScale);
-        } else {
-            console.warn('[tar1090] svgShapeToURI not found, using triangle fallback');
-            return new ol.style.Style({
-                image: new ol.style.RegularShape({
-                    fill: new ol.style.Fill({ color: color }),
-                    stroke: new ol.style.Stroke({ color: 'rgba(0,0,0,0.6)', width: 1.5 }),
-                    points: 3, radius: 10 * finalScale, radius2: 0,
-                    rotation: rotRad, rotateWithView: !noRotate
-                })
-            });
-        }
+        // Render shape to canvas (synchronous — no async SVG loading flicker)
+        const _canvas = (() => {
+            const scale = finalScale * shapeScale;
+            const w = Math.ceil(shape.w * scale) || 1;
+            const h = Math.ceil(shape.h * scale) || 1;
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            const cx = c.getContext('2d');
+            const [vbX, vbY, vbW, vbH] = shape.viewBox.split(/\s+/).map(Number);
+            cx.setTransform(w / vbW, 0, 0, h / vbH, -vbX * w / vbW, -vbY * h / vbH);
+            const p = new Path2D(shape.path);
+            cx.fillStyle = color;
+            cx.fill(p);
+            cx.strokeStyle = 'rgba(0,0,0,0.6)';
+            cx.lineWidth = 0.7;
+            cx.stroke(p);
+            return c;
+        })();
 
         const style = new ol.style.Style({
             image: new ol.style.Icon({
-                src: svgSrc,
+                img: _canvas,
+                imgSize: [_canvas.width, _canvas.height],
                 rotation: rotRad,
                 rotateWithView: !noRotate,
                 anchor: [0.5, 0.5],
@@ -809,7 +813,6 @@ function updateMapDimming() {
 }
 
 let olFeatureCache = {};
-let pendingUpdate = false;
 let animationFrameId = null;
 const aircraftTarget = new Map(); // hex => {lat, lon, heading, speed, timestamp} - API anchor position
 const aircraftDisplay = new Map(); // hex => {lat, lon, velLat, velLon} - smoothed display position with velocity for smoothDamp
@@ -862,14 +865,14 @@ function interpolateAircraftPositions() {
         if (hasNormalMap) {
             const features = olAircraftLayer.getSource().getFeatures();
             features.forEach(feature => updateFeaturePosition(feature, now));
-            olAircraftLayer.changed();
+            //olAircraftLayer.changed();
         }
         
         // Update fullscreen features (same smoothDamp state, just different OpenLayers features)
         if (hasFullscreen) {
             const fsFeatures = fullscreenAircraftLayer.getSource().getFeatures();
             fsFeatures.forEach(feature => updateFeaturePosition(feature, now));
-            fullscreenAircraftLayer.changed();
+            //fullscreenAircraftLayer.changed();
         }
         
         // Continue animation loop
@@ -923,9 +926,9 @@ function updateFeaturePosition(feature, now) {
     const coord = ol.proj.fromLonLat([display.lon, display.lat]);
     feature.getGeometry().setCoordinates(coord);
     
-    feature.set('alt', target.alt);
-    feature.set('speed', target.speed);
-    feature.set('rotation', display.heading * Math.PI / 180);
+    //feature.set('alt', target.alt);
+    //feature.set('speed', target.speed);
+    //feature.set('rotation', display.heading * Math.PI / 180);
     feature.set('heading', display.heading);
 }
 
@@ -934,105 +937,107 @@ function updateOLAircraft(flights) {
         console.warn('[updateOLAircraft] Layer or map not ready', { olAircraftLayer, map });
         return;
     }
-    if (pendingUpdate) return;
-    pendingUpdate = true;
+    try {
+        const currentHexIds = new Set();
+        const source = olAircraftLayer.getSource();
+        let added = 0, updated = 0, removed = 0;
 
-    const doRender = () => requestAnimationFrame(() => {
-            try {
-                const currentHexIds = new Set();
-                const source = olAircraftLayer.getSource();
-                let added = 0, updated = 0, removed = 0;
+        flights.forEach(fl => {
+            fixLatLon(fl);
+            if (!fl.lat || !fl.lon) return;
+            const hex = fl.hexid || fl.hex;
+            if (!hex) return;
+            currentHexIds.add(hex);
+            aircraftLastSeen.set(hex, Date.now());
 
-                flights.forEach(fl => {
-                    fixLatLon(fl);
-                    if (!fl.lat || !fl.lon) return;
-                    const hex = fl.hexid || fl.hex;
-                    if (!hex) return;
-                    currentHexIds.add(hex);
-                    aircraftLastSeen.set(hex, Date.now());
+            const lat = parseFloat(fl.lat);
+            const lon = parseFloat(fl.lon);
+            const heading = parseFloat(fl.heading) || 0;
+            const speed = parseFloat(fl.speed) || 0;
+            const alt = parseFloat(fl.alt) || 0;
+            const typeCode = fl.ac_type || '';
+            
+            // Store API target for smooth transition (includes alt for altitude coloring)
+            aircraftTarget.set(hex, { lat, lon, heading, speed, alt, timestamp: Date.now() });
 
-                    const lat = parseFloat(fl.lat);
-                    const lon = parseFloat(fl.lon);
-                    const heading = parseFloat(fl.heading) || 0;
-                    const speed = parseFloat(fl.speed) || 0;
-                    const alt = parseFloat(fl.alt) || 0;
-                    const typeCode = fl.ac_type || '';
-                    
-                    // Store API target for smooth transition (includes alt for altitude coloring)
-                    aircraftTarget.set(hex, { lat, lon, heading, speed, alt, timestamp: Date.now() });
+            const coord = ol.proj.fromLonLat([lon, lat]);
+            const rotation = heading * Math.PI / 180;
 
-                    const coord = ol.proj.fromLonLat([lon, lat]);
-                    const rotation = heading * Math.PI / 180;
+            let feature = olFeatureCache[hex];
 
-                    let feature = olFeatureCache[hex];
-
-                    if (feature) {
-                        // Update existing feature - don't jump position, let interpolation handle it
-                        feature.set('alt', alt);
-                        feature.set('speed', speed);
-                        feature.set('rotation', rotation);
-                        feature.set('origin', fl.origin || '');
-                        feature.set('destination', fl.destination || '');
-                        feature.set('typeCode', typeCode);
-                        updated++;
-                    } else {
-                        feature = new ol.Feature({
-                            geometry: new ol.geom.Point(coord),
-                            hexid: hex,
-                            callsign: fl.callsign || '',
-                            reg: fl.reg || '',
-                            type: fl.ac_type || '',
-                            typeCode: typeCode,
-                            alt: alt,
-                            speed: speed,
-                            rotation: rotation,
-                            origin: fl.origin || '',
-                            destination: fl.destination || ''
-                        });
-                        source.addFeature(feature);
-                        olFeatureCache[hex] = feature;
-                        
-                        // Initialize display state for smooth animation
-                        aircraftDisplay.set(hex, { lat, lon, velLat: 0, velLon: 0, heading, _lastFrame: Date.now() });
-                        added++;
-                    }
-                });
-
-                // Coast missing aircraft via dead reckoning instead of immediate removal
-                const _now = Date.now();
-                Object.keys(olFeatureCache).forEach(hex => {
-                    if (!currentHexIds.has(hex)) {
-                        const lastSeen = aircraftLastSeen.get(hex);
-                        if (lastSeen && (_now - lastSeen) < AIRCRAFT_COAST_MS) {
-                            // Keep feature and animation state — interpolateAircraftPositions handles dead reckoning
-                        } else {
-                            const feature = olFeatureCache[hex];
-                            source.removeFeature(feature);
-                            delete olFeatureCache[hex];
-                            aircraftDisplay.delete(hex);
-                            aircraftTarget.delete(hex);
-                            aircraftLastSeen.delete(hex);
-                            removed++;
-                        }
-                    } else {
-                        aircraftLastSeen.set(hex, _now);
-                    }
-                });
-
-                // Refresh styles with type info
-                olAircraftLayer.changed();
-                console.log(`[updateOLAircraft] added=${added}, updated=${updated}, removed=${removed}, total=${source.getFeatures().length}`);
-                
-                // Start animation loop if not already running
-                if (!animationFrameId) {
-                    animationFrameId = requestAnimationFrame(interpolateAircraftPositions);
+            if (feature) {
+                // Unhide if was previously hidden (reappearing aircraft)
+                if (!feature.get('visible')) {
+                    feature.set('visible', true);
+                    feature.set('hexid', hex);
+                    feature.set('callsign', fl.callsign || '');
+                    feature.set('reg', fl.reg || '');
+                    feature.set('type', fl.ac_type || '');
+                    // Reinitialize display state for smooth animation
+                    aircraftDisplay.set(hex, { lat, lon, velLat: 0, velLon: 0, heading, _lastFrame: Date.now() });
+                    feature.getGeometry().setCoordinates(coord);
                 }
-            } catch (e) {
-                console.error('[updateOLAircraft] Error:', e);
+                feature.set('alt', alt);
+                feature.set('speed', speed);
+                feature.set('rotation', rotation);
+                feature.set('origin', fl.origin || '');
+                feature.set('destination', fl.destination || '');
+                feature.set('typeCode', typeCode);
+                updated++;
+            } else {
+                feature = new ol.Feature({
+                    geometry: new ol.geom.Point(coord),
+                    hexid: hex,
+                    callsign: fl.callsign || '',
+                    reg: fl.reg || '',
+                    type: fl.ac_type || '',
+                    typeCode: typeCode,
+                    alt: alt,
+                    speed: speed,
+                    rotation: rotation,
+                    origin: fl.origin || '',
+                    destination: fl.destination || '',
+                    visible: true
+                });
+                source.addFeature(feature);
+                olFeatureCache[hex] = feature;
+                
+                // Initialize display state for smooth animation
+                aircraftDisplay.set(hex, { lat, lon, velLat: 0, velLon: 0, heading, _lastFrame: Date.now() });
+                added++;
             }
-            pendingUpdate = false;
         });
-    doRender();
+
+        // Coast missing aircraft via dead reckoning instead of immediate removal
+        const _now = Date.now();
+        Object.keys(olFeatureCache).forEach(hex => {
+            if (!currentHexIds.has(hex)) {
+                const lastSeen = aircraftLastSeen.get(hex);
+                if (lastSeen && (_now - lastSeen) < AIRCRAFT_COAST_MS) {
+                    // Keep feature and animation state — interpolateAircraftPositions handles dead reckoning
+                } else {
+                    const feature = olFeatureCache[hex];
+                    source.removeFeature(feature);
+                    delete olFeatureCache[hex];
+                    aircraftDisplay.delete(hex);
+                    aircraftTarget.delete(hex);
+                    aircraftLastSeen.delete(hex);
+                    removed++;
+                }
+            } else {
+                aircraftLastSeen.set(hex, _now);
+            }
+        });
+
+        console.log(`[updateOLAircraft] added=${added}, updated=${updated}, removed=${removed}, total=${source.getFeatures().length}`);
+        
+        // Start animation loop if not already running
+        if (!animationFrameId) {
+            animationFrameId = requestAnimationFrame(interpolateAircraftPositions);
+        }
+    } catch (e) {
+        console.error('[updateOLAircraft] Error:', e);
+    }
 }
 
 function showAircraftPopup(props, pixel) {

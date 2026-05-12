@@ -38,7 +38,7 @@
     <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <style>
-        .plane-marker { display: flex; justify-content: center; align-items: center; transition: transform 1s linear; }
+        .plane-marker { display: flex; justify-content: center; align-items: center; //* transition: transform 1s linear; */ }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #111827; }
         ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
@@ -449,7 +449,9 @@
                             <div class="absolute top-4 right-4 z-10 flex flex-col gap-2">
                                 <div class="theme-bg-sidebar/90 backdrop-blur border theme-border rounded-lg shadow-xl overflow-hidden">
                                     <div class="px-3 py-1.5 theme-bg-input theme-text-muted text-[10px] font-bold uppercase tracking-wider border-b theme-border">Base Map</div>
-                                    <button onclick="switchMapLayer('carto_dark')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition bg-gray-700" data-layer="carto_dark">CARTO Dark</button>
+                                    <button onclick="switchMapLayer('carto_dark')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition bg-gray-700" data-layer="carto_dark">CARTO Dark</button>                                    
+                                    <button onclick="switchMapLayer('carto_dark_all')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="carto_dark_all">CARTO Dark All</button>
+                                    <button onclick="switchMapLayer('carto_light_all')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="carto_light_all">CARTO Light All</button>
                                     <button onclick="switchMapLayer('carto_voyager')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="carto_voyager">CARTO Light</button>
                                     <button onclick="switchMapLayer('osm')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="osm">OpenStreetMap</button>
                                     <button onclick="switchMapLayer('openfreemap_bright')" class="layer-btn block w-full text-left px-3 py-1.5 text-xs theme-text-secondary hover:theme-bg-input transition" data-layer="openfreemap_bright">OpenFreeMap</button>
