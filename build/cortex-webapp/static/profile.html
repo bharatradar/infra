@@ -5,57 +5,64 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Account | Bharat Radar</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cstyle%3E@keyframes p%7B0%25%7Btransform:scale(1);opacity:.75%7D75%25%7Btransform:scale(2.5);opacity:0%7D100%25%7Btransform:scale(1);opacity:.75%7D%7D.r%7Banimation:p 1s cubic-bezier(0,0,.2,1)infinite;transform-origin:16px 16px%7D%3C/style%3E%3Ccircle class=%27r%27 cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%2360a5fa%27 opacity=%27.75%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%233b82f6%27/%3E%3C/svg%3E">
+    <script>!function(){var e=document.cookie.match(/(?:^| )theme=([^;]+)/);e=e?e[1]:(window.matchMedia("(prefers-color-scheme:light)").matches?"light":"dark");document.documentElement.setAttribute("data-theme",e)}()</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        .sidebar { width: 260px; min-height: calc(100vh - 64px); background: #1e293b; border-right: 1px solid #334155; }
-        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; color: #94a3b8; cursor: pointer; transition: all 0.2s; border-left: 3px solid transparent; }
-        .nav-item:hover { background: rgba(35,192,116,0.1); color: #fff; }
-        .nav-item.active { background: rgba(35,192,116,0.15); color: #23c074; border-left-color: #23c074; }
-        .nav-section { padding: 16px 20px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; font-weight: 600; }
-        .content-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 24px; }
-        .tier-platinum { background: linear-gradient(135deg, #e5e7eb, #9ca3af); color: #1f2937; }
-        .tier-gold { background: linear-gradient(135deg, #fef3c7, #fbbf24); color: #1f2937; }
-        .tier-silver { background: linear-gradient(135deg, #f3f4f6, #d1d5db); color: #1f2937; }
-        .tier-bronze { background: linear-gradient(135deg, #ffedd5, #fdba74); color: #1f2937; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-        .status-active { background: #23c074; box-shadow: 0 0 6px #23c074; }
-        .status-activated { background: #fbbf24; box-shadow: 0 0 6px #fbbf24; }
-        .status-pending { background: #f97316; }
-        .status-inactive { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
-        .contributor-badge { background: linear-gradient(135deg, #23c074, #16a34a); color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; }
-        .tab-btn { padding: 10px 20px; border-bottom: 2px solid transparent; color: #94a3b8; cursor: pointer; transition: all 0.2s; }
-        .tab-btn:hover { color: #fff; }
-        .tab-btn.active { color: #23c074; border-bottom-color: #23c074; }
-        .data-table { width: 100%; border-collapse: collapse; }
-        .data-table th { text-align: left; padding: 12px 16px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 1px solid #334155; }
-        .data-table td { padding: 16px; border-bottom: 1px solid #1e293b; color: #e2e8f0; }
-        .data-table tr:hover td { background: rgba(35,192,116,0.05); }
-    </style>
+    <link rel="stylesheet" href="/static/css/common.css">
 </head>
-<body class="bg-gray-900 text-white">
-    <div class="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-6">
-        <div class="flex items-center gap-4">
-            <a href="/dashboard" class="text-gray-400 hover:text-white"><i class="fas fa-arrow-left"></i></a>
-            <div class="flex items-center gap-3">
-                <div class="relative flex h-3 w-3">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-full w-full bg-blue-500"></span>
-                </div>
-                <a href="https://bharatradar.com" class="text-xl font-black tracking-widest uppercase bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent hover:opacity-80 transition">
-                    BharatRadar <span class="text-gray-400 text-sm font-normal">| Profile</span>
-                </a>
+<body class="theme-bg-body theme-text min-h-screen" style="background:var(--bg-body);color:var(--text-primary)">
+    <!-- Header (consistent with bharatradar.com) -->
+    <nav class="fixed w-full z-50 h-12 sm:h-14 bg-gray-900/80 backdrop-blur-md border-b border-gray-800 flex items-center justify-between px-2 sm:px-6">
+        <div class="flex items-center gap-2 sm:gap-3">
+            <button id="hamburger-btn" onclick="document.getElementById('sidebar').classList.toggle('-translate-x-full');document.getElementById('sidebar-overlay')?.classList.toggle('hidden')" class="text-gray-400 hover:text-white transition md:hidden" aria-label="Menu">
+                <i class="fa-solid fa-bars text-lg"></i>
+            </button>
+            <div class="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-blue-500"></span>
             </div>
+            <a href="https://bharatradar.com" class="text-sm sm:text-lg font-black tracking-widest uppercase text-white hover:text-blue-400 transition">
+                BharatRadar
+            </a>
+            <span class="hidden sm:inline text-gray-500 text-xs sm:text-sm ml-1 sm:ml-2">| Profile</span>
         </div>
-        <div class="flex items-center gap-4">
-            <span id="header-callsign" class="text-sm text-gray-400">Loading...</span>
-            <span id="header-contributor" class="contributor-badge hidden">Contributor</span>
-            <a href="/logout" class="text-gray-400 hover:text-white" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
+        <div class="flex items-center gap-1 sm:gap-2">
+            <a href="/feeders" class="theme-btn-toggle" title="Feeders"><i class="fa-solid fa-satellite-dish"></i></a>
+            <a href="/api-access" class="theme-btn-toggle" title="API Access"><i class="fa-solid fa-key"></i></a>
+            <a href="/profile" class="theme-btn-toggle text-blue-400" title="Profile"><i class="fa-solid fa-user"></i></a>
+            <button id="theme-toggle" type="button" class="theme-btn-toggle" aria-label="Toggle theme">
+                <svg class="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                <svg class="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
+            </button>
+            <a href="/logout" class="theme-btn-toggle" title="Logout"><i class="fa-solid fa-sign-out-alt"></i></a>
         </div>
-    </div>
+    </nav>
 
-    <div class="flex">
-        <div class="sidebar">
+    <script>
+        (function() {
+            var btn = document.getElementById('theme-toggle');
+            if (btn) {
+                function updateBtn() {
+                    var theme = document.documentElement.getAttribute('data-theme');
+                    btn.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+                }
+                updateBtn();
+                btn.addEventListener('click', function() {
+                    var current = document.documentElement.getAttribute('data-theme');
+                    var next = current === 'dark' ? 'light' : 'dark';
+                    document.documentElement.setAttribute('data-theme', next);
+                    document.cookie = 'theme=' + next + '; Domain=.bharatradar.com; Path=/; Max-Age=31536000; SameSite=Lax';
+                    updateBtn();
+                });
+            }
+        })();
+    </script>
+
+    <!-- Mobile sidebar overlay -->
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden" onclick="document.getElementById('sidebar').classList.add('-translate-x-full');this.classList.add('hidden')"></div>
+
+    <div class="flex pt-12 sm:pt-14">
+        <div id="sidebar" class="sidebar fixed left-0 top-12 sm:top-14 h-screen z-40 -translate-x-full md:static md:h-auto md:translate-x-0 transition-all duration-300">
             <div class="nav-section">My Feeders</div>
             <div class="nav-item active" onclick="showSection('stations')"><i class="fas fa-satellite-dish w-5"></i><span>My Stations</span></div>
             <div class="nav-item" onclick="showSection('register')"><i class="fas fa-plus-circle w-5"></i><span>Register Station</span></div>
@@ -69,72 +76,76 @@
             <a href="/api-access" class="nav-item" style="text-decoration:none"><i class="fas fa-key w-5"></i><span>API Access</span></a>
         </div>
 
-        <div class="flex-1 p-8 bg-gray-900 min-h-screen">
+        <div class="flex-1 p-4 sm:p-8 min-h-screen overflow-hidden" style="background:var(--bg-body);color:var(--text-primary)">
+            <div id="user-info-bar" class="flex items-center gap-2 px-1 pb-3 mb-4 border-b md:hidden" style="border-color:var(--border)">
+                <span id="content-callsign" class="text-sm text-gray-400">Loading...</span>
+                <span id="content-contributor" class="hidden text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold">Contributor</span>
+            </div>
             <div id="section-stations" class="section-content">
-                <div class="flex justify-between items-center mb-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-6">
                     <div>
-                        <h1 class="text-2xl font-bold">My Stations</h1>
-                        <p class="text-gray-400 text-sm">View and organize your ADS-B receivers</p>
+                        <h1 class="text-xl sm:text-2xl font-bold">My Stations</h1>
+                        <p class="theme-text-secondary text-xs sm:text-sm">View and organize your ADS-B receivers</p>
                     </div>
-                    <button onclick="showLinkStation()" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded transition"><i class="fas fa-plus mr-2"></i>Link Station</button>
+                    <button onclick="showLinkStation()" class="btn btn-primary"><i class="fas fa-plus mr-2"></i>Link Station</button>
                 </div>
                 <div id="link-station-form" class="content-card mb-6 hidden">
                     <h3 class="font-bold mb-4">Link Your Station</h3>
-                    <p class="text-gray-400 text-sm mb-4">Paste your Station ID from <code>/etc/bharat-radar-id</code></p>
+                    <p class="theme-text-secondary text-sm mb-4">Paste your Station ID from <code>/etc/bharat-radar-id</code></p>
                     <div class="flex gap-3">
-                        <input type="text" id="link-uuid" placeholder="Station UUID" class="flex-1 bg-gray-800 border border-gray-600 rounded px-4 py-2 text-white">
-                        <button onclick="linkStation()" class="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded transition">Link</button>
-                        <button onclick="hideLinkStation()" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded transition">Cancel</button>
+                        <input type="text" id="link-uuid" placeholder="Station UUID" class="form-input" style="max-width:400px">
+                        <button onclick="linkStation()" class="btn btn-primary">Link</button>
+                        <button onclick="hideLinkStation()" class="btn btn-secondary">Cancel</button>
                     </div>
                     <div id="link-result" class="mt-3 hidden"></div>
                 </div>
                 <div class="content-card">
                     <h3 class="font-bold mb-4">Linked Stations</h3>
-                    <div id="stations-table-container"><div class="text-gray-400 text-center py-8">Loading stations...</div></div>
+                    <div id="stations-table-container"><div class="theme-text-secondary text-center py-8">Loading stations...</div></div>
                 </div>
             </div>
 
             <div id="section-coverage" class="section-content hidden">
                 <h1 class="text-2xl font-bold mb-2">Coverage</h1>
-                <p class="text-gray-400 text-sm mb-6">Your station coverage and detection range</p>
+                <p class="theme-text-secondary text-sm mb-6">Your station coverage and detection range</p>
                 <div class="content-card"><div id="coverage-content">Loading...</div></div>
             </div>
 
             <div id="section-leaderboard" class="section-content hidden">
                 <h1 class="text-2xl font-bold mb-2">Leaderboard</h1>
-                <p class="text-gray-400 text-sm mb-6">Top contributors across the network</p>
+                <p class="theme-text-secondary text-sm mb-6">Top contributors across the network</p>
                 <div class="content-card"><div id="leaderboard-content">Loading...</div></div>
             </div>
 
             <div id="section-register" class="section-content hidden">
                 <h1 class="text-2xl font-bold mb-2">Register New Station</h1>
-                <p class="text-gray-400 text-sm mb-6">Add a new ADS-B receiver to your account</p>
+                <p class="theme-text-secondary text-sm mb-6">Add a new ADS-B receiver to your account</p>
                 <div class="content-card">
                     <form id="reg-form" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
                         <div class="md:col-span-2">
-                            <label class="block text-sm text-gray-400 mb-1">Station ID (from /etc/bharat-radar-id)</label>
-                            <input type="text" id="reg-uuid" placeholder="e.g., 67620ee8-58c4-407d-82d0-3ca1ea2bcf97" class="w-full bg-gray-800 border border-gray-600 rounded px-4 py-2 text-white">
+                            <label class="form-label">Station ID (from /etc/bharat-radar-id)</label>
+                            <input type="text" id="reg-uuid" placeholder="e.g., 67620ee8-58c4-407d-82d0-3ca1ea2bcf97" class="form-input">
                         </div>
                         <div>
-                            <label class="block text-sm text-gray-400 mb-1">Location (City/Area)</label>
-                            <input type="text" id="reg-location" placeholder="Pune" class="w-full bg-gray-800 border border-gray-600 rounded px-4 py-2 text-white">
+                            <label class="form-label">Location (City/Area)</label>
+                            <input type="text" id="reg-location" placeholder="Pune" class="form-input">
                         </div>
                         <div>
-                            <button type="button" onclick="getLocation()" class="w-full bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded transition mt-6">
+                            <button type="button" onclick="getLocation()" class="btn btn-secondary w-full mt-6">
                                 <i class="fas fa-location-arrow mr-2"></i>Use My Location
                             </button>
                         </div>
                         <div>
-                            <label class="block text-sm text-gray-400 mb-1">Latitude</label>
-                            <input type="number" id="reg-lat" step="any" placeholder="18.52" class="w-full bg-gray-800 border border-gray-600 rounded px-4 py-2 text-white">
+                            <label class="form-label">Latitude</label>
+                            <input type="number" id="reg-lat" step="any" placeholder="18.52" class="form-input">
                         </div>
                         <div>
-                            <label class="block text-sm text-gray-400 mb-1">Longitude</label>
-                            <input type="number" id="reg-lon" step="any" placeholder="73.86" class="w-full bg-gray-800 border border-gray-600 rounded px-4 py-2 text-white">
+                            <label class="form-label">Longitude</label>
+                            <input type="number" id="reg-lon" step="any" placeholder="73.86" class="form-input">
                         </div>
                         <div>
-                            <label class="block text-sm text-gray-400 mb-1">Antenna Type</label>
-                            <select id="reg-antenna" class="w-full bg-gray-800 border border-gray-600 rounded px-4 py-2 text-white">
+                            <label class="form-label">Antenna Type</label>
+                            <select id="reg-antenna" class="form-input">
                                 <option value="">Select...</option>
                                 <option value="Outdoor">Outdoor</option>
                                 <option value="Indoor">Indoor</option>
@@ -143,8 +154,8 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm text-gray-400 mb-1">Receiver Type</label>
-                            <select id="reg-receiver" class="w-full bg-gray-800 border border-gray-600 rounded px-4 py-2 text-white">
+                            <label class="form-label">Receiver Type</label>
+                            <select id="reg-receiver" class="form-input">
                                 <option value="">Select...</option>
                                 <option value="RTL-SDR">RTL-SDR</option>
                                 <option value="Airspy">Airspy</option>
@@ -154,9 +165,7 @@
                             </select>
                         </div>
                         <div class="md:col-span-2">
-                            <button type="submit" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded transition">
-                                <i class="fas fa-plus mr-2"></i>Register Station
-                            </button>
+                            <button type="submit" class="btn btn-primary"><i class="fas fa-plus mr-2"></i>Register Station</button>
                         </div>
                     </form>
                     <div id="reg-result" class="mt-4 hidden"></div>
@@ -165,8 +174,8 @@
 
             <div id="section-account" class="section-content hidden">
                 <h1 class="text-2xl font-bold mb-2">Account</h1>
-                <p class="text-gray-400 text-sm mb-6">Manage your account settings</p>
-                <div class="flex border-b border-gray-700 mb-6">
+                <p class="theme-text-secondary text-sm mb-6">Manage your account settings</p>
+                <div class="flex border-b mb-6" style="border-color:var(--border)">
                     <div class="tab-btn active" onclick="showAccountTab('profile')">Profile</div>
                     <div class="tab-btn" onclick="showAccountTab('security')">Security</div>
                 </div>
@@ -174,10 +183,10 @@
                     <div class="content-card">
                         <h3 class="font-bold mb-4">Account Details</h3>
                         <div class="space-y-4 max-w-md">
-                            <div><label class="block text-sm text-gray-400 mb-1">Email</label><input type="email" id="acc-email" readonly class="w-full bg-gray-800 border border-gray-600 rounded px-4 py-2 text-gray-400"></div>
-                            <div><label class="block text-sm text-gray-400 mb-1">Display Name</label><input type="text" id="acc-name" class="w-full bg-gray-800 border border-gray-600 rounded px-4 py-2 text-white"></div>
-                            <div><label class="block text-sm text-gray-400 mb-1">Callsign</label><input type="text" id="acc-callsign" class="w-full bg-gray-800 border border-gray-600 rounded px-4 py-2 text-white" maxlength="20"><p class="text-xs text-gray-500 mt-1">Your public ham-style identifier</p></div>
-                            <button onclick="saveProfile()" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded transition"><i class="fas fa-save mr-2"></i>Save Changes</button>
+                            <div><label class="form-label">Email</label><input type="email" id="acc-email" readonly class="form-input" style="color:var(--text-muted)"></div>
+                            <div><label class="form-label">Display Name</label><input type="text" id="acc-name" class="form-input"></div>
+                            <div><label class="form-label">Callsign</label><input type="text" id="acc-callsign" class="form-input" maxlength="20"><p class="text-xs mt-1" style="color:var(--text-muted)">Your public ham-style identifier</p></div>
+                            <button onclick="saveProfile()" class="btn btn-primary"><i class="fas fa-save mr-2"></i>Save Changes</button>
                             <div id="profile-save-result" class="hidden"></div>
                         </div>
                     </div>
@@ -185,8 +194,8 @@
                 <div id="account-tab-security" class="account-tab-content hidden">
                     <div class="content-card">
                         <h3 class="font-bold mb-4">Security</h3>
-                        <p class="text-gray-400">Your account is secured via Google OAuth.</p>
-                        <div class="mt-4 p-4 bg-gray-800 rounded flex items-center gap-3"><i class="fab fa-google text-xl text-blue-400"></i><div><div class="font-bold">Google Account</div><div class="text-sm text-gray-400">Signed in via Google OAuth</div></div></div>
+                        <p class="theme-text-secondary">Your account is secured via Google OAuth.</p>
+                        <div class="mt-4 p-4 rounded flex items-center gap-3" style="background:var(--bg-input);border:1px solid var(--border)"><i class="fab fa-google text-xl text-blue-400"></i><div><div class="font-bold">Google Account</div><div class="text-sm theme-text-secondary">Signed in via Google OAuth</div></div></div>
                     </div>
                 </div>
             </div>
@@ -204,6 +213,8 @@
             if (section === 'stations') loadStations();
             if (section === 'leaderboard') loadLeaderboard();
             if (section === 'coverage') loadCoverage();
+            var sb = document.getElementById('sidebar'), ov = document.getElementById('sidebar-overlay');
+            if (sb && window.innerWidth < 768) { sb.classList.add('-translate-x-full'); if (ov) ov.classList.add('hidden'); }
         }
 
         function getLocation() {
@@ -300,10 +311,11 @@
                 const res = await fetch(`${API_BASE}/auth/me`);
                 if (!res.ok) { window.location.href = '/login'; return; }
                 const data = await res.json();
-                document.getElementById('header-callsign').textContent = data.callsign || data.name || data.email;
-                const contribBadge = document.getElementById('header-contributor');
-                if (data.contributor_status === 'CONTRIBUTOR') { contribBadge.classList.remove('hidden'); }
-                else { contribBadge.classList.add('hidden'); }
+                var callsign = data.callsign || data.name || data.email;
+                document.getElementById('content-callsign').textContent = callsign;
+                var contentContrib = document.getElementById('content-contributor');
+                if (data.contributor_status === 'CONTRIBUTOR') { contentContrib.classList.remove('hidden'); }
+                else { contentContrib.classList.add('hidden'); }
                 document.getElementById('acc-email').value = data.email;
                 document.getElementById('acc-name').value = data.name || '';
                 document.getElementById('acc-callsign').value = data.callsign || '';
@@ -328,7 +340,7 @@
                 const stations = data.stations || [];
                 const container = document.getElementById('stations-table-container');
                 if (stations.length === 0) {
-                    container.innerHTML = `<div class="text-center text-gray-400 py-8"><p class="mb-4">No stations linked yet.</p><button onclick="showLinkStation()" class="bg-green-600 hover:bg-green-500 text-white py-2 px-4 rounded transition">Link Your First Station</button></div>`;
+                    container.innerHTML = `<div class="text-center theme-text-secondary py-8"><p class="mb-4">No stations linked yet.</p><button onclick="showLinkStation()" class="btn btn-primary">Link Your First Station</button></div>`;
                     return;
                 }
                 const rows = [];
@@ -336,12 +348,12 @@
                     try { const statsRes = await fetch(`${API_BASE}/feeders/${s.id}/stats`); const stats = await statsRes.json(); rows.push(renderStationRow(s, stats)); }
                     catch (e) { rows.push(renderStationRow(s, {})); }
                 }
-                container.innerHTML = `<table class="data-table"><thead><tr><th>Status</th><th>Name</th><th>Location</th><th>Coordinates</th><th>Messages</th><th>Aircraft</th><th>Range</th><th>Actions</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+                container.innerHTML = `<div class="overflow-x-auto"><table class="data-table"><thead><tr><th>Status</th><th>Name</th><th>Location</th><th>Coordinates</th><th>Messages</th><th>Aircraft</th><th>Range</th><th>Actions</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
             } catch (e) { console.error('Stations load error:', e); }
         }
         function renderStationRow(s, stats) {
             const statusClass = s.status === 'ACTIVE' ? 'status-active' : s.status === 'ACTIVATED' ? 'status-activated' : s.status === 'INACTIVE' ? 'status-inactive' : 'status-pending';
-            return `<tr><td><span class="status-dot ${statusClass}"></span><span class="text-xs ml-1">${s.status}</span></td><td><div class="font-bold">${s.name}</div><span class="inline-block px-2 py-0.5 rounded text-xs font-bold tier-${(s.tier || 'BRONZE').toLowerCase()}">${s.tier}</span></td><td>${s.location || '-'}</td><td class="font-mono text-xs">${s.lat ? s.lat.toFixed(2) + '; ' + s.lon.toFixed(2) : '-'}</td><td class="text-blue-400 font-bold">${formatNumber(stats.messages_count || 0)}</td><td class="text-green-400 font-bold">${stats.aircraft_count || 0}</td><td class="text-purple-400 font-bold">${(stats.max_range_km || 0).toFixed(0)} km</td><td><div class="flex gap-2"><a href="${API_BASE}/feeders/${s.id}/map" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm" title="Live Map"><i class="fas fa-satellite-dish"></i></a><a href="/feeders/account/${s.id}" class="text-green-400 hover:text-green-300 text-sm" title="Dashboard"><i class="fas fa-chart-line"></i></a><a href="/feeders/health?id=${s.id}" class="text-yellow-400 hover:text-yellow-300 text-sm" title="Health"><i class="fas fa-heartbeat"></i></a></div></td></tr>`;
+            return `<tr><td data-label="Status"><span class="status-dot ${statusClass}"></span><span class="text-xs ml-1">${s.status}</span></td><td data-label="Station"><div class="font-bold">${s.name}</div><span class="inline-block px-2 py-0.5 rounded text-xs font-bold tier-${(s.tier || 'BRONZE').toLowerCase()}">${s.tier}</span></td><td data-label="Location">${s.location || '-'}</td><td data-label="Coords" class="font-mono text-xs">${s.lat ? s.lat.toFixed(2) + '; ' + s.lon.toFixed(2) : '-'}</td><td data-label="Messages" class="text-blue-400 font-bold">${formatNumber(stats.messages_count || 0)}</td><td data-label="Aircraft" class="text-green-400 font-bold">${stats.aircraft_count || 0}</td><td data-label="Range" class="text-purple-400 font-bold">${(stats.max_range_km || 0).toFixed(0)} km</td><td data-label="Actions"><div class="flex gap-3 sm:gap-2"><a href="${API_BASE}/feeders/${s.id}/map" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm sm:text-xs p-2 sm:p-0" title="Live Map"><i class="fas fa-satellite-dish text-base sm:text-sm"></i></a><a href="/feeders/account/${s.id}" class="text-green-400 hover:text-green-300 text-sm sm:text-xs p-2 sm:p-0" title="Dashboard"><i class="fas fa-chart-line text-base sm:text-sm"></i></a><a href="/feeders/health?id=${s.id}" class="text-yellow-400 hover:text-yellow-300 text-sm sm:text-xs p-2 sm:p-0" title="Health"><i class="fas fa-heartbeat text-base sm:text-sm"></i></a></div></td></tr>`;
         }
         async function loadLeaderboard() {
             const container = document.getElementById('leaderboard-content');
@@ -350,7 +362,7 @@
                 const res = await fetch(`${API_BASE}/feeders/leaderboard?limit=20`);
                 const data = await res.json();
                 const feeders = data.feeders || [];
-                container.innerHTML = feeders.map((f, i) => `<div class="flex items-center justify-between py-3 ${i < feeders.length-1 ? 'border-b border-gray-700' : ''}"><div class="flex items-center gap-3"><span class="text-gray-500 w-6">${i+1}</span><span class="inline-block px-2 py-0.5 rounded text-xs font-bold tier-${(f.tier || 'BRONZE').toLowerCase()}">${f.tier}</span><span class="font-bold">${f.display_name || f.name}</span></div><div class="text-blue-400 font-bold">${formatNumber(f.total_messages || 0)} msgs</div></div>`).join('');
+                container.innerHTML = feeders.map((f, i) => `<div class="flex items-center justify-between py-3 ${i < feeders.length-1 ? 'border-b' : ''}" style="border-color:var(--border)"><div class="flex items-center gap-3"><span class="theme-text-muted w-6">${i+1}</span><span class="inline-block px-2 py-0.5 rounded text-xs font-bold tier-${(f.tier || 'BRONZE').toLowerCase()}">${f.tier}</span><span class="font-bold">${f.display_name || f.name}</span></div><div class="text-blue-400 font-bold">${formatNumber(f.total_messages || 0)} msgs</div></div>`).join('');
             } catch (e) { container.innerHTML = '<div class="text-red-400">Failed to load</div>'; }
         }
         async function loadCoverage() {
@@ -360,8 +372,8 @@
                 const res = await fetch(`${API_BASE}/feeders/my-stations?_=${Date.now()}`);
                 const data = await res.json();
                 const stations = data.stations || [];
-                if (stations.length === 0) { container.innerHTML = '<div class="text-gray-400">No stations to show coverage for.</div>'; return; }
-                container.innerHTML = stations.map(s => `<div class="mb-6"><div class="flex justify-between items-center mb-2"><h4 class="font-bold">${s.name}</h4><a href="/feeders/map" class="text-blue-400 text-sm hover:underline">View on Global Map →</a></div><div class="grid grid-cols-3 gap-4 mb-3"><div class="bg-gray-800 rounded p-3 text-center"><div class="text-2xl font-bold text-blue-400">${s.lat ? s.lat.toFixed(2) : '-'}</div><div class="text-xs text-gray-400">Latitude</div></div><div class="bg-gray-800 rounded p-3 text-center"><div class="text-2xl font-bold text-blue-400">${s.lon ? s.lon.toFixed(2) : '-'}</div><div class="text-xs text-gray-400">Longitude</div></div><div class="bg-gray-800 rounded p-3 text-center"><div class="text-2xl font-bold text-blue-400">${s.altitude_m || 0}m</div><div class="text-xs text-gray-400">Altitude</div></div></div><div class="text-sm text-gray-400"><i class="fas fa-map-marker-alt mr-2"></i>${s.location || 'No location set'}</div></div>`).join('');
+                if (stations.length === 0) { container.innerHTML = '<div class="theme-text-secondary">No stations to show coverage for.</div>'; return; }
+                container.innerHTML = stations.map(s => `<div class="mb-6"><div class="flex justify-between items-center mb-2"><h4 class="font-bold">${s.name}</h4><a href="/feeders/map" class="text-blue-400 text-sm hover:underline">View on Global Map →</a></div><div class="grid grid-cols-3 gap-4 mb-3"><div class="rounded p-3 text-center" style="background:var(--bg-input);border:1px solid var(--border)"><div class="text-2xl font-bold text-blue-400">${s.lat ? s.lat.toFixed(2) : '-'}</div><div class="text-xs theme-text-secondary">Latitude</div></div><div class="rounded p-3 text-center" style="background:var(--bg-input);border:1px solid var(--border)"><div class="text-2xl font-bold text-blue-400">${s.lon ? s.lon.toFixed(2) : '-'}</div><div class="text-xs theme-text-secondary">Longitude</div></div><div class="rounded p-3 text-center" style="background:var(--bg-input);border:1px solid var(--border)"><div class="text-2xl font-bold text-blue-400">${s.altitude_m || 0}m</div><div class="text-xs theme-text-secondary">Altitude</div></div></div><div class="text-sm theme-text-secondary"><i class="fas fa-map-marker-alt mr-2"></i>${s.location || 'No location set'}</div></div>`).join('');
             } catch (e) { container.innerHTML = '<div class="text-red-400">Failed to load</div>'; }
         }
         function formatNumber(num) { if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'; if (num >= 1000) return (num / 1000).toFixed(1) + 'K'; return num.toString(); }

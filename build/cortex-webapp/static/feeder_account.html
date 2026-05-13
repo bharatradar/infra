@@ -5,140 +5,176 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Feeder Dashboard | Bharat Radar</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cstyle%3E@keyframes p%7B0%25%7Btransform:scale(1);opacity:.75%7D75%25%7Btransform:scale(2.5);opacity:0%7D100%25%7Btransform:scale(1);opacity:.75%7D%7D.r%7Banimation:p 1s cubic-bezier(0,0,.2,1)infinite;transform-origin:16px 16px%7D%3C/style%3E%3Ccircle class=%27r%27 cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%2360a5fa%27 opacity=%27.75%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%233b82f6%27/%3E%3C/svg%3E">
+    <script>!function(){var e=document.cookie.match(/(?:^| )theme=([^;]+)/);e=e?e[1]:(window.matchMedia("(prefers-color-scheme:light)").matches?"light":"dark");document.documentElement.setAttribute("data-theme",e)}()</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/common.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        .tier-platinum { background: linear-gradient(135deg, #e5e7eb 0%, #9ca3af 50%, #e5e7eb 100%); }
-        .tier-gold { background: linear-gradient(135deg, #fef3c7 0%, #fbbf24 50%, #f59e0b 100%); }
-        .tier-silver { background: linear-gradient(135deg, #f3f4f6 0%, #d1d5db 50%, #9ca3af 100%); }
-        .tier-bronze { background: linear-gradient(135deg, #ffedd5 0%, #fdba74 50%, #ea580c 100%); }
-        .status-active { color: #23c074; }
-        .status-activated { color: #fbbf24; }
-        .status-pending { color: #f97316; }
-        .status-inactive { color: #ef4444; }
-    </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen">
-    <div class="container mx-auto px-4 py-8 max-w-5xl">
-        <!-- Header -->
-        <div class="flex justify-between items-center mb-8">
-            <div class="flex items-center gap-4">
-                <a href="/profile" class="text-gray-400 hover:text-white text-xl">
-                    <i class="fas fa-arrow-left"></i>
-                </a>
-                <div>
-                    <h1 id="station-name" class="text-3xl font-bold">Loading...</h1>
-                    <p id="station-location" class="text-gray-400">Loading...</p>
+<body class="min-h-screen" style="background:var(--bg-body);color:var(--text-primary)">
+    <!-- Header (consistent with bharatradar.com) -->
+    <nav class="fixed w-full z-50 h-12 sm:h-14 bg-gray-900/80 backdrop-blur-md border-b border-gray-800 flex items-center justify-between px-2 sm:px-6">
+        <div class="flex items-center gap-2 sm:gap-3">
+            <button id="hamburger-btn" class="text-gray-400 hover:text-white transition md:hidden" aria-label="Menu">
+                <i class="fa-solid fa-bars text-lg"></i>
+            </button>
+            <div class="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-blue-500"></span>
+            </div>
+            <a href="https://bharatradar.com" class="text-sm sm:text-lg font-black tracking-widest uppercase text-white hover:text-blue-400 transition">
+                BharatRadar
+            </a>
+            <span id="header-station-name" class="hidden sm:inline text-gray-500 text-xs sm:text-sm ml-1 sm:ml-2">| Feeder</span>
+        </div>
+        <div class="flex items-center gap-1 sm:gap-2">
+            <a href="/feeders" class="theme-btn-toggle" title="Feeders"><i class="fa-solid fa-satellite-dish"></i></a>
+            <a href="/api-access" class="theme-btn-toggle" title="API Access"><i class="fa-solid fa-key"></i></a>
+            <a href="/profile" class="theme-btn-toggle" title="Profile"><i class="fa-solid fa-user"></i></a>
+            <button id="theme-toggle" type="button" class="theme-btn-toggle" aria-label="Toggle theme">
+                <svg class="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                <svg class="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
+            </button>
+            <a href="/logout" class="theme-btn-toggle" title="Logout"><i class="fa-solid fa-sign-out-alt"></i></a>
+        </div>
+    </nav>
+
+    <script>
+        (function() {
+            var btn = document.getElementById('theme-toggle');
+            if (btn) {
+                function updateBtn() {
+                    var theme = document.documentElement.getAttribute('data-theme');
+                    btn.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+                }
+                updateBtn();
+                btn.addEventListener('click', function() {
+                    var current = document.documentElement.getAttribute('data-theme');
+                    var next = current === 'dark' ? 'light' : 'dark';
+                    document.documentElement.setAttribute('data-theme', next);
+                    document.cookie = 'theme=' + next + '; Domain=.bharatradar.com; Path=/; Max-Age=31536000; SameSite=Lax';
+                    updateBtn();
+                });
+            }
+        })();
+    </script>
+
+    <div class="pt-12 sm:pt-14">
+        <div class="container mx-auto px-4 py-8 max-w-5xl">
+            <!-- Header -->
+            <div class="flex justify-between items-center mb-8">
+                <div class="flex items-center gap-4">
+                    <div>
+                        <h1 id="station-name" class="text-3xl font-bold">Loading...</h1>
+                        <p id="station-location" class="theme-text-secondary">Loading...</p>
+                    </div>
+                </div>
+                <div class="flex gap-3">
+                    <a id="live-map-link" href="#" target="_blank" class="btn btn-primary">
+                        <i class="fas fa-satellite-dish mr-2"></i>Live Map
+                    </a>
+                    <a id="health-link" href="#" class="btn btn-secondary">
+                        <i class="fas fa-heartbeat mr-2"></i>Health
+                    </a>
+                    <a href="/feeders/map" class="btn btn-secondary">
+                        <i class="fas fa-globe mr-2"></i>Coverage Map
+                    </a>
                 </div>
             </div>
-            <div class="flex gap-3">
-                <a id="live-map-link" href="#" target="_blank" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition">
-                    <i class="fas fa-satellite-dish mr-2"></i>Live Map
-                </a>
-                <a id="health-link" href="#" class="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-4 rounded transition">
-                    <i class="fas fa-heartbeat mr-2"></i>Health
-                </a>
-                <a href="/feeders/map" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition">
-                    <i class="fas fa-globe mr-2"></i>Coverage Map
-                </a>
-            </div>
-        </div>
 
-        <!-- Tier Badge & Quick Stats -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <div id="tier-card" class="tier-bronze rounded-lg p-6 text-center text-gray-800">
-                <i class="fas fa-medal text-3xl mb-2"></i>
-                <h3 class="font-bold text-lg">BRONZE</h3>
-                <p class="text-sm">Current Tier</p>
-            </div>
-            <div class="bg-gray-800 rounded-lg p-6 text-center">
-                <div id="stat-messages" class="text-3xl font-bold text-blue-400">-</div>
-                <div class="text-sm text-gray-400">Total Messages</div>
-            </div>
-            <div class="bg-gray-800 rounded-lg p-6 text-center">
-                <div id="stat-aircraft" class="text-3xl font-bold text-green-400">-</div>
-                <div class="text-sm text-gray-400">Aircraft Tracked</div>
-            </div>
-            <div class="bg-gray-800 rounded-lg p-6 text-center">
-                <div id="stat-range" class="text-3xl font-bold text-purple-400">-</div>
-                <div class="text-sm text-gray-400">Max Range (km)</div>
-            </div>
-        </div>
-
-        <!-- Charts -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div class="bg-gray-800 rounded-lg p-6">
-                <h3 class="text-lg font-bold mb-4">📊 Messages (Last 30 Days)</h3>
-                <canvas id="messages-chart" height="200"></canvas>
-            </div>
-            <div class="bg-gray-800 rounded-lg p-6">
-                <h3 class="text-lg font-bold mb-4">✈️ Aircraft Seen (Last 30 Days)</h3>
-                <canvas id="aircraft-chart" height="200"></canvas>
-            </div>
-        </div>
-
-        <!-- Health Status Card -->
-        <div class="bg-gray-800 rounded-lg p-6 mb-8">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-bold">🩺 Station Health</h3>
-                <a href="/feeders/health" id="detailed-health-link" class="text-yellow-400 text-sm hover:underline">View Detailed Health →</a>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div class="bg-gray-700 rounded p-4 text-center">
-                    <div id="health-status" class="text-3xl font-bold status-pending">-</div>
-                    <div class="text-sm text-gray-400">Status</div>
+            <!-- Tier Badge & Quick Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                <div id="tier-card" class="tier-bronze rounded-lg p-6 text-center" style="color:#1f2937">
+                    <i class="fas fa-medal text-3xl mb-2"></i>
+                    <h3 class="font-bold text-lg">BRONZE</h3>
+                    <p class="text-sm">Current Tier</p>
                 </div>
-                <div class="bg-gray-700 rounded p-4 text-center">
-                    <div id="health-last-seen" class="text-3xl font-bold text-blue-400">-</div>
-                    <div class="text-sm text-gray-400">Last Seen</div>
+                <div class="card p-6 text-center">
+                    <div id="stat-messages" class="text-3xl font-bold text-blue-400">-</div>
+                    <div class="text-sm theme-text-secondary">Total Messages</div>
                 </div>
-                <div class="bg-gray-700 rounded p-4 text-center">
-                    <div id="health-active-hours" class="text-3xl font-bold text-green-400">-</div>
-                    <div class="text-sm text-gray-400">Active Hours</div>
+                <div class="card p-6 text-center">
+                    <div id="stat-aircraft" class="text-3xl font-bold text-green-400">-</div>
+                    <div class="text-sm theme-text-secondary">Aircraft Tracked</div>
                 </div>
-                <div class="bg-gray-700 rounded p-4 text-center">
-                    <div id="health-uptime" class="text-3xl font-bold text-purple-400">-</div>
-                    <div class="text-sm text-gray-400">Uptime %</div>
+                <div class="card p-6 text-center">
+                    <div id="stat-range" class="text-3xl font-bold text-purple-400">-</div>
+                    <div class="text-sm theme-text-secondary">Max Range (km)</div>
                 </div>
             </div>
-        </div>
 
-        <!-- Notification Settings -->
-        <div class="bg-gray-800 rounded-lg p-6 mb-8">
-            <h3 class="text-lg font-bold mb-4">🔔 Notification Settings</h3>
-            <p class="text-gray-400 text-sm mb-4">Get alerted when your feeder goes offline.</p>
-            <div class="flex items-center gap-4">
-                <label class="text-sm text-gray-300">Notify me if my feeder is down for</label>
-                <input type="number" id="notify-hours" min="0" max="72" value="0" class="w-20 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-center">
-                <span class="text-sm text-gray-400">hours</span>
-                <button onclick="saveNotifySettings()" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded transition">
-                    <i class="fas fa-save mr-2"></i>Save
-                </button>
+            <!-- Charts -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="card p-6">
+                    <h3 class="text-lg font-bold mb-4">📊 Messages (Last 30 Days)</h3>
+                    <canvas id="messages-chart" height="200"></canvas>
+                </div>
+                <div class="card p-6">
+                    <h3 class="text-lg font-bold mb-4">✈️ Aircraft Seen (Last 30 Days)</h3>
+                    <canvas id="aircraft-chart" height="200"></canvas>
+                </div>
             </div>
-            <p class="text-xs text-gray-500 mt-2">Set to 0 to disable notifications.</p>
-            <div id="notify-result" class="mt-3 hidden"></div>
-        </div>
 
-        <!-- Range Chart -->
-        <div class="bg-gray-800 rounded-lg p-6 mb-8">
-            <h3 class="text-lg font-bold mb-4">📡 Max Detection Range (km)</h3>
-            <canvas id="range-chart" height="100"></canvas>
-        </div>
-
-        <!-- Peers Section -->
-        <div class="bg-gray-800 rounded-lg p-6 mb-8">
-            <h3 class="text-lg font-bold mb-4">👥 Nearby Feeders (within 500 km)</h3>
-            <div id="peers-list" class="space-y-2">
-                <div class="text-gray-400">Loading...</div>
+            <!-- Health Status Card -->
+            <div class="card p-6 mb-8">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold">🩺 Station Health</h3>
+                    <a href="/feeders/health" id="detailed-health-link" class="text-yellow-400 text-sm hover:underline">View Detailed Health →</a>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="rounded p-4 text-center" style="background:var(--bg-input);border:1px solid var(--border)">
+                        <div id="health-status" class="text-3xl font-bold status-pending">-</div>
+                        <div class="text-sm theme-text-secondary">Status</div>
+                    </div>
+                    <div class="rounded p-4 text-center" style="background:var(--bg-input);border:1px solid var(--border)">
+                        <div id="health-last-seen" class="text-3xl font-bold text-blue-400">-</div>
+                        <div class="text-sm theme-text-secondary">Last Seen</div>
+                    </div>
+                    <div class="rounded p-4 text-center" style="background:var(--bg-input);border:1px solid var(--border)">
+                        <div id="health-active-hours" class="text-3xl font-bold text-green-400">-</div>
+                        <div class="text-sm theme-text-secondary">Active Hours</div>
+                    </div>
+                    <div class="rounded p-4 text-center" style="background:var(--bg-input);border:1px solid var(--border)">
+                        <div id="health-uptime" class="text-3xl font-bold text-purple-400">-</div>
+                        <div class="text-sm theme-text-secondary">Uptime %</div>
+                    </div>
+                </div>
             </div>
-        </div>
 
-        <!-- Achievements -->
-        <div class="bg-gray-800 rounded-lg p-6">
-            <h3 class="text-lg font-bold mb-4">🏆 Achievements</h3>
-            <div id="achievements-list" class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div class="text-gray-400 col-span-full">Coming soon...</div>
+            <!-- Notification Settings -->
+            <div class="card p-6 mb-8">
+                <h3 class="text-lg font-bold mb-4">🔔 Notification Settings</h3>
+                <p class="theme-text-secondary text-sm mb-4">Get alerted when your feeder goes offline.</p>
+                <div class="flex items-center gap-4">
+                    <label class="text-sm theme-text-secondary">Notify me if my feeder is down for</label>
+                    <input type="number" id="notify-hours" min="0" max="72" value="0" class="form-input" style="width:80px;text-align:center">
+                    <span class="text-sm theme-text-secondary">hours</span>
+                    <button onclick="saveNotifySettings()" class="btn btn-primary"><i class="fas fa-save mr-2"></i>Save</button>
+                </div>
+                <p class="text-xs theme-text-muted mt-2">Set to 0 to disable notifications.</p>
+                <div id="notify-result" class="mt-3 hidden"></div>
+            </div>
+
+            <!-- Range Chart -->
+            <div class="card p-6 mb-8">
+                <h3 class="text-lg font-bold mb-4">📡 Max Detection Range (km)</h3>
+                <canvas id="range-chart" height="100"></canvas>
+            </div>
+
+            <!-- Peers Section -->
+            <div class="card p-6 mb-8">
+                <h3 class="text-lg font-bold mb-4">👥 Nearby Feeders (within 500 km)</h3>
+                <div id="peers-list" class="space-y-2">
+                    <div class="theme-text-secondary">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Achievements -->
+            <div class="card p-6">
+                <h3 class="text-lg font-bold mb-4">🏆 Achievements</h3>
+                <div id="achievements-list" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div class="theme-text-secondary col-span-full">Coming soon...</div>
+                </div>
             </div>
         </div>
     </div>
@@ -158,30 +194,28 @@
                 loadPeers(),
                 loadHealth()
             ]);
-            // Auto-refresh live stats every 5 seconds
             setInterval(loadLiveStats, 5000);
         }
 
         async function loadStationInfo() {
             try {
-                // Get from my-stations or leaderboard
                 const res = await fetch(`${API_BASE}/feeders/my-stations`);
                 const data = await res.json();
                 const station = (data.stations || []).find(s => s.id == feederId);
                 if (station) {
                     document.getElementById('station-name').textContent = station.name;
                     document.getElementById('station-location').textContent = station.location || 'Unknown location';
+                    document.getElementById('header-station-name').textContent = '| ' + station.name;
 
-                    // Set tier card
                     const tierCard = document.getElementById('tier-card');
-                    tierCard.className = `tier-${station.tier.toLowerCase()} rounded-lg p-6 text-center text-gray-800`;
+                    tierCard.className = `tier-${(station.tier || 'bronze').toLowerCase()} rounded-lg p-6 text-center`;
+                    tierCard.style.color = '#1f2937';
                     tierCard.innerHTML = `
                         <i class="fas fa-medal text-3xl mb-2"></i>
                         <h3 class="font-bold text-lg">${station.tier}</h3>
                         <p class="text-sm">Current Tier</p>
                     `;
 
-                    // Live map link
                     document.getElementById('live-map-link').href =
                         `${API_BASE}/feeders/${feederId}/map`;
                     document.getElementById('health-link').href =
@@ -202,7 +236,7 @@
 
                 const statusEl = document.getElementById('health-status');
                 statusEl.textContent = data.status;
-                statusEl.className = `text-3xl font-bold status-${data.status.toLowerCase()}`;
+                statusEl.className = `text-3xl font-bold status-${(data.status || '').toLowerCase()}`;
 
                 let lastSeenText = 'Never';
                 if (data.minutes_since_last_seen !== null) {
@@ -211,11 +245,7 @@
                 }
                 document.getElementById('health-last-seen').textContent = lastSeenText;
                 document.getElementById('health-active-hours').textContent = data.total_active_hours || 0;
-
-                // Simple uptime estimate: active hours vs total age in hours
-                // We'll approximate since we don't have exact registration time here
                 document.getElementById('health-uptime').textContent = '-';
-
                 document.getElementById('notify-hours').value = data.notify_after_hours || 0;
             } catch (e) {
                 console.error('Health load error:', e);
@@ -265,7 +295,6 @@
                 const history = data.history || [];
 
                 if (history.length === 0) {
-                    // No historical data yet — show placeholder message on charts
                     ['messages-chart', 'aircraft-chart', 'range-chart'].forEach(id => {
                         const canvas = document.getElementById(id);
                         const ctx = canvas.getContext('2d');
@@ -278,7 +307,7 @@
                     return;
                 }
 
-                const labels = history.map(h => h.stat_date?.slice(5) || ''); // MM-DD
+                const labels = history.map(h => h.stat_date?.slice(5) || '');
                 const messages = history.map(h => h.messages_count || 0);
                 const aircraft = history.map(h => h.aircraft_count || 0);
                 const ranges = history.map(h => h.max_range_km || 0);
@@ -336,19 +365,19 @@
                 const container = document.getElementById('peers-list');
 
                 if (peers.length === 0) {
-                    container.innerHTML = '<div class="text-gray-400">No nearby feeders found.</div>';
+                    container.innerHTML = '<div class="theme-text-secondary">No nearby feeders found.</div>';
                     return;
                 }
 
                 container.innerHTML = peers.map(p => `
-                    <div class="flex justify-between items-center bg-gray-700 rounded p-3">
+                    <div class="flex justify-between items-center rounded p-3" style="background:var(--bg-input);border:1px solid var(--border)">
                         <div>
                             <span class="font-bold">${p.display_name}</span>
-                            <span class="text-xs text-gray-400 ml-2">${p.location || ''}</span>
+                            <span class="text-xs theme-text-secondary ml-2">${p.location || ''}</span>
                         </div>
                         <div class="flex items-center gap-3">
                             <span class="text-sm text-yellow-400">${p.tier}</span>
-                            <span class="text-sm text-gray-400">${p.distance_km} km</span>
+                            <span class="text-sm theme-text-secondary">${p.distance_km} km</span>
                             <a href="/feeders/account/${p.id}" class="text-blue-400 text-sm hover:underline">View →</a>
                         </div>
                     </div>

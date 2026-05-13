@@ -1146,7 +1146,7 @@ function initCharts() {
                         zoom: { zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }, pan: { enabled: true, mode: 'xy' } }
                     }, 
                     interaction: { mode: 'nearest', intersect: false }, 
-                    elements: { point: { radius: 5, hoverRadius: 8, hitRadius: 20, backgroundColor: 'rgba(16, 185, 129, 0.6)', borderColor: '#10b981', borderWidth: 1 } },
+                    elements: { point: { radius: 5, hoverRadius: 8, hitRadius: 20, backgroundColor: 'rgba(59, 130, 246, 0.6)', borderColor: '#3b82f6', borderWidth: 1 } },
                     scales: { x: { title: { display: true, text: 'Flights' }, grid: { color: '#374151' } }, y: { title: { display: true, text: 'Hours Airborne' }, grid: { color: '#374151' } } },
                     onHover: (e, elements, chart) => { chart.canvas.style.cursor = elements.length ? 'pointer' : 'default'; },
                     onClick: async (e, elements, chart) => {
@@ -1600,11 +1600,11 @@ function setTerminalMode(type, mode) {
     const btnLog = document.getElementById(`btn-${type}-log`);
     
     if (mode === 'board') {
-        btnBoard.className = "px-3 py-1.5 text-xs font-bold rounded-md bg-blue-600 text-white shadow transition";
-        btnLog.className = "px-3 py-1.5 text-xs font-bold rounded-md text-gray-400 hover:text-white transition";
+        btnBoard.className = "btn-group-item active";
+        btnLog.className = "btn-group-item";
     } else {
-        btnLog.className = "px-3 py-1.5 text-xs font-bold rounded-md bg-purple-600 text-white shadow transition";
-        btnBoard.className = "px-3 py-1.5 text-xs font-bold rounded-md text-gray-400 hover:text-white transition";
+        btnLog.className = "btn-group-item active";
+        btnBoard.className = "btn-group-item";
     }
     fetchSchedules(); 
 }
@@ -1877,7 +1877,7 @@ async function fetchExec() {
 
         charts['cdoChart'].data.labels = d.approach_efficiency.map(c => c.airline_display);
         charts['cdoChart'].data.rawCodes = d.approach_efficiency.map(c => c.airline);
-        charts['cdoChart'].data.datasets = [{ label: 'Avg Mins', data: d.approach_efficiency.map(c => c.time), backgroundColor: '#10b981', borderRadius: 4, minBarLength: 6 }];
+        charts['cdoChart'].data.datasets = [{ label: 'Avg Mins', data: d.approach_efficiency.map(c => c.time), backgroundColor: '#3b82f6', borderRadius: 4, minBarLength: 6 }];
         charts['cdoChart'].update();
 
         let uHtml = '';

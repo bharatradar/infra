@@ -10,8 +10,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/static/css/common.css">
     <style>
-        :root { --header-bg: #111827; --border: #374151; --surface: #1e293b; --bg-body: #0f0f1a; --bg-card: #1e293b; --bg-sidebar: #1a1a2e; --bg-input: #0f172a; --text: #f1f5f9; --text-muted: #94a3b8; --text-secondary: #94a3b8; --primary: #3b82f6; --accent: #10b981; --table-stripe: rgba(35,192,116,0.05); }
-        [data-theme="light"] { --header-bg: #ffffff; --border: #e2e8f0; --surface: #ffffff; --bg-body: #f8fafc; --bg-card: #ffffff; --bg-sidebar: #ffffff; --bg-input: #f1f5f9; --text: #0f172a; --text-muted: #64748b; --text-secondary: #64748b; --primary: #2563eb; --accent: #059669; --table-stripe: rgba(5,150,105,0.05); }
+        :root { --header-bg: #111827; --border: #374151; --surface: #1e293b; --bg-body: #0f0f1a; --bg-card: #1e293b; --bg-sidebar: #1a1a2e; --bg-input: #0f172a; --text: #f1f5f9; --text-muted: #94a3b8; --text-secondary: #94a3b8; --primary: #2563eb; --accent: #3b82f6; --table-stripe: rgba(37,99,235,0.05); }
+        [data-theme="light"] { --header-bg: #ffffff; --border: #e2e8f0; --surface: #ffffff; --bg-body: #f8fafc; --bg-card: #ffffff; --bg-sidebar: #ffffff; --bg-input: #f1f5f9; --text: #0f172a; --text-muted: #64748b; --text-secondary: #64748b; --primary: #2563eb; --accent: #3b82f6; --table-stripe: rgba(37,99,235,0.08); }
         .theme-bg-header { background: var(--header-bg); }
         .theme-border { border-color: var(--border); }
         .theme-text-muted { color: var(--text-muted); }
@@ -264,57 +264,46 @@
 </head>
 <body class="theme-bg-body theme-text h-screen flex overflow-hidden font-sans selection:bg-blue-500 selection:text-white">
 
-    <header class="fixed top-0 left-0 right-0 h-12 sm:h-14 theme-bg-header border-b theme-border flex items-center justify-between px-2 sm:px-6 z-50 shadow-lg">
-        <div class="flex items-center gap-2 sm:gap-4">
-            <button onclick="toggleSidebar()" class="md:hidden theme-text-muted hover-theme-text transition">
+    <nav class="fixed w-full z-50 h-12 sm:h-14 bg-gray-900/80 backdrop-blur-md border-b border-gray-800 flex items-center justify-between px-2 sm:px-6">
+        <div class="flex items-center gap-2 sm:gap-3">
+            <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white transition md:hidden" aria-label="Menu">
                 <i class="fa-solid fa-bars text-lg"></i>
             </button>
-            <div class="flex items-center gap-2 sm:gap-3">
-                <div class="relative flex h-2.5 w-2.5">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
-                </div>
-                <a href="https://bharatradar.com" class="text-sm sm:text-lg font-black tracking-widest uppercase theme-text-logo hover:opacity-80 transition">
-                    BharatRadar
-                </a>
+            <div class="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-blue-500"></span>
             </div>
+            <a href="https://bharatradar.com" class="text-sm sm:text-lg font-black tracking-widest uppercase text-white hover:text-blue-400 transition">
+                BharatRadar
+            </a>
         </div>
-        
-        <div class="flex items-center gap-1 sm:gap-3">
-            <div class="relative hidden md:block w-36">
+        <div class="flex items-center gap-1 sm:gap-2">
+            <div class="relative hidden md:block w-32">
                 <div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none">
-                    <i class="fa-solid fa-location-dot theme-text-muted text-[10px]"></i>
+                    <i class="fa-solid fa-location-dot text-gray-500 text-[10px]"></i>
                 </div>
-                <select id="filter-airport" onchange="applyFilters()" class="theme-bg-input border theme-border theme-text-secondary text-[11px] rounded-lg block w-full pl-6 py-1.5 appearance-none outline-none font-bold">
+                <select id="filter-airport" onchange="applyFilters()" class="bg-gray-800 text-gray-300 border border-gray-700 text-[11px] rounded-lg block w-full pl-6 py-1.5 appearance-none outline-none font-bold focus:border-blue-500">
                     <option value="ALL">🌐 ALL Airports</option>
                 </select>
             </div>
-            <div class="relative hidden md:block w-36">
+            <div class="relative hidden md:block w-32">
                 <div class="absolute inset-y-0 left-0 flex items-center pl-2 pointer-events-none">
-                    <i class="fa-solid fa-plane theme-text-muted text-[10px]"></i>
+                    <i class="fa-solid fa-plane text-gray-500 text-[10px]"></i>
                 </div>
-                <select id="filter-airline" onchange="applyFilters()" class="theme-bg-input border theme-border theme-text-secondary text-[11px] rounded-lg block w-full pl-6 py-1.5 appearance-none outline-none font-bold">
+                <select id="filter-airline" onchange="applyFilters()" class="bg-gray-800 text-gray-300 border border-gray-700 text-[11px] rounded-lg block w-full pl-6 py-1.5 appearance-none outline-none font-bold focus:border-blue-500">
                     <option value="ALL">✈️ ALL Airlines</option>
                 </select>
             </div>
-            <a href="/profile" class="bg-green-600 hover:bg-green-500 text-white p-1.5 sm:p-2 rounded transition shrink-0 text-xs sm:text-sm" title="My Feeders">
-                <i class="fa-solid fa-satellite-dish"></i>
-            </a>
-            <a href="/api-access" class="bg-orange-600 hover:bg-orange-500 text-white p-1.5 sm:p-2 rounded transition shrink-0 text-xs sm:text-sm" title="API Access">
-                <i class="fa-solid fa-key"></i>
-            </a>
-            <a href="/profile" class="bg-purple-600 hover:bg-purple-500 text-white p-1.5 sm:p-2 rounded transition shrink-0 text-xs sm:text-sm" title="My Profile">
-                <i class="fa-solid fa-user"></i>
-            </a>
-            <button id="theme-toggle" type="button" class="theme-btn-toggle !p-1.5 sm:!p-2" aria-label="Toggle theme">
+            <a href="/feeders" class="theme-btn-toggle" title="Feeders"><i class="fa-solid fa-satellite-dish"></i></a>
+            <a href="/api-access" class="theme-btn-toggle" title="API Access"><i class="fa-solid fa-key"></i></a>
+            <a href="/profile" class="theme-btn-toggle" title="Profile"><i class="fa-solid fa-user"></i></a>
+            <button id="theme-toggle" type="button" class="theme-btn-toggle" aria-label="Toggle theme">
                 <svg class="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
                 <svg class="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
             </button>
-            <a href="/logout" class="bg-gray-700 hover:bg-gray-600 text-white p-1.5 sm:p-2 rounded transition shrink-0 text-xs sm:text-sm" title="Logout">
-                <i class="fa-solid fa-right-from-bracket"></i>
-            </a>
+            <a href="/logout" class="theme-btn-toggle" title="Logout"><i class="fa-solid fa-right-from-bracket"></i></a>
         </div>
-    </header>
+    </nav>
 
     <!-- Mobile filter bar (hidden on desktop) -->
     <div id="mobile-filter-bar" class="fixed top-12 left-0 right-0 h-10 theme-bg-header border-b theme-border items-center gap-2 px-2 z-40 flex md:hidden">
@@ -397,7 +386,7 @@
         </div>
     </aside>
 
-    <main class="flex-1 md:ml-64 mt-14 overflow-hidden relative theme-bg-body">
+    <main class="flex-1 md:ml-64 mt-12 sm:mt-14 overflow-hidden relative theme-bg-body">
         <div class="absolute inset-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6" id="main-content">
             
             <div id="view-atc" class="h-full flex flex-col">
@@ -710,9 +699,9 @@
                     <div class="p-4 sm:p-5 border-b theme-border theme-bg-input/30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div class="flex items-center">
                             <h2 class="text-lg sm:text-xl font-bold text-white flex items-center"><i class="fa-solid fa-plane-arrival text-emerald-500 mr-3"></i> Arrivals Board</h2>
-                            <div class="flex items-center theme-bg-body p-1 rounded-lg border theme-border ml-4 shadow-inner">
-                                <button id="btn-arr-board" onclick="setTerminalMode('arr', 'board')" class="px-3 py-1.5 text-xs font-bold rounded-md bg-blue-600 text-white shadow transition">Terminal Board</button>
-                                <button id="btn-arr-log" onclick="setTerminalMode('arr', 'log')" class="px-3 py-1.5 text-xs font-bold rounded-md theme-text-muted hover-theme-text transition">Radar Log</button>
+                            <div class="btn-group">
+                                <button id="btn-arr-board" onclick="setTerminalMode('arr', 'board')" class="btn-group-item active">Terminal Board</button>
+                                <button id="btn-arr-log" onclick="setTerminalMode('arr', 'log')" class="btn-group-item">Radar Log</button>
                             </div>
                         </div>
                         
@@ -758,9 +747,9 @@
                     <div class="p-4 sm:p-5 border-b theme-border theme-bg-input/30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div class="flex items-center">
                             <h2 class="text-lg sm:text-xl font-bold text-white flex items-center"><i class="fa-solid fa-plane-departure text-amber-500 mr-3"></i> Departures Board</h2>
-                            <div class="flex items-center theme-bg-body p-1 rounded-lg border theme-border ml-4 shadow-inner">
-                                <button id="btn-dep-board" onclick="setTerminalMode('dep', 'board')" class="px-3 py-1.5 text-xs font-bold rounded-md bg-blue-600 text-white shadow transition">Terminal Board</button>
-                                <button id="btn-dep-log" onclick="setTerminalMode('dep', 'log')" class="px-3 py-1.5 text-xs font-bold rounded-md theme-text-muted hover-theme-text transition">Radar Log</button>
+                            <div class="btn-group">
+                                <button id="btn-dep-board" onclick="setTerminalMode('dep', 'board')" class="btn-group-item active">Terminal Board</button>
+                                <button id="btn-dep-log" onclick="setTerminalMode('dep', 'log')" class="btn-group-item">Radar Log</button>
                             </div>
                         </div>
                         

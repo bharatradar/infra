@@ -5,62 +5,91 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Feeder Coverage Map | Bharat Radar</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cstyle%3E@keyframes p%7B0%25%7Btransform:scale(1);opacity:.75%7D75%25%7Btransform:scale(2.5);opacity:0%7D100%25%7Btransform:scale(1);opacity:.75%7D%7D.r%7Banimation:p 1s cubic-bezier(0,0,.2,1)infinite;transform-origin:16px 16px%7D%3C/style%3E%3Ccircle class=%27r%27 cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%2360a5fa%27 opacity=%27.75%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%233b82f6%27/%3E%3C/svg%3E">
+    <script>!function(){var e=document.cookie.match(/(?:^| )theme=([^;]+)/);e=e?e[1]:(window.matchMedia("(prefers-color-scheme:light)").matches?"light":"dark");document.documentElement.setAttribute("data-theme",e)}()</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/common.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         #map { height: calc(100vh - 140px); min-height: 500px; }
         .feeder-popup { font-family: system-ui, sans-serif; }
-        .tier-platinum { color: #9ca3af; }
-        .tier-gold { color: #fbbf24; }
-        .tier-silver { color: #d1d5db; }
-        .tier-bronze { color: #fdba74; }
     </style>
 </head>
-<body class="bg-gray-900 text-white">
-    <!-- Header -->
-    <div class="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-6">
-        <div class="flex items-center gap-4">
-            <a href="/profile" class="text-gray-400 hover:text-white"><i class="fas fa-arrow-left"></i></a>
-            <div class="flex items-center gap-3">
-                <div class="relative flex h-3 w-3">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-full w-full bg-blue-500"></span>
-                </div>
-                <a href="https://bharatradar.com" class="text-xl font-black tracking-widest uppercase bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent hover:opacity-80 transition">
-                    BharatRadar <span class="text-gray-400 text-sm font-normal">| Global Coverage</span>
-                </a>
+<body style="background:var(--bg-body);color:var(--text-primary)">
+    <!-- Header (consistent with bharatradar.com) -->
+    <nav class="fixed w-full z-50 h-12 sm:h-14 bg-gray-900/80 backdrop-blur-md border-b border-gray-800 flex items-center justify-between px-2 sm:px-6">
+        <div class="flex items-center gap-2 sm:gap-3">
+            <button id="hamburger-btn" class="text-gray-400 hover:text-white transition md:hidden" aria-label="Menu">
+                <i class="fa-solid fa-bars text-lg"></i>
+            </button>
+            <div class="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-blue-500"></span>
             </div>
+            <a href="https://bharatradar.com" class="text-sm sm:text-lg font-black tracking-widest uppercase text-white hover:text-blue-400 transition">
+                BharatRadar
+            </a>
+            <span class="hidden sm:inline text-gray-500 text-xs sm:text-sm ml-1 sm:ml-2">| Global Coverage</span>
         </div>
-        <div class="flex items-center gap-4">
-            <span class="text-sm text-gray-400" id="feeder-count">Loading...</span>
-            <select id="tier-filter" class="bg-gray-700 border border-gray-600 rounded px-3 py-1 text-sm text-white">
+        <div class="flex items-center gap-1 sm:gap-2">
+            <span class="hidden sm:inline text-xs text-gray-500" id="feeder-count">Loading...</span>
+            <select id="tier-filter" class="bg-gray-800 text-gray-300 border border-gray-700 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-blue-500">
                 <option value="">All Tiers</option>
                 <option value="PLATINUM">Platinum</option>
                 <option value="GOLD">Gold</option>
                 <option value="SILVER">Silver</option>
                 <option value="BRONZE">Bronze</option>
             </select>
+            <a href="/feeders" class="theme-btn-toggle" title="Feeders"><i class="fa-solid fa-satellite-dish"></i></a>
+            <a href="/api-access" class="theme-btn-toggle" title="API Access"><i class="fa-solid fa-key"></i></a>
+            <a href="/profile" class="theme-btn-toggle" title="Profile"><i class="fa-solid fa-user"></i></a>
+            <button id="theme-toggle" type="button" class="theme-btn-toggle" aria-label="Toggle theme">
+                <svg class="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                <svg class="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
+            </button>
+            <a href="/logout" class="theme-btn-toggle" title="Logout"><i class="fa-solid fa-sign-out-alt"></i></a>
         </div>
-    </div>
+    </nav>
+
+    <script>
+        (function() {
+            var btn = document.getElementById('theme-toggle');
+            if (btn) {
+                function updateBtn() {
+                    var theme = document.documentElement.getAttribute('data-theme');
+                    btn.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+                }
+                updateBtn();
+                btn.addEventListener('click', function() {
+                    var current = document.documentElement.getAttribute('data-theme');
+                    var next = current === 'dark' ? 'light' : 'dark';
+                    document.documentElement.setAttribute('data-theme', next);
+                    document.cookie = 'theme=' + next + '; Domain=.bharatradar.com; Path=/; Max-Age=31536000; SameSite=Lax';
+                    updateBtn();
+                });
+            }
+        })();
+    </script>
 
     <!-- Stats Bar -->
-    <div class="bg-gray-800 border-b border-gray-700 px-4 py-2">
-        <div class="container mx-auto flex gap-6 text-sm">
-            <span class="text-gray-400">Active Feeders: <strong id="stat-active" class="text-white">-</strong></span>
-            <span class="text-gray-400">Coverage Radius: <strong id="stat-radius" class="text-white">-</strong> km avg</span>
-            <span class="text-gray-400">Total Messages: <strong id="stat-messages" class="text-white">-</strong></span>
+    <div class="pt-12 sm:pt-14" style="background:var(--bg-card);border-bottom:1px solid var(--border)">
+        <div class="px-4 py-2">
+            <div class="container mx-auto flex gap-6 text-sm">
+                <span class="theme-text-secondary">Active Feeders: <strong id="stat-active" class="font-bold" style="color:var(--text-primary)">-</strong></span>
+                <span class="theme-text-secondary">Coverage Radius: <strong id="stat-radius" class="font-bold" style="color:var(--text-primary)">-</strong> km avg</span>
+                <span class="theme-text-secondary">Total Messages: <strong id="stat-messages" class="font-bold" style="color:var(--text-primary)">-</strong></span>
+            </div>
         </div>
     </div>
 
     <!-- Map -->
-    <div id="map" class="w-full"></div>
+    <div id="map" class="w-full" style="background:var(--bg-body)"></div>
 
     <!-- Legend -->
-    <div class="absolute bottom-4 left-4 bg-gray-800 border border-gray-700 rounded-lg p-3 z-[1000] shadow-lg">
+    <div class="absolute bottom-4 left-4 rounded-lg p-3 z-[1000] shadow-lg" style="background:var(--bg-card);border:1px solid var(--border)">
         <h4 class="text-sm font-bold mb-2">Tier Colors</h4>
-        <div class="space-y-1 text-xs">
+        <div class="space-y-1 text-xs" style="color:var(--text-secondary)">
             <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-gray-400"></span> Platinum</div>
             <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-400"></span> Gold</div>
             <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-gray-300"></span> Silver</div>
@@ -81,7 +110,7 @@
         };
 
         function initMap() {
-            map = L.map('map').setView([20.5937, 78.9629], 5); // Center on India
+            map = L.map('map').setView([20.5937, 78.9629], 5);
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors',
@@ -104,7 +133,6 @@
         }
 
         function renderFeeders(feeders) {
-            // Clear existing
             markers.forEach(m => map.removeLayer(m));
             circles.forEach(c => map.removeLayer(c));
             markers = [];
@@ -114,9 +142,8 @@
                 if (!f.lat || !f.lon) return;
 
                 const color = TIER_COLORS[f.tier] || '#3b82f6';
-                const radius = (f.max_range || 100) * 1000; // meters
+                const radius = (f.max_range || 100) * 1000;
 
-                // Coverage circle
                 const circle = L.circle([f.lat, f.lon], {
                     radius: radius,
                     color: color,
@@ -126,7 +153,6 @@
                 }).addTo(map);
                 circles.push(circle);
 
-                // Marker
                 const marker = L.circleMarker([f.lat, f.lon], {
                     radius: 8,
                     fillColor: color,
@@ -135,7 +161,6 @@
                     fillOpacity: 0.9
                 }).addTo(map);
 
-                // Popup
                 const popupContent = `
                     <div class="feeder-popup">
                         <strong>${f.display_name}</strong><br>
@@ -171,7 +196,6 @@
             return num.toString();
         }
 
-        // Tier filter
         document.getElementById('tier-filter').addEventListener('change', (e) => {
             const tier = e.target.value;
             const filtered = tier ? allFeeders.filter(f => f.tier === tier) : allFeeders;

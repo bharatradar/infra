@@ -5,93 +5,124 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Feeder Health | Bharat Radar</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cstyle%3E@keyframes p%7B0%25%7Btransform:scale(1);opacity:.75%7D75%25%7Btransform:scale(2.5);opacity:0%7D100%25%7Btransform:scale(1);opacity:.75%7D%7D.r%7Banimation:p 1s cubic-bezier(0,0,.2,1)infinite;transform-origin:16px 16px%7D%3C/style%3E%3Ccircle class=%27r%27 cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%2360a5fa%27 opacity=%27.75%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%276%27 fill=%27%233b82f6%27/%3E%3C/svg%3E">
+    <script>!function(){var e=document.cookie.match(/(?:^| )theme=([^;]+)/);e=e?e[1]:(window.matchMedia("(prefers-color-scheme:light)").matches?"light":"dark");document.documentElement.setAttribute("data-theme",e)}()</script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/common.css">
     <style>
-        .status-active { color: #23c074; }
-        .status-activated { color: #fbbf24; }
-        .status-pending { color: #f97316; }
-        .status-inactive { color: #ef4444; }
-        .dot-active { background: #23c074; box-shadow: 0 0 8px #23c074; }
-        .dot-activated { background: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
-        .dot-pending { background: #f97316; }
-        .dot-inactive { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
         .timeline-bar { height: 24px; border-radius: 4px; }
     </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen">
-    <div class="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-6">
-        <div class="flex items-center gap-4">
-            <a href="/profile" class="text-gray-400 hover:text-white"><i class="fas fa-arrow-left"></i></a>
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded bg-gradient-to-br from-blue-500 to-green-500 flex items-center justify-center"><i class="fas fa-radar text-sm"></i></div>
-                <span class="font-bold text-lg">Bharat Radar</span>
+<body class="min-h-screen" style="background:var(--bg-body);color:var(--text-primary)">
+    <!-- Header (consistent with bharatradar.com) -->
+    <nav class="fixed w-full z-50 h-12 sm:h-14 bg-gray-900/80 backdrop-blur-md border-b border-gray-800 flex items-center justify-between px-2 sm:px-6">
+        <div class="flex items-center gap-2 sm:gap-3">
+            <button id="hamburger-btn" class="text-gray-400 hover:text-white transition md:hidden" aria-label="Menu">
+                <i class="fa-solid fa-bars text-lg"></i>
+            </button>
+            <div class="relative flex h-2.5 w-2.5 sm:h-3 sm:w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-blue-500"></span>
             </div>
+            <a href="https://bharatradar.com" class="text-sm sm:text-lg font-black tracking-widest uppercase text-white hover:text-blue-400 transition">
+                BharatRadar
+            </a>
+            <span id="page-title" class="hidden sm:inline text-gray-500 text-xs sm:text-sm ml-1 sm:ml-2">| Feeder Health</span>
         </div>
-        <div id="page-title" class="text-lg font-bold">Feeder Health</div>
-        <a href="/logout" class="text-gray-400 hover:text-white" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
-    </div>
-
-    <div class="container mx-auto px-4 py-8 max-w-5xl">
-        <!-- Summary Cards (always shown) -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div class="bg-gray-800 rounded-lg p-6 text-center">
-                <div id="count-active" class="text-3xl font-bold status-active">-</div>
-                <div class="text-sm text-gray-400">Active</div>
-            </div>
-            <div class="bg-gray-800 rounded-lg p-6 text-center">
-                <div id="count-activated" class="text-3xl font-bold status-activated">-</div>
-                <div class="text-sm text-gray-400">Activated</div>
-            </div>
-            <div class="bg-gray-800 rounded-lg p-6 text-center">
-                <div id="count-inactive" class="text-3xl font-bold status-inactive">-</div>
-                <div class="text-sm text-gray-400">Inactive</div>
-            </div>
-            <div class="bg-gray-800 rounded-lg p-6 text-center">
-                <div id="count-pending" class="text-3xl font-bold status-pending">-</div>
-                <div class="text-sm text-gray-400">Pending</div>
-            </div>
+        <div class="flex items-center gap-1 sm:gap-2">
+            <a href="/feeders" class="theme-btn-toggle" title="Feeders"><i class="fa-solid fa-satellite-dish"></i></a>
+            <a href="/api-access" class="theme-btn-toggle" title="API Access"><i class="fa-solid fa-key"></i></a>
+            <a href="/profile" class="theme-btn-toggle" title="Profile"><i class="fa-solid fa-user"></i></a>
+            <button id="theme-toggle" type="button" class="theme-btn-toggle" aria-label="Toggle theme">
+                <svg class="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                <svg class="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>
+            </button>
+            <a href="/logout" class="theme-btn-toggle" title="Logout"><i class="fa-solid fa-sign-out-alt"></i></a>
         </div>
+    </nav>
 
-        <!-- Single Feeder View -->
-        <div id="single-view" class="hidden">
-            <div class="bg-gray-800 rounded-lg p-6 mb-8">
-                <div class="flex justify-between items-center mb-6">
-                    <div>
-                        <h2 id="single-name" class="text-2xl font-bold">Station Name</h2>
-                        <p id="single-status" class="text-lg font-bold status-pending">Status</p>
-                    </div>
-                    <a id="single-dashboard-link" href="#" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded transition">
-                        <i class="fas fa-chart-line mr-2"></i>Dashboard
-                    </a>
+    <script>
+        (function() {
+            var btn = document.getElementById('theme-toggle');
+            if (btn) {
+                function updateBtn() {
+                    var theme = document.documentElement.getAttribute('data-theme');
+                    btn.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+                }
+                updateBtn();
+                btn.addEventListener('click', function() {
+                    var current = document.documentElement.getAttribute('data-theme');
+                    var next = current === 'dark' ? 'light' : 'dark';
+                    document.documentElement.setAttribute('data-theme', next);
+                    document.cookie = 'theme=' + next + '; Domain=.bharatradar.com; Path=/; Max-Age=31536000; SameSite=Lax';
+                    updateBtn();
+                });
+            }
+        })();
+    </script>
+
+    <div class="pt-12 sm:pt-14">
+        <div class="container mx-auto px-4 py-8 max-w-5xl">
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="card p-6 text-center">
+                    <div id="count-active" class="text-3xl font-bold status-active">-</div>
+                    <div class="text-sm theme-text-secondary">Active</div>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div class="bg-gray-700 rounded p-4 text-center">
-                        <div id="single-last-seen" class="text-2xl font-bold text-blue-400">-</div>
-                        <div class="text-xs text-gray-400">Last Seen</div>
-                    </div>
-                    <div class="bg-gray-700 rounded p-4 text-center">
-                        <div id="single-active-hours" class="text-2xl font-bold text-green-400">-</div>
-                        <div class="text-xs text-gray-400">Total Active Hours</div>
-                    </div>
-                    <div class="bg-gray-700 rounded p-4 text-center">
-                        <div id="single-notify" class="text-2xl font-bold text-purple-400">-</div>
-                        <div class="text-xs text-gray-400">Notify After (hrs)</div>
-                    </div>
+                <div class="card p-6 text-center">
+                    <div id="count-activated" class="text-3xl font-bold status-activated">-</div>
+                    <div class="text-sm theme-text-secondary">Activated</div>
                 </div>
-                <div class="mb-4">
-                    <h4 class="font-bold mb-2">Last 24h Status Timeline</h4>
-                    <p class="text-sm text-gray-400">Green = ACTIVE, Yellow = ACTIVATED, Orange = PENDING, Red = INACTIVE</p>
+                <div class="card p-6 text-center">
+                    <div id="count-inactive" class="text-3xl font-bold status-inactive">-</div>
+                    <div class="text-sm theme-text-secondary">Inactive</div>
                 </div>
-                <div id="single-timeline" class="flex gap-1 h-8"></div>
+                <div class="card p-6 text-center">
+                    <div id="count-pending" class="text-3xl font-bold status-pending">-</div>
+                    <div class="text-sm theme-text-secondary">Pending</div>
+                </div>
             </div>
-        </div>
 
-        <!-- Network-wide View -->
-        <div id="network-view">
-            <div class="bg-gray-800 rounded-lg p-6">
-                <h2 class="text-2xl font-bold mb-4">All Stations</h2>
-                <div id="stations-table-container"><div class="text-gray-400 text-center py-8">Loading...</div></div>
+            <!-- Single Feeder View -->
+            <div id="single-view" class="hidden">
+                <div class="card p-6 mb-8">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h2 id="single-name" class="text-2xl font-bold">Station Name</h2>
+                            <p id="single-status" class="text-lg font-bold status-pending">Status</p>
+                        </div>
+                        <a id="single-dashboard-link" href="#" class="btn btn-primary">
+                            <i class="fas fa-chart-line mr-2"></i>Dashboard
+                        </a>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="rounded p-4 text-center" style="background:var(--bg-input);border:1px solid var(--border)">
+                            <div id="single-last-seen" class="text-2xl font-bold text-blue-400">-</div>
+                            <div class="text-xs theme-text-secondary">Last Seen</div>
+                        </div>
+                        <div class="rounded p-4 text-center" style="background:var(--bg-input);border:1px solid var(--border)">
+                            <div id="single-active-hours" class="text-2xl font-bold text-green-400">-</div>
+                            <div class="text-xs theme-text-secondary">Total Active Hours</div>
+                        </div>
+                        <div class="rounded p-4 text-center" style="background:var(--bg-input);border:1px solid var(--border)">
+                            <div id="single-notify" class="text-2xl font-bold text-purple-400">-</div>
+                            <div class="text-xs theme-text-secondary">Notify After (hrs)</div>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <h4 class="font-bold mb-2">Last 24h Status Timeline</h4>
+                        <p class="text-sm theme-text-secondary">Green = ACTIVE, Yellow = ACTIVATED, Orange = PENDING, Red = INACTIVE</p>
+                    </div>
+                    <div id="single-timeline" class="flex gap-1 h-8"></div>
+                </div>
+            </div>
+
+            <!-- Network-wide View -->
+            <div id="network-view">
+                <div class="card p-6">
+                    <h2 class="text-2xl font-bold mb-4">All Stations</h2>
+                    <div id="stations-table-container"><div class="theme-text-secondary text-center py-8">Loading...</div></div>
+                </div>
             </div>
         </div>
     </div>
@@ -104,13 +135,13 @@
             if (feederId) {
                 document.getElementById('single-view').classList.remove('hidden');
                 document.getElementById('network-view').classList.add('hidden');
-                document.getElementById('page-title').textContent = 'Station Health';
+                document.getElementById('page-title').textContent = '| Station Health';
                 document.getElementById('single-dashboard-link').href = `/feeders/account/${feederId}`;
                 await Promise.all([loadNetworkSummary(), loadSingleFeeder()]);
             } else {
                 document.getElementById('single-view').classList.add('hidden');
                 document.getElementById('network-view').classList.remove('hidden');
-                document.getElementById('page-title').textContent = 'Network Health';
+                document.getElementById('page-title').textContent = '| Network Health';
                 await loadNetworkSummary();
                 await loadNetworkTable();
             }
@@ -153,7 +184,6 @@
                 document.getElementById('single-active-hours').textContent = data.total_active_hours || 0;
                 document.getElementById('single-notify').textContent = data.notify_after_hours || 0;
 
-                // Mock timeline (since we don't have historical data yet)
                 renderTimeline(data.status);
             } catch (e) {
                 console.error('Single feeder error:', e);
@@ -163,7 +193,6 @@
         function renderTimeline(currentStatus) {
             const container = document.getElementById('single-timeline');
             const statuses = ['ACTIVE', 'ACTIVE', 'ACTIVE', 'INACTIVE', 'ACTIVE', 'ACTIVE', 'ACTIVATED', 'ACTIVE', 'ACTIVE', 'ACTIVE', 'ACTIVE', 'INACTIVE'];
-            // In real implementation, this would come from a history endpoint
             container.innerHTML = statuses.map(s => {
                 const color = s === 'ACTIVE' ? '#23c074' : s === 'ACTIVATED' ? '#fbbf24' : s === 'INACTIVE' ? '#ef4444' : '#f97316';
                 return `<div class="flex-1 rounded" style="background:${color};opacity:0.8" title="${s}"></div>`;
@@ -177,11 +206,11 @@
                 const stations = data.stations || [];
                 const container = document.getElementById('stations-table-container');
                 if (stations.length === 0) {
-                    container.innerHTML = '<div class="text-gray-400 text-center py-8">No stations registered.</div>';
+                    container.innerHTML = '<div class="theme-text-secondary text-center py-8">No stations registered.</div>';
                     return;
                 }
                 container.innerHTML = `<table class="w-full">
-                    <thead><tr class="text-left text-xs uppercase text-gray-500 border-b border-gray-700">
+                    <thead><tr class="text-left text-xs uppercase" style="color:var(--text-muted);border-bottom:1px solid var(--border)">
                         <th class="py-3 px-4">Status</th><th class="py-3 px-4">Name</th><th class="py-3 px-4">Last Seen</th><th class="py-3 px-4">Active Hours</th><th class="py-3 px-4">Actions</th>
                     </tr></thead>
                     <tbody>${stations.map(s => renderNetworkRow(s)).join('')}</tbody>
@@ -192,16 +221,16 @@
         }
 
         function renderNetworkRow(s) {
-            const dotClass = `dot-${s.status.toLowerCase()}`;
+            const dotClass = `dot-${(s.status || '').toLowerCase()}`;
             let lastSeenText = 'Never';
             if (s.last_seen_at) {
                 const diff = (Date.now() - new Date(s.last_seen_at).getTime()) / 60000;
                 lastSeenText = diff < 1 ? 'Just now' : diff < 60 ? `${Math.round(diff)}m ago` : `${Math.round(diff/60)}h ago`;
             }
-            return `<tr class="border-b border-gray-700 hover:bg-gray-700/50">
-                <td class="py-3 px-4"><span class="inline-block w-2 h-2 rounded-full ${dotClass} mr-2"></span><span class="status-${s.status.toLowerCase()}">${s.status}</span></td>
+            return `<tr style="border-bottom:1px solid var(--border);transition:background 0.2s">
+                <td class="py-3 px-4"><span class="inline-block w-2 h-2 rounded-full ${dotClass} mr-2"></span><span class="status-${(s.status || '').toLowerCase()}">${s.status}</span></td>
                 <td class="py-3 px-4 font-bold">${s.display_name || s.name}</td>
-                <td class="py-3 px-4 text-gray-400">${lastSeenText}</td>
+                <td class="py-3 px-4 theme-text-secondary">${lastSeenText}</td>
                 <td class="py-3 px-4 text-green-400 font-bold">${s.total_active_hours || 0}</td>
                 <td class="py-3 px-4"><div class="flex gap-2"><a href="/feeders/health?id=${s.id}" class="text-yellow-400 hover:text-yellow-300 text-sm" title="Health"><i class="fas fa-heartbeat"></i></a><a href="/feeders/account/${s.id}" class="text-green-400 hover:text-green-300 text-sm" title="Dashboard"><i class="fas fa-chart-line"></i></a></div></td>
             </tr>`;
