@@ -122,4 +122,14 @@ INSERT INTO airports (icao, iata, name, city, state, region, lat, lon, elev, typ
 ('VETE', 'TEZ', E'Tezpur Airport', E'Tezpur', E'Assam', E'North-East', 26.632, 92.785, 240, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5),
 ('VEZO', 'ZER', E'Ziro Airport', E'Ziro', E'Arunachal Pradesh', E'North-East', 27.587, 93.827, 5300, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5),
 ('VAJB', 'JLR', E'Jabalpur Airport / Dumna Airport', E'Jabalpur', E'Madhya Pradesh', E'Central', 23.178, 80.052, 1624, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5),
-('VELR', 'IXI', E'Lilabari Airport', E'Keshod', E'Gujarat', E'West', 27.298, 94.097, 333, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5);
+('VELR', 'IXI', E'Lilabari Airport', E'Keshod', E'Gujarat', E'West', 27.298, 94.097, 333, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5),
+('VIHR', 'HSS', E'Hisar Airport', E'Hisar', E'Haryana', E'North', 29.180, 75.753, 700, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5),
+('VERH', 'RQY', E'Raigarh Airport', E'Raigarh', E'Chhattisgarh', E'Central', 21.854, 83.404, 1000, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5),
+('VEPU', 'PXN', E'Purnea Airport', E'Purnia', E'Bihar', E'East', 25.760, 87.406, 125, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5),
+('VIAX', 'AIP', E'Adampur Airport', E'Jalandhar', E'Punjab', E'North', 31.433, 75.759, 775, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5),
+('VASL', 'SSE', E'Solapur Airport', E'Solapur', E'Maharashtra', E'West', 17.626, 75.934, 1583, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5),
+('VAGD', 'GDB', E'Birsi Airport', E'Gondia', E'Maharashtra', E'West', 21.480, 80.309, 1020, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5),
+('VAAM', 'AVR', E'Amravati Airport', E'Amravati', E'Maharashtra', E'West', 20.852, 77.720, 1000, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5),
+('VOBR', 'IXX', E'Bidar Airport', E'Bidar', E'Karnataka', E'South', 17.908, 77.487, 2178, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5),
+('VEUK', 'UKE', E'Utkela Airport', E'Kalahandi', E'Odisha', E'East', 20.000, 83.181, 645, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5),
+('VADT', 'DPP', E'Datia Airport', E'Datia', E'Madhya Pradesh', E'Central', 25.660, 78.471, 900, E'Domestic', E'Asia/Kolkata', ARRAY[]::TEXT[], false, 0.5);
