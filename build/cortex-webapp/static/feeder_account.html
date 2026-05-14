@@ -245,7 +245,7 @@
                 }
                 document.getElementById('health-last-seen').textContent = lastSeenText;
                 document.getElementById('health-active-hours').textContent = data.total_active_hours || 0;
-                document.getElementById('health-uptime').textContent = '-';
+                document.getElementById('health-uptime').textContent = data.uptime_pct !== null && data.uptime_pct !== undefined ? data.uptime_pct + '%' : '-';
                 document.getElementById('notify-hours').value = data.notify_after_hours || 0;
             } catch (e) {
                 console.error('Health load error:', e);

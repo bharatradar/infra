@@ -7,4 +7,5 @@ COPY --from=uuid /usr/local/bin/viewadsb-uuid /usr/local/bin/viewadsb
 COPY --from=uuid /usr/local/lib/libjemalloc.so.2 /usr/local/lib/libjemalloc.so.2
 COPY --from=uuid /usr/local/share/tar1090/aircraft.csv.gz /usr/local/share/tar1090/aircraft.csv.gz
 COPY html/ /usr/local/share/tar1090/html-webroot/
+COPY nginx-tar1090-custom.conf /etc/nginx/sites-enabled/tar1090
 ENV LD_PRELOAD=/usr/local/lib/libjemalloc.so.2

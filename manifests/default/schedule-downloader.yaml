@@ -1,5 +1,7 @@
 # BharatRadar Schedule Downloader CronJob
-# Runs daily to download flight schedules from FlightRadar24
+# Runs daily at 22:00 UTC (03:30 IST) to download next day's schedules.
+# For manual runs, use: kubectl create job --from=cronjob/schedule-downloader sched-xxx
+#   then: kubectl set env job/sched-xxx SCHEDULE_DAYS=today
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -30,7 +32,6 @@ spec:
           - name: downloader
             image: ghcr.io/bharatradar/schedule-downloader:latest
             imagePullPolicy: Always
-            command: ["python", "-u", "route_schedule_downloader.py"]
             env:
             - name: DB_HOST
               value: "SHARED_SERVICES_HOST"
@@ -51,63 +52,11 @@ spec:
               requests:
                 memory: "256Mi"
                 cpu: "250m"
-              limits:
+                limits:
                 memory: "512Mi"
                 cpu: "500m"
 ---
-# BharatRadar Schedule Downloader - Manual Job
-# Use this to trigger manual runs that bypass scheduler_enabled check
-# Usage: kubectl apply -f schedule-downloader-manual-job.yaml
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: schedule-downloader-manual
-  namespace: bharatradar
-  labels:
-    app: schedule-downloader
-    run-type: manual
-spec:
-  ttlSecondsAfterFinished: 3600
-  template:
-    metadata:
-      labels:
-        app: schedule-downloader
-        run-type: manual
-    spec:
-      restartPolicy: OnFailure
-      serviceAccountName: schedule-downloader
-      imagePullSecrets:
-      - name: ghcr-secret
-      containers:
-      - name: downloader
-        image: ghcr.io/bharatradar/schedule-downloader:latest
-        imagePullPolicy: IfNotPresent
-        command: ["python", "-u", "route_schedule_downloader.py"]
-        args: ["--manual"]
-        env:
-        - name: DB_HOST
-          value: "SHARED_SERVICES_HOST"
-        - name: DB_PORT
-          value: "5432"
-        - name: DB_NAME
-          value: "flight_db"
-        - name: DB_USER
-          value: "flight_db_user"
-        - name: DB_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: flight-db-credentials
-              key: password
-        - name: AIRLINES_FILE
-          value: "/opt/bharatradar/flight_radar/data/airlines.csv"
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
----
+
 apiVersion: v1
 kind: ServiceAccount
 metadata:

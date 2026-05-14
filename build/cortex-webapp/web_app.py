@@ -402,13 +402,14 @@ async def _feeder_stats_parser_task():
                     feeder_aircraft = []
 
                     try:
-                        url = f"http://localhost/tar1090/re-api/aircraft.json?filter_uuid={uuid}"
+                        url = f"http://planes-readsb:80/data/aircraft.json?all"
                         req = urllib.request.Request(url)
                         with urllib.request.urlopen(req, timeout=5) as response:
                             data = json.loads(response.read().decode('utf-8'))
-                            feeder_aircraft = data.get('aircraft', [])
+                            all_aircraft = data.get('aircraft', [])
+                            feeder_aircraft = [ac for ac in all_aircraft if uuid.startswith(ac.get('rId', ''))]
                     except Exception as e:
-                        logger.warning(f"Stats parser: tar1090 API error for feeder {fid}: {e}")
+                        logger.warning(f"Stats parser: readsb API error for feeder {fid}: {e}")
                         continue
 
                     if not feeder_aircraft:
@@ -1383,11 +1384,11 @@ async def get_flight_history(
             for r in arr:
                 flights.append({"type": "arrival", "hex_id": r["hex_id"], "callsign": r["callsign"], 
                     "airport": r["airport"], "origin": r.get("origin"), "destination": r.get("destination"),
-                    "runway": r.get("runway"), "timestamp": r["timestamp"].isoformat()})
+                    "runway": r.get("runway"), "timestamp": r["timestamp"].strftime('%Y-%m-%dT%H:%M:%SZ')})
             for r in dep:
                 flights.append({"type": "departure", "hex_id": r["hex_id"], "callsign": r["callsign"],
                     "airport": r["airport"], "origin": r.get("origin"), "destination": r.get("destination"),
-                    "runway": r.get("runway"), "timestamp": r["timestamp"].isoformat()})
+                    "runway": r.get("runway"), "timestamp": r["timestamp"].strftime('%Y-%m-%dT%H:%M:%SZ')})
         
         flights.sort(key=lambda x: x["timestamp"], reverse=True)
         return {"flights": flights[:limit], "count": len(flights)}
@@ -2199,17 +2200,16 @@ async def get_feeder_stats(feeder_id: int, request: Request):
 
             if station_uuid:
                 try:
-                    # Use tar1090's filter_uuid parameter to get only this feeder's aircraft
                     import urllib.request
-                    url = f"http://localhost/tar1090/re-api/aircraft.json?filter_uuid={station_uuid}"
+                    url = f"http://planes-readsb:80/data/aircraft.json?all"
                     req = urllib.request.Request(url)
                     with urllib.request.urlopen(req, timeout=5) as response:
                         data = json.loads(response.read().decode('utf-8'))
-                        feeder_aircraft = data.get('aircraft', [])
+                        all_aircraft = data.get('aircraft', [])
+                        feeder_aircraft = [ac for ac in all_aircraft if station_uuid.startswith(ac.get('rId', ''))]
                         data_now = data.get('now')
                 except Exception as e:
-                    logger.warning(f"tar1090 API error for feeder {feeder_id}: {e}")
-                    # Fallback to raw aircraft.json
+                    logger.warning(f"readsb API error for feeder {feeder_id}: {e}")
                     try:
                         with open('/run/readsb/aircraft.json', 'r') as f:
                             data = json.load(f)
@@ -2320,7 +2320,7 @@ async def get_feeder_health(feeder_id: int, request: Request):
     try:
         async with db_pool.acquire() as conn:
             feeder = await conn.fetchrow(
-                "SELECT id, name, user_email, status, last_seen_at, total_active_hours, notify_after_hours FROM feeders WHERE id = $1",
+                "SELECT id, name, user_email, status, last_seen_at, total_active_hours, notify_after_hours, created_at FROM feeders WHERE id = $1",
                 feeder_id
             )
             if not feeder:
@@ -2334,6 +2334,14 @@ async def get_feeder_health(feeder_id: int, request: Request):
                     "SELECT EXTRACT(EPOCH FROM (NOW() - $1)) / 60", feeder['last_seen_at']
                 )
 
+            uptime_pct = None
+            if feeder['created_at'] and feeder['total_active_hours']:
+                hours_since_created = await conn.fetchval(
+                    "SELECT EXTRACT(EPOCH FROM (NOW() - $1)) / 3600", feeder['created_at']
+                )
+                if hours_since_created and hours_since_created > 0:
+                    uptime_pct = min(round((feeder['total_active_hours'] / hours_since_created) * 100, 1), 100.0)
+
             return {
                 "feeder_id": feeder_id,
                 "name": feeder['name'],
@@ -2341,6 +2349,7 @@ async def get_feeder_health(feeder_id: int, request: Request):
                 "last_seen_at": feeder['last_seen_at'].isoformat() if feeder['last_seen_at'] else None,
                 "minutes_since_last_seen": round(minutes_since, 1) if minutes_since else None,
                 "total_active_hours": feeder['total_active_hours'],
+                "uptime_pct": uptime_pct,
                 "notify_after_hours": feeder['notify_after_hours']
             }
     except Exception as e:
@@ -2610,26 +2619,15 @@ async def proxy_tar1090(feeder_id: int, path: str, request: Request):
         # Build target URL on local tar1090
         target_path = path or ""
 
-        # Special handling for aircraft.json API - needs 'all' parameter for re-api
+        # Everything else (HTML, JS, CSS, data/aircraft.json) proxied internally
         if target_path == 'data/aircraft.json' or target_path.endswith('/data/aircraft.json'):
             target_url = f"http://planes-readsb/tar1090/re-api/aircraft.json?all&filter_uuid={station_uuid}"
-        elif target_path.startswith('re-api/'):
-            # Forward re-api calls with filter_uuid appended
-            re_api_path = target_path[7:]  # strip 're-api/'
-            target_url = f"http://planes-readsb/tar1090/re-api/{re_api_path}"
-            # Use raw query string to preserve parameter format (e.g., binCraft without =)
-            qs = request.url.query or ""
-            if qs:
-                target_url += "?" + qs + "&filter_uuid=" + station_uuid
-            else:
-                target_url += "?filter_uuid=" + station_uuid
         else:
             target_url = f"http://planes-readsb/{target_path}"
             qs = request.url.query or ""
             if qs:
                 target_url += "?" + qs
 
-        # Forward request to local tar1090
         import httpx
         forward_headers = {}
         for k, v in request.headers.items():
@@ -2657,10 +2655,37 @@ async def proxy_tar1090(feeder_id: int, path: str, request: Request):
             try:
                 html = content.decode('utf-8', errors='replace')
                 # Inject <base href> so relative URLs resolve through proxy
+                fu = station_uuid
+                re_api_intercept = f'''<script>
+(function(){{
+var rePath='re-api/';
+var fu='{fu}';
+function rewriteReApi(url){{
+var qsIndex=url.indexOf('?');
+var qs=qsIndex>=0?url.substring(qsIndex):'';
+var sep=qs?'&':'?';
+return 'https://map.bharatradar.com/re-api/'+qs+sep+'filter_uuid='+fu;
+}}
+var origFetch=window.fetch;
+window.fetch=function(url,opts){{
+if(typeof url==='string'&&url.indexOf(rePath)>=0){{
+return origFetch.call(this,rewriteReApi(url),opts);
+}}
+return origFetch.call(this,url,opts);
+}};
+var origOpen=XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open=function(method,url){{
+if(typeof url==='string'&&url.indexOf(rePath)>=0){{
+arguments[1]=rewriteReApi(url);
+}}
+return origOpen.apply(this,arguments);
+}};
+}})();
+</script>'''
                 if '<head>' in html:
-                    html = html.replace('<head>', f'<head><base href="{proxy_base}">')
+                    html = html.replace('<head>', f'<head><base href="{proxy_base}">{re_api_intercept}')
                 elif '<HEAD>' in html:
-                    html = html.replace('<HEAD>', f'<HEAD><base href="{proxy_base}">')
+                    html = html.replace('<HEAD>', f'<HEAD><base href="{proxy_base}">{re_api_intercept}')
 
                 # Rewrite any absolute UUID-based URLs to proxy URLs
                 uuid_url_patterns = [

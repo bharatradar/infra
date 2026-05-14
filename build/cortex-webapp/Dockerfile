@@ -24,6 +24,7 @@ COPY resolver.py .
 COPY auth.py .
 COPY core_ai_pipeline.py .
 COPY bot_router_mcp_client.py .
+COPY delay_predictor.py .
 
 # Copy data directory (airports, airlines, etc.)
 COPY data ./data

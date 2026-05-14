@@ -128,7 +128,8 @@ class Config:
     
 
     GET_SCHEDULES_FOR = ["TODAY", "TOMORROW"]  # Options: "TODAY", "TOMORROW", "NEXT_7_DAYS"
-    GET_SCHEDULES_FROM_AVIONIO = False
+    GET_SCHEDULES_FROM_AVIONIO = True
+    GET_SCHEDULES_FROM_FLIGHTSFROM = False
     MISSING_AIRPORTS_IN_AVIONIO = {'VEAY': 'AYJ', 'VEDO': 'DGH', 'VIJW': 'DXN', 'VIDX': 'HDO', 'VEHO': 'HGI', 'VIAH': 'HRH', 'VAHS': 'HSR', 'VOKU': 'KJB', 'VANM': 'NMI', 'VARW': 'REW', 'VOSR': 'SDW'}
     # --- File Paths ---
     AIRLINES_FILE = "/home/ragaradar/bharat-radar/data/airlines.csv"

@@ -1,0 +1,51 @@
+# BharatRadar Schedule Downloader - Manual: Today only
+# Usage: kubectl apply -f schedule-downloader-today.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: schedule-downloader-today
+  namespace: bharatradar
+  labels:
+    app: schedule-downloader
+    run-type: manual
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: schedule-downloader
+        run-type: manual
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: schedule-downloader
+      imagePullSecrets:
+      - name: ghcr-secret
+      containers:
+      - name: downloader
+        image: ghcr.io/bharatradar/schedule-downloader:latest
+        imagePullPolicy: IfNotPresent
+        command: ["python", "-u", "route_schedule_downloader.py"]
+        args: ["--today"]
+        env:
+        - name: DB_HOST
+          value: "SHARED_SERVICES_HOST"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          value: "flight_db"
+        - name: DB_USER
+          value: "flight_db_user"
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: flight-db-credentials
+              key: password
+        - name: AIRLINES_FILE
+          value: "/opt/bharatradar/flight_radar/data/airlines.csv"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

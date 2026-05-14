@@ -7,6 +7,8 @@ import redis.asyncio as redis
 from datetime import datetime
 from config import Config
 
+TS_UTC_ISO = 'YYYY-MM-DD"T"HH24:MI:SS"Z"'
+
 logger = logging.getLogger(__name__)
 
 # Global pool reference
@@ -231,40 +233,132 @@ async def fetch_live_flights(db_pool, airline, airport):
         return {"focus": focus, "flights": flights}
 
 async def fetch_congestion_heatmap(db_pool):
-    async with db_pool.acquire() as conn:
-        rows = await conn.fetch("SELECT ROUND(lat::numeric * 2) / 2 AS lat_grid, ROUND(lon::numeric * 2) / 2 AS lon_grid, COUNT(*) as density FROM flights_in_air WHERE lat IS NOT NULL GROUP BY lat_grid, lon_grid HAVING COUNT(*) > 1")
-        return [dict(r) for r in rows]
+    try:
+        r = await get_redis_client()
+        redis_key = Config.REDIS_LIVE_FLIGHTS_KEY
+        exists = await r.exists(redis_key)
+        if not exists:
+            return []
+        all_flights = await r.hgetall(redis_key)
+        if not all_flights:
+            return []
+        grid = {}
+        for hex_id, data in all_flights.items():
+            try:
+                fl = orjson.loads(data)
+            except:
+                continue
+            lat, lon = fl.get('lat'), fl.get('lon')
+            if lat is None or lon is None:
+                continue
+            if abs(lat) > 60 and abs(lon) < 60:
+                lat, lon = lon, lat
+            lat_grid = round(lat * 2) / 2
+            lon_grid = round(lon * 2) / 2
+            key = (lat_grid, lon_grid)
+            grid[key] = grid.get(key, 0) + 1
+        return [{"lat_grid": k[0], "lon_grid": k[1], "density": v} for k, v in grid.items() if v > 1]
+    except Exception as e:
+        logger.warning(f"Redis fetch_congestion_heatmap error: {e}")
+        return []
 
 async def fetch_atc_stats(db_pool, airline, airport):
-    async with db_pool.acquire() as conn:
-        query = "SELECT COUNT(*) as active, COALESCE(AVG(speed), 0) as spd, COALESCE(AVG(alt), 0) as alt FROM flights_in_air WHERE lat IS NOT NULL"
-        params = []
-        if airline and airline != 'ALL':
-            params.append(f"{airline.upper()}%")
-            query += f" AND callsign LIKE ${len(params)}"
+    try:
+        r = await get_redis_client()
+        redis_key = Config.REDIS_LIVE_FLIGHTS_KEY
+        exists = await r.exists(redis_key)
+        if not exists:
+            return {"active": 0, "spd": 0, "alt": 0}
+        all_flights = await r.hgetall(redis_key)
+        if not all_flights:
+            return {"active": 0, "spd": 0, "alt": 0}
+        
+        ap_lat, ap_lon = None, None
         if airport and airport != 'ALL':
-            lat, lon = await get_airport_coords(conn, airport)
-            if lat and lon:
-                params.extend([lat, lon])
-                query += f" AND abs(lat - ${len(params)-1}) < 1.5 AND abs(lon - ${len(params)}) < 1.5"
-        row = await conn.fetchrow(query, *params)
-        return dict(row)
+            async with db_pool.acquire() as conn:
+                ap_lat, ap_lon = await get_airport_coords(conn, airport)
+        
+        speeds, alts = [], []
+        for hex_id, data in all_flights.items():
+            try:
+                fl = orjson.loads(data)
+            except:
+                continue
+            lat, lon = fl.get('lat'), fl.get('lon')
+            if lat is None:
+                continue
+            if abs(lat) > 60 and abs(lon) < 60:
+                lat, lon = lon, lat
+            if airline and airline != 'ALL':
+                cs = fl.get('callsign', '')
+                if not cs or not cs.startswith(airline.upper()):
+                    continue
+            if airport and airport != 'ALL' and ap_lat is not None and ap_lon is not None:
+                if abs(lat - ap_lat) >= 1.5 or abs(lon - ap_lon) >= 1.5:
+                    continue
+            spd = fl.get('speed')
+            if spd is not None:
+                speeds.append(spd)
+            alt = fl.get('alt')
+            if alt is not None:
+                alts.append(alt)
+        
+        active = max(len(speeds), len(alts))
+        avg_spd = sum(speeds) / len(speeds) if speeds else 0
+        avg_alt = sum(alts) / len(alts) if alts else 0
+        return {"active": active, "spd": round(avg_spd, 1), "alt": round(avg_alt, 1)}
+    except Exception as e:
+        logger.warning(f"Redis fetch_atc_stats error: {e}")
+        return {"active": 0, "spd": 0, "alt": 0}
 
 async def fetch_altitude_bands(db_pool, airline, airport):
-    async with db_pool.acquire() as conn:
-        query = "SELECT CASE WHEN alt < 10000 THEN 'Approach (<10k)' WHEN alt < 20000 THEN 'Terminal (10k-20k)' ELSE 'Enroute (>20k)' END as band, COUNT(*) as count FROM flights_in_air WHERE lat IS NOT NULL"
-        params = []
-        if airline and airline != 'ALL':
-            params.append(f"{airline.upper()}%")
-            query += f" AND callsign LIKE ${len(params)}"
+    try:
+        r = await get_redis_client()
+        redis_key = Config.REDIS_LIVE_FLIGHTS_KEY
+        exists = await r.exists(redis_key)
+        if not exists:
+            return []
+        all_flights = await r.hgetall(redis_key)
+        if not all_flights:
+            return []
+        
+        ap_lat, ap_lon = None, None
         if airport and airport != 'ALL':
-            lat, lon = await get_airport_coords(conn, airport)
-            if lat and lon:
-                params.extend([lat, lon])
-                query += f" AND abs(lat - ${len(params)-1}) < 1.5 AND abs(lon - ${len(params)}) < 1.5"
-        query += " GROUP BY band"
-        rows = await conn.fetch(query, *params)
-        return [dict(r) for r in rows]
+            async with db_pool.acquire() as conn:
+                ap_lat, ap_lon = await get_airport_coords(conn, airport)
+        
+        bands = {'Approach (<10k)': 0, 'Terminal (10k-20k)': 0, 'Enroute (>20k)': 0}
+        for hex_id, data in all_flights.items():
+            try:
+                fl = orjson.loads(data)
+            except:
+                continue
+            alt = fl.get('alt')
+            if alt is None:
+                continue
+            if airline and airline != 'ALL':
+                cs = fl.get('callsign', '')
+                if not cs or not cs.startswith(airline.upper()):
+                    continue
+            if airport and airport != 'ALL' and ap_lat is not None and ap_lon is not None:
+                lat, lon = fl.get('lat'), fl.get('lon')
+                if lat is None or lon is None:
+                    continue
+                if abs(lat) > 60 and abs(lon) < 60:
+                    lat, lon = lon, lat
+                if abs(lat - ap_lat) >= 1.5 or abs(lon - ap_lon) >= 1.5:
+                    continue
+            if alt < 10000:
+                bands['Approach (<10k)'] += 1
+            elif alt < 20000:
+                bands['Terminal (10k-20k)'] += 1
+            else:
+                bands['Enroute (>20k)'] += 1
+        
+        return [{"band": k, "count": v} for k, v in bands.items()]
+    except Exception as e:
+        logger.warning(f"Redis fetch_altitude_bands error: {e}")
+        return []
 
 async def fetch_live_anomalies(db_pool, airport, airline):
     async with db_pool.acquire() as conn:
@@ -427,7 +521,7 @@ async def fetch_airport_schedules(db_pool, airport, direction, target_date):
         
         if not is_today:
             rows = await conn.fetch(f"""
-                SELECT flight_number, callsign, hex_id, route_airport, anomaly_flag, TO_CHAR(scheduled_time, 'YYYY-MM-DD HH24:MI') as sched_time, TO_CHAR(actual_time, 'YYYY-MM-DD HH24:MI') as act_time
+                SELECT flight_number, callsign, hex_id, route_airport, anomaly_flag, TO_CHAR(scheduled_time, '{TS_UTC_ISO}') as sched_time, TO_CHAR(actual_time, '{TS_UTC_ISO}') as act_time
                 FROM flight_schedules WHERE airport_code = $1 AND direction = $2 
                   AND ((scheduled_time >= TO_TIMESTAMP($3, 'YYYY-MM-DD') AND scheduled_time < TO_TIMESTAMP($3, 'YYYY-MM-DD') + INTERVAL '1 day')
                       OR (scheduled_time IS NULL AND actual_time >= TO_TIMESTAMP($3, 'YYYY-MM-DD') AND actual_time < TO_TIMESTAMP($3, 'YYYY-MM-DD') + INTERVAL '1 day'))
@@ -435,7 +529,7 @@ async def fetch_airport_schedules(db_pool, airport, direction, target_date):
             """, icao, direction.upper(), target_date)
         else:
             rows = await conn.fetch(f"""
-                SELECT flight_number, callsign, hex_id, route_airport, anomaly_flag, TO_CHAR(scheduled_time, 'YYYY-MM-DD HH24:MI') as sched_time, TO_CHAR(actual_time, 'YYYY-MM-DD HH24:MI') as act_time
+                SELECT flight_number, callsign, hex_id, route_airport, anomaly_flag, TO_CHAR(scheduled_time, '{TS_UTC_ISO}') as sched_time, TO_CHAR(actual_time, '{TS_UTC_ISO}') as act_time
                 FROM flight_schedules WHERE airport_code = $1 AND direction = $2 
                   AND (scheduled_time >= NOW() - INTERVAL '4 hours' AND scheduled_time <= NOW() + INTERVAL '14 hours'
                       OR actual_time >= NOW() - INTERVAL '4 hours' OR (scheduled_time IS NULL AND actual_time >= NOW() - INTERVAL '4 hours'))
@@ -465,9 +559,9 @@ async def fetch_airport_logs(db_pool, airport, direction, target_date):
         route_col = "origin" if direction.upper() == 'ARRIVALS' else "destination"
 
         if not is_today:
-            rows = await conn.fetch(f"SELECT callsign, hex_id, {route_col} as route_airport, anomaly_flag, runway, TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI') as act_time FROM {table} WHERE airport = $1 AND timestamp >= TO_TIMESTAMP($2, 'YYYY-MM-DD') AND timestamp < TO_TIMESTAMP($2, 'YYYY-MM-DD') + INTERVAL '1 day' ORDER BY timestamp DESC LIMIT 1000", icao, target_date)
+            rows = await conn.fetch(f"SELECT callsign, hex_id, {route_col} as route_airport, anomaly_flag, runway, TO_CHAR(timestamp, '{TS_UTC_ISO}') as act_time FROM {table} WHERE airport = $1 AND timestamp >= TO_TIMESTAMP($2, 'YYYY-MM-DD') AND timestamp < TO_TIMESTAMP($2, 'YYYY-MM-DD') + INTERVAL '1 day' ORDER BY timestamp DESC LIMIT 1000", icao, target_date)
         else:
-            rows = await conn.fetch(f"SELECT callsign, hex_id, {route_col} as route_airport, anomaly_flag, runway, TO_CHAR(timestamp, 'YYYY-MM-DD HH24:MI') as act_time FROM {table} WHERE airport = $1 AND timestamp >= NOW() - INTERVAL '24 hours' ORDER BY timestamp DESC LIMIT 500", icao)
+            rows = await conn.fetch(f"SELECT callsign, hex_id, {route_col} as route_airport, anomaly_flag, runway, TO_CHAR(timestamp, '{TS_UTC_ISO}') as act_time FROM {table} WHERE airport = $1 AND timestamp >= NOW() - INTERVAL '24 hours' ORDER BY timestamp DESC LIMIT 500", icao)
             
         results = []
         for r in rows:
@@ -548,7 +642,7 @@ async def fetch_drilldown_otp(db_pool, target_airline, airport):
             params.append(icao)
             where_clauses.append(f"airport_code = ${len(params)}")
         where_sql = " AND ".join(where_clauses)
-        rows = await conn.fetch(f"SELECT hex_id, callsign, route_airport, TO_CHAR(scheduled_time, 'YYYY-MM-DD HH24:MI') as sched_time, TO_CHAR(actual_time, 'YYYY-MM-DD HH24:MI') as act_time, ROUND(EXTRACT(EPOCH FROM (actual_time - scheduled_time))/60) as delay_mins FROM flight_schedules WHERE {where_sql} ORDER BY delay_mins DESC LIMIT 100", *params)
+        rows = await conn.fetch(f"SELECT hex_id, callsign, route_airport, TO_CHAR(scheduled_time, '{TS_UTC_ISO}') as sched_time, TO_CHAR(actual_time, '{TS_UTC_ISO}') as act_time, ROUND(EXTRACT(EPOCH FROM (actual_time - scheduled_time))/60) as delay_mins FROM flight_schedules WHERE {where_sql} ORDER BY delay_mins DESC LIMIT 100", *params)
         results = []
         for r in rows:
             d = dict(r)

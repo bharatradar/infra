@@ -64,9 +64,116 @@ async def get_airport_iata_to_icao_map(session: aiohttp.ClientSession):
         logger.error(f"Failed to load airports.csv: {e}")
     return airport_map
 
+async def download_from_flightsfrom(db: AsyncDatabaseManager, session: aiohttp.ClientSession, airport_iata_to_icao: dict, days_to_run: list = None):
+    logger.info("📅 Fetching Schedules from FlightsFrom (PRIMARY)...")
+
+    if days_to_run is None:
+        days_to_run = getattr(config.Config, 'GET_SCHEDULES_FOR', ['TODAY', 'TOMORROW'])
+
+    now_ist = datetime.now(IST)
+    offsets = []
+    if 'TODAY' in days_to_run: offsets.append(0)
+    if 'TOMORROW' in days_to_run: offsets.append(1)
+
+    for day_offset in offsets:
+        target_date = now_ist + timedelta(days=day_offset)
+        date_str = target_date.strftime('%Y-%m-%d')
+        day_key = f'day{target_date.isoweekday()}'
+
+        midday_epoch = int(target_date.replace(hour=12, minute=0, second=0, microsecond=0).timestamp())
+
+        for icao_key, data in config.Config.TARGET_AIRPORTS.items():
+            iata_code = data.get('iata', '').upper()
+            if not iata_code:
+                continue
+
+            url = f'https://www.flightsfrom.com/api/airport/{iata_code}'
+            airport_headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+                'Referer': f'https://www.flightsfrom.com/{iata_code}',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Origin': 'https://www.flightsfrom.com',
+                'Connection': 'keep-alive',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-origin',
+            }
+
+            for entity_type in ('departures', 'arrivals'):
+                params = {
+                    'from': iata_code,
+                    'entityType': entity_type,
+                    'take': '1000',
+                    'sorting': 'departure-time',
+                    'sortingDirection': 'asc',
+                    'selectedDate': date_str,
+                    'dateMethod': 'day',
+                    'dateFrom': date_str,
+                    'dateTo': date_str,
+                }
+
+                try:
+                    async with session.get(url, params=params, headers=airport_headers, timeout=60) as resp:
+                        if resp.status != 200:
+                            logger.warning(f'⚠️ FlightsFrom HTTP {resp.status} for {iata_code} {entity_type}')
+                            continue
+
+                        payload = await resp.json()
+                        routes = payload.get('response', {}).get('routes', {})
+                        direction = entity_type.upper()
+                        route_count = 0
+
+                        route_items = routes.values() if isinstance(routes, dict) else routes
+                        for route in route_items:
+                            if route.get(day_key) != 'yes':
+                                continue
+
+                            route_iata = route.get('iata_to' if entity_type == 'departures' else 'iata_from', '')
+                            if not route_iata:
+                                continue
+
+                            route_icao = airport_iata_to_icao.get(route_iata.upper(), route_iata)
+
+                            for ar in route.get('airlineroutes', []):
+                                carrier = ar.get('carrier', '').upper()
+                                icao_code = ar.get('airline', {}).get('ICAO', '').upper()
+                                if not carrier and not icao_code:
+                                    continue
+
+                                safe_route = route_icao.upper() if route_icao else ''
+                                async with db.pool.acquire() as conn:
+                                    try:
+                                        await conn.execute("""
+                                            INSERT INTO flight_schedules
+                                            (airport_code, direction, flight_number, callsign, route_airport, scheduled_time, created_from, updated_from)
+                                            VALUES ($1, $2, $3, $4, $5, TO_TIMESTAMP($6), 'FLIGHTSFROM', 'FLIGHTSFROM')
+                                            ON CONFLICT (airport_code, direction, flight_number, route_airport, scheduled_time)
+                                            DO UPDATE SET callsign = EXCLUDED.callsign, updated_from = 'FLIGHTSFROM'
+                                        """, icao_key.upper(), direction, carrier, icao_code, safe_route, midday_epoch)
+                                        route_count += 1
+                                    except Exception as ins_err:
+                                        logger.error(f'⚠️ FlightsFrom upsert failed for {carrier}/{icao_code}: {ins_err}')
+
+                        logger.info(f'[{icao_key.upper()} {iata_code.upper()} {direction}] FlightsFrom routes: {route_count}')
+
+                except asyncio.TimeoutError:
+                    logger.error(f'⏳ FlightsFrom Timeout for {iata_code} {entity_type}')
+                except Exception as req_err:
+                    logger.error(f'❌ FlightsFrom Error for {iata_code}: {repr(req_err)}')
+
+                await asyncio.sleep(1)
+
+            await asyncio.sleep(1)
+
+    logger.info('✅ FlightsFrom Schedule download complete.')
+
+
 async def download_schedules(db: AsyncDatabaseManager, session: aiohttp.ClientSession, iata_to_icao: dict, airport_iata_to_icao: dict):
     logger.info("📅 Fetching Schedules...")
     
+    get_from_flightsfrom = getattr(config.Config, 'GET_SCHEDULES_FROM_FLIGHTSFROM', False)
     get_from_avionio = getattr(config.Config, 'GET_SCHEDULES_FROM_AVIONIO', False)
     missing_avionio = getattr(config.Config, 'MISSING_AIRPORTS_IN_AVIONIO', {})
     days_to_run = getattr(config.Config, 'GET_SCHEDULES_FOR', ["TODAY", "TOMORROW"])
@@ -106,7 +213,7 @@ async def download_schedules(db: AsyncDatabaseManager, session: aiohttp.ClientSe
                 target_year_str = str(tomorrow_midnight_ist.year)
             
             target_ts_ms = start_epoch * 1000
-                                   
+                                    
             for icao_key, data in config.Config.TARGET_AIRPORTS.items():
                 iata_code = data.get('iata', '').upper()
                 if not iata_code: continue
@@ -350,7 +457,7 @@ async def download_schedules(db: AsyncDatabaseManager, session: aiohttp.ClientSe
     except Exception as e: 
         logger.error(f"❌ Fatal Error: {traceback.format_exc()}")
 
-async def execute_download(iata_to_icao: dict):
+async def execute_download(iata_to_icao: dict, days_to_run: list = None):
     """Creates fresh connections, does the work, and closes them."""
     importlib.reload(config)
     
@@ -359,27 +466,35 @@ async def execute_download(iata_to_icao: dict):
 
     async with aiohttp.ClientSession() as session:
         airport_iata_to_icao = await get_airport_iata_to_icao_map(session)
-        await download_schedules(db, session, iata_to_icao, airport_iata_to_icao)
+        get_from_flightsfrom = getattr(config.Config, 'GET_SCHEDULES_FROM_FLIGHTSFROM', False)
+        if get_from_flightsfrom:
+            await download_from_flightsfrom(db, session, airport_iata_to_icao, days_to_run)
+        else:
+            await download_schedules(db, session, iata_to_icao, airport_iata_to_icao)
     await asyncio.sleep(5)
     await pool.close()
 
-async def schedule_loop(iata_to_icao: dict):
-    """Runs at startup and then every day at 22:30 hrs IST based on Config."""
-    logger.info("🚀 Startup detected: Executing initial schedule download...")
-    await execute_download(iata_to_icao)
-    while True:
-        # Ensure 22:30 triggers in IST, not UTC Server time!
-        now_ist = datetime.now(IST)
-        t1 = now_ist.replace(hour=22, minute=30, second=0, microsecond=0)
-        next_run = t1 if now_ist < t1 else t1 + timedelta(days=1)
-        await asyncio.sleep((next_run - now_ist).total_seconds())
-        await execute_download(iata_to_icao)
-
 async def main():
-    logger.info("🚀 Route Schedule Downloader Initialized (Daemon Mode)")
-    
+    importlib.reload(config)
     iata_to_icao = await get_iata_to_icao_map()
-    await schedule_loop(iata_to_icao)
+
+    schedule_days = os.environ.get('SCHEDULE_DAYS', '').lower()
+
+    if schedule_days == 'today':
+        days = ['TODAY']
+    elif schedule_days == 'tomorrow':
+        days = ['TOMORROW']
+    elif schedule_days == 'both':
+        days = ['TODAY', 'TOMORROW']
+    else:
+        now_ist = datetime.now(IST)
+        if 6 <= now_ist.hour < 21:
+            days = ['TODAY']
+        else:
+            days = ['TOMORROW']
+
+    logger.info(f"📅 Fetching schedules: {', '.join(days)}")
+    await execute_download(iata_to_icao, days)
 
 if __name__ == "__main__":
     try: asyncio.run(main())

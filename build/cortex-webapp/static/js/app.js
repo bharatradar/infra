@@ -1217,8 +1217,8 @@ async function openDrillDownModal(type, targetCode, targetDisplay) {
                     <td ${clickAttr}>${row.hex_id || 'UNK'}</td>
                     <td class="px-4 py-3 text-white font-bold"><i class="fa-solid fa-plane-arrival text-blue-500 mr-1 text-xs"></i> ${row.callsign || 'UNK'}</td>
                     <td class="px-4 py-3 text-gray-300">${row.route_airport_display || 'UNK'}</td>
-                    <td class="px-4 py-3 text-gray-300">${row.sched_time}</td>
-                    <td class="px-4 py-3 text-gray-300">${row.act_time}</td>
+                    <td class="px-4 py-3 text-gray-300">${formatScheduleTime(row.sched_time)}</td>
+                    <td class="px-4 py-3 text-gray-300">${formatScheduleTime(row.act_time)}</td>
                     <td class="px-4 py-3 text-right font-bold ${color}">${row.delay_mins}m</td>
                 </tr>`;
             });
@@ -1576,6 +1576,11 @@ async function fetchDelayPredictions() {
             const avgDelay = Math.round(totalDelay / routeData.routes.length);
             const avgEl = document.getElementById('avg-delay');
             if (avgEl) avgEl.textContent = avgDelay + 'm';
+            
+            // Count delayed flights (>15 min delay)
+            const delayedCount = routeData.routes.filter(r => r.avg_delay_minutes > 15).length;
+            const delayedEl = document.getElementById('delayed-flights');
+            if (delayedEl) delayedEl.textContent = delayedCount;
         }
         
         // Get airport congestion
@@ -1637,7 +1642,7 @@ function applyLocalFilters(type) {
 
 function formatScheduleTime(dateStr) {
     if (!dateStr || dateStr === '---') return '---';
-    const d = new Date(dateStr.replace(' ', 'T') + ':00');
+    const d = new Date(dateStr);
     if (isNaN(d)) return dateStr;
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const day = String(d.getDate()).padStart(2, '0');
@@ -1671,8 +1676,8 @@ function renderScheduleRows(data, elementId, type) {
         let timeCol = '';
         let statusCol = '';
 
-        const schedObj = (r.sched_time && r.sched_time !== '---') ? new Date(r.sched_time.replace(' ', 'T') + ':00') : null;
-        const actObj = r.act_time ? new Date(r.act_time.replace(' ', 'T') + ':00') : null;
+        const schedObj = (r.sched_time && r.sched_time !== '---') ? new Date(r.sched_time) : null;
+        const actObj = r.act_time ? new Date(r.act_time) : null;
 
         if (isPhysicalLog) {
             timeCol = formatScheduleTime(r.act_time);
