@@ -2660,23 +2660,21 @@ async def proxy_tar1090(feeder_id: int, path: str, request: Request):
 (function(){{
 var rePath='re-api/';
 var fu='{fu}';
-function rewriteReApi(url){{
-var qsIndex=url.indexOf('?');
-var qs=qsIndex>=0?url.substring(qsIndex):'';
-var sep=qs?'&':'?';
-return 'https://map.bharatradar.com/re-api/'+qs+sep+'filter_uuid='+fu;
+function appendFu(url){{
+var sep=url.indexOf('?')>=0?'&':'?';
+return url+sep+'filter_uuid='+fu;
 }}
 var origFetch=window.fetch;
 window.fetch=function(url,opts){{
 if(typeof url==='string'&&url.indexOf(rePath)>=0){{
-return origFetch.call(this,rewriteReApi(url),opts);
+return origFetch.call(this,appendFu(url),opts);
 }}
 return origFetch.call(this,url,opts);
 }};
 var origOpen=XMLHttpRequest.prototype.open;
 XMLHttpRequest.prototype.open=function(method,url){{
 if(typeof url==='string'&&url.indexOf(rePath)>=0){{
-arguments[1]=rewriteReApi(url);
+arguments[1]=appendFu(url);
 }}
 return origOpen.apply(this,arguments);
 }};
