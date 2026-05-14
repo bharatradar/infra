@@ -7,6 +7,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import asyncpg
+import weather_service
 
 logger = logging.getLogger(__name__)
 
@@ -255,6 +256,14 @@ class DelayPredictor:
             base_delay = 5 + int(data.get('anomaly_rate', 0) * 2)
             predicted_delay = base_delay
             factors.append("baseline")
+        
+        # 7. Weather factor (uses Open-Meteo data from Redis cache)
+        if airport_code:
+            weather_delay = weather_service.get_weather_delay_minutes(airport_code)
+            if weather_delay:
+                predicted_delay += weather_delay
+                factors.append(f"weather:{airport_code}:{weather_delay}min")
+                breakdown['weather_delay'] = weather_delay
         
         # Cap maximum delay at 60 minutes
         predicted_delay = min(predicted_delay, 60)

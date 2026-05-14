@@ -134,7 +134,36 @@ function handleWebSocketMessage(msg) {
     } else if (msg.type === 'aircraft_data') {
         // Response to get_aircraft
         console.log('WS: Aircraft data:', msg.data);
+    } else if (msg.type === 'weather_alert') {
+        console.log('WS: Weather alerts:', msg.alerts);
+        showWeatherAlerts(msg.alerts || []);
     }
+}
+
+function showWeatherAlerts(alerts) {
+    let container = document.getElementById('weather-alert-banner');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'weather-alert-banner';
+        container.className = 'fixed top-14 left-0 right-0 z-50 flex flex-col gap-1 px-4 py-2';
+        document.body.appendChild(container);
+    }
+    if (!alerts.length) {
+        container.innerHTML = '';
+        container.classList.add('hidden');
+        return;
+    }
+    container.classList.remove('hidden');
+    container.innerHTML = alerts.map(a => {
+        const colors = {3: 'bg-red-900/80 border-red-600 text-red-200', 2: 'bg-orange-900/80 border-orange-600 text-orange-200', 1: 'bg-yellow-900/80 border-yellow-600 text-yellow-200'};
+        const icons = {3: 'fa-bolt', 2: 'fa-triangle-exclamation', 1: 'fa-circle-exclamation'};
+        const c = colors[a.severity] || colors[1];
+        const i = icons[a.severity] || icons[1];
+        return `<div class="${c} border-l-4 rounded-lg px-3 py-2 text-xs font-bold flex items-center gap-2 shadow-lg backdrop-blur-sm">
+            <i class="fa-solid ${i}"></i>
+            <span>${a.message || `${a.icao}: ${(a.types || []).join(', ')}`}</span>
+        </div>`;
+    }).join('');
 }
 
 function fixLatLon(ac) {
@@ -357,6 +386,7 @@ function applyFilters() {
     fetchOps();
     fetchExec();
     fetchSchedules();
+    fetchWeather();
     handleAirportZoom();
 }
 
@@ -1628,6 +1658,7 @@ async function fetchATC() {
         }
         
         if (currentTab === 'atc') {
+            fetchWeather();
             try {
                 const atcRes = await fetch('/api/atc/data', {
                     method: 'POST',
@@ -1657,6 +1688,84 @@ async function fetchATC() {
         
     } catch(e) {
         console.error('fetchATC error:', e);
+    }
+}
+
+async function fetchWeather() {
+    const airport = document.getElementById('filter-airport').value;
+    const widget = document.getElementById('weather-widget');
+    
+    if (airport === 'ALL') {
+        widget.classList.add('hidden');
+        return;
+    }
+    
+    try {
+        const res = await fetch(`/api/weather/${airport}`);
+        const data = await res.json();
+        
+        if (!data || data.error) {
+            widget.classList.add('hidden');
+            return;
+        }
+        
+        displayWeather(data);
+    } catch (e) {
+        console.warn('Weather fetch failed:', e);
+        widget.classList.add('hidden');
+    }
+}
+
+function displayWeather(data) {
+    const widget = document.getElementById('weather-widget');
+    widget.classList.remove('hidden');
+    
+    const current = data.current || {};
+    const weatherCode = current.weather_code || 0;
+    const iconMap = {
+        0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',
+        45: '🌫️', 48: '🌫️',
+        51: '🌦️', 53: '🌦️', 55: '🌦️',
+        56: '🌧️', 57: '🌧️',
+        61: '🌧️', 63: '🌧️', 65: '🌧️',
+        66: '🌧️', 67: '🌧️',
+        71: '❄️', 73: '❄️', 75: '❄️', 77: '❄️',
+        80: '🌦️', 81: '🌦️', 82: '🌦️',
+        85: '❄️', 86: '❄️',
+        95: '⛈️', 96: '⛈️', 99: '⛈️'
+    };
+    
+    document.getElementById('weather-airport-name').textContent = `@ ${data.airport || data.icao || ''}`;
+    document.getElementById('weather-icon').textContent = iconMap[weatherCode] || '☀️';
+    document.getElementById('weather-temp').textContent = current.temperature_2m != null ? `${Math.round(current.temperature_2m)}°C` : '--';
+    document.getElementById('weather-desc').textContent = current.weather_description || '--';
+    
+    const windDir = current.wind_direction_10m != null ? ` ${current.wind_direction_10m}°` : '';
+    document.getElementById('weather-wind').textContent = current.wind_speed_10m != null ? `${current.wind_speed_10m} kn${windDir}` : '--';
+    
+    const vis = current.visibility;
+    document.getElementById('weather-visibility').textContent = vis != null ? vis >= 1000 ? `${(vis / 1000).toFixed(1)} km` : `${vis} m` : '--';
+    document.getElementById('weather-pressure').textContent = current.pressure_msl != null ? `${current.pressure_msl} hPa` : '--';
+    document.getElementById('weather-humidity').textContent = current.relative_humidity_2m != null ? `${current.relative_humidity_2m}%` : '--';
+    document.getElementById('weather-updated').textContent = data.cached_at ? new Date(data.cached_at).toLocaleTimeString() : '';
+    
+    // Forecast strip
+    const forecastContainer = document.getElementById('weather-forecast');
+    forecastContainer.innerHTML = '';
+    if (data.hourly && data.hourly.length > 0) {
+        data.hourly.slice(0, 6).forEach(h => {
+            const time = new Date(h.time);
+            const hour = time.getHours();
+            const icon = iconMap[h.weather_code] || '☀️';
+            const div = document.createElement('div');
+            div.className = 'flex flex-col items-center min-w-[60px] py-1 px-2 rounded-lg bg-gray-800/40';
+            div.innerHTML = `
+                <span class="text-xs text-gray-400">${hour}:00</span>
+                <span class="text-lg my-1">${icon}</span>
+                <span class="text-sm font-bold text-white">${h.temperature_2m != null ? Math.round(h.temperature_2m) : '--'}°</span>
+            `;
+            forecastContainer.appendChild(div);
+        });
     }
 }
 
