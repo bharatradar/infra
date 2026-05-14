@@ -400,6 +400,7 @@ let map = null;
 let markers = {};
 let heatLayerGroup = null;
 let olAircraftLayer = null;
+let olHeatmapLayer = null;
 let olMapInitialized = false;
 let mapDimOverlay = null;
 let isMapDimmed = false;
@@ -1517,7 +1518,43 @@ async function fetchATC() {
         if (olMapInitialized && map && olAircraftLayer) {
             updateOLAircraft(flights);
         }
-        
+
+        // Congestion heatmap overlay
+        if (olMapInitialized && map) {
+            if (showingHeatmap) {
+                if (!olHeatmapLayer) {
+                    olHeatmapLayer = new ol.layer.Heatmap({
+                        source: new ol.source.Vector(),
+                        blur: 20,
+                        radius: 12,
+                        gradient: ['#00f', '#0ff', '#0f0', '#ff0', '#f00']
+                    });
+                    map.addLayer(olHeatmapLayer);
+                }
+                try {
+                    const hRes = await fetch('/api/atc/congestion');
+                    const hData = await hRes.json();
+                    if (Array.isArray(hData)) {
+                        const maxDensity = Math.max(1, ...hData.map(d => d.density));
+                        const features = hData.map(d => {
+                            const f = new ol.Feature({
+                                geometry: new ol.geom.Point(ol.proj.fromLonLat([d.lon_grid, d.lat_grid]))
+                            });
+                            f.set('weight', Math.min(d.density / maxDensity, 1));
+                            return f;
+                        });
+                        olHeatmapLayer.getSource().clear();
+                        olHeatmapLayer.getSource().addFeatures(features);
+                    }
+                } catch (e) {
+                    console.warn('[fetchATC] Congestion heatmap fetch failed:', e);
+                }
+            } else if (olHeatmapLayer) {
+                map.removeLayer(olHeatmapLayer);
+                olHeatmapLayer = null;
+            }
+        }
+
         // Update fullscreen if visible - always process, no delay
         if (fullscreenOlInitialized && fullscreenAircraftLayer && radarFullscreen) {
             requestAnimationFrame(() => updateFullscreenAircraft(flights));
