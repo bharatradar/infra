@@ -431,6 +431,18 @@ const AIRPORTS = [
     {icao: 'VEBD', lat: 26.6812, lon: 88.3286},
     {icao: 'VIBL', lat: 26.9883, lon: 80.8931},
     {icao: 'VANR', lat: 19.9637, lon: 73.8076},
+    {icao: 'VTBS', lat: 13.6931, lon: 100.7501},
+    {icao: 'VTBD', lat: 13.9125, lon: 100.6067},
+    {icao: 'OMDB', lat: 25.2528, lon: 55.3644},
+    {icao: 'OMAA', lat: 24.4333, lon: 54.6511},
+    {icao: 'OTBD', lat: 25.2731, lon: 51.6081},
+    {icao: 'OOMS', lat: 23.6017, lon: 58.2844},
+    {icao: 'WSSS', lat: 1.3592, lon: 103.9894},
+    {icao: 'WMKK', lat: 2.7456, lon: 101.7099},
+    {icao: 'VRMM', lat: 4.1917, lon: 73.5289},
+    {icao: 'VCBI', lat: 7.1808, lon: 79.8842},
+    {icao: 'VGHS', lat: 23.8436, lon: 90.3992},
+    {icao: 'VNKT', lat: 27.6961, lon: 85.3591},
 ];
 function _nearestAirport(lat, lon) {
     let best = null, bestDist = Infinity;
@@ -439,7 +451,7 @@ function _nearestAirport(lat, lon) {
         const dist = dlat * dlat + dlon * dlon;
         if (dist < bestDist) { bestDist = dist; best = ap; }
     }
-    return bestDist < 2 ? best : null;
+    return best;
 }
 
 let markers = {};
@@ -1596,8 +1608,7 @@ async function fetchATC() {
                         const peakEl = document.getElementById('peak-display');
                         if (peak) {
                             const ap = _nearestAirport(peak.lat_grid, peak.lon_grid);
-                            const label = ap ? ap.icao : peak.lat_grid.toFixed(1) + 'N ' + peak.lon_grid.toFixed(1) + 'E';
-                            if (peakEl) peakEl.textContent = label + ' · ' + peak.density + ' flights';
+                            if (peakEl) peakEl.textContent = ap.icao + ' · ' + peak.density + ' flights';
                         }
                     }
                 } catch (e) {
