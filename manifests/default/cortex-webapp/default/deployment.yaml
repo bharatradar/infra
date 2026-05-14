@@ -37,7 +37,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: cortex-webapp
-          image: ghcr.io/bharatradar/cortex-webapp:feature-openmeteo
+          image: ghcr.io/bharatradar/cortex-webapp:v5.8.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8081
