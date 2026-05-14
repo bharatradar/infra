@@ -397,6 +397,51 @@ function handleAirportZoom() {
 
 // --- 2. MAP SETUP (OpenLayers - tar1090 Style) ---
 let map = null;
+// Major Indian airports for congestion heatmap peak lookup
+const AIRPORTS = [
+    {icao: 'VABB', lat: 19.0887, lon: 72.8679},
+    {icao: 'VIDP', lat: 28.5665, lon: 77.1031},
+    {icao: 'VOBL', lat: 13.1979, lon: 77.7063},
+    {icao: 'VOMM', lat: 12.9900, lon: 80.1693},
+    {icao: 'VECC', lat: 22.6547, lon: 88.4467},
+    {icao: 'VAPO', lat: 18.5821, lon: 73.9197},
+    {icao: 'VAAH', lat: 23.0772, lon: 72.6347},
+    {icao: 'VOHS', lat: 17.2313, lon: 78.4299},
+    {icao: 'VOCI', lat: 10.1520, lon: 76.4019},
+    {icao: 'VOTV', lat: 8.4821, lon: 76.9201},
+    {icao: 'VANP', lat: 21.0922, lon: 79.0472},
+    {icao: 'VOGO', lat: 15.3808, lon: 73.8314},
+    {icao: 'VOGA', lat: 15.7444, lon: 73.8613},
+    {icao: 'VILK', lat: 26.7606, lon: 80.8893},
+    {icao: 'VIJP', lat: 26.8242, lon: 75.8122},
+    {icao: 'VICG', lat: 30.6735, lon: 76.7885},
+    {icao: 'VEPT', lat: 25.5913, lon: 85.0880},
+    {icao: 'VEGT', lat: 26.1061, lon: 91.5859},
+    {icao: 'VEBS', lat: 20.2444, lon: 85.8178},
+    {icao: 'VABP', lat: 23.2875, lon: 77.3374},
+    {icao: 'VAUD', lat: 24.6177, lon: 73.8961},
+    {icao: 'VASU', lat: 21.1241, lon: 72.7418},
+    {icao: 'VEBN', lat: 25.4524, lon: 82.8593},
+    {icao: 'VIJO', lat: 26.2511, lon: 73.0489},
+    {icao: 'VARK', lat: 22.3092, lon: 70.7795},
+    {icao: 'VEGK', lat: 26.7397, lon: 83.4497},
+    {icao: 'VISR', lat: 33.9871, lon: 74.7742},
+    {icao: 'VERC', lat: 23.3143, lon: 85.3217},
+    {icao: 'VABO', lat: 22.3362, lon: 73.2263},
+    {icao: 'VEBD', lat: 26.6812, lon: 88.3286},
+    {icao: 'VIBL', lat: 26.9883, lon: 80.8931},
+    {icao: 'VANR', lat: 19.9637, lon: 73.8076},
+];
+function _nearestAirport(lat, lon) {
+    let best = null, bestDist = Infinity;
+    for (const ap of AIRPORTS) {
+        const dlat = ap.lat - lat, dlon = ap.lon - lon;
+        const dist = dlat * dlat + dlon * dlon;
+        if (dist < bestDist) { bestDist = dist; best = ap; }
+    }
+    return bestDist < 2 ? best : null;
+}
+
 let markers = {};
 let heatLayerGroup = null;
 let olAircraftLayer = null;
@@ -1545,6 +1590,16 @@ async function fetchATC() {
                         });
                         olHeatmapLayer.getSource().clear();
                         olHeatmapLayer.getSource().addFeatures(features);
+
+                        // Find peak density cell and nearest airport
+                        let peak = hData.reduce((a, b) => a.density > b.density ? a : b, hData[0]);
+                        const peakEl = document.getElementById('peak-airport');
+                        const peakDensEl = document.getElementById('peak-density');
+                        if (peak) {
+                            const ap = _nearestAirport(peak.lat_grid, peak.lon_grid);
+                            if (peakEl) peakEl.textContent = ap ? ap.icao : peak.lat_grid.toFixed(1) + 'N ' + peak.lon_grid.toFixed(1) + 'E';
+                            if (peakDensEl) peakDensEl.textContent = peak.density + ' flights';
+                        }
                     }
                 } catch (e) {
                     console.warn('[fetchATC] Congestion heatmap fetch failed:', e);
@@ -1552,6 +1607,10 @@ async function fetchATC() {
             } else if (olHeatmapLayer) {
                 map.removeLayer(olHeatmapLayer);
                 olHeatmapLayer = null;
+                const peakEl = document.getElementById('peak-airport');
+                const peakDensEl = document.getElementById('peak-density');
+                if (peakEl) peakEl.textContent = '--';
+                if (peakDensEl) peakDensEl.textContent = '--';
             }
         }
 
