@@ -2622,6 +2622,11 @@ async def proxy_tar1090(feeder_id: int, path: str, request: Request):
         # Everything else (HTML, JS, CSS, data/aircraft.json) proxied internally
         if target_path == 'data/aircraft.json' or target_path.endswith('/data/aircraft.json'):
             target_url = f"http://planes-readsb/tar1090/re-api/aircraft.json?all&filter_uuid={station_uuid}"
+        elif target_path.startswith('re-api/'):
+            qs = request.url.query or ""
+            target_url = f"http://reapi-readsb.bharatradar.svc.cluster.local:30152/{target_path[7:]}"
+            if qs:
+                target_url += "?" + qs
         else:
             target_url = f"http://planes-readsb/{target_path}"
             qs = request.url.query or ""
