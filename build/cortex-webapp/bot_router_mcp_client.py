@@ -405,6 +405,20 @@ FAST_ROUTER_TOOLS = [
                 "required": []
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_airport_weather",
+            "description": "Get current weather and 48h forecast for an airport by ICAO code. Use when user asks about weather at an airport, visibility, wind conditions, or how weather might affect flights.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "icao": {"type": "string", "description": "ICAO airport code (e.g., VABB for Mumbai, VIDP for Delhi)"}
+                },
+                "required": ["icao"]
+            }
+        }
     }
 ]
 
@@ -748,6 +762,39 @@ async def smart_route_free_text(query: str) -> str:
     if tool_name == "set_flight_alert":
         params["chat_id"] = CURRENT_CHAT_ID.get() or 0
         params["session_id"] = CURRENT_SESSION_ID.get() or ""
+
+    # Handle weather tool locally (not in MCP server)
+    if tool_name == "get_airport_weather":
+        try:
+            import weather_service
+            icao = params.get("icao", "")
+            if not icao:
+                return "Which airport ICAO code are you asking about?"
+            result = await weather_service.get_airport_weather(icao)
+            if not result or "error" in result:
+                return f"⚠️ Weather data not available for {icao}: {result.get('error', 'Unknown error')}"
+            c = result.get("current", {})
+            hourly = result.get("hourly", [])
+            lines = [
+                f"🌤️ **Weather at {result.get('airport', icao)} ({icao})**",
+                f"Temperature: {c.get('temperature_2m', 'N/A')}°C",
+                f"Condition: {c.get('weather_description', 'N/A')}",
+                f"Wind: {c.get('wind_speed_10m', 'N/A')} kn at {c.get('wind_direction_10m', 'N/A')}°",
+                f"Visibility: {c.get('visibility', 'N/A')} m",
+                f"Pressure: {c.get('pressure_msl', 'N/A')} hPa",
+                f"Humidity: {c.get('relative_humidity_2m', 'N/A')}%",
+            ]
+            if result.get("alerts"):
+                lines.append(f"⚠️ Alerts: {', '.join(result['alerts'])}")
+            if hourly:
+                next_hours = hourly[:4]
+                forecast_strs = [f"{h['time'][11:16]} {h['temperature_2m']}°C" for h in next_hours if h.get('temperature_2m')]
+                if forecast_strs:
+                    lines.append(f"📡 4h Forecast: {' | '.join(forecast_strs)}")
+            return "\n".join(lines)
+        except Exception as e:
+            logger.error(f"Weather tool error: {e}")
+            return f"⚠️ Could not fetch weather: {str(e)}"
 
     # 🚀 SEND TO MCP SERVER 🚀
     return await execute_tool_via_mcp(tool_name, params)

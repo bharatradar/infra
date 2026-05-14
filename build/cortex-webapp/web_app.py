@@ -25,6 +25,7 @@ from math import radians, sin, cos, sqrt, atan2
 import core_ai_pipeline
 import bot_router_mcp_client
 import web_app_db
+import weather_service
 from datetime import datetime
 import gzip
 import csv
@@ -72,6 +73,7 @@ PUBLIC_ROUTES = [
     "/static/",
     "/favicon.ico",
     "/api/feeders/",
+    "/api/weather/",
     # API docs (public access)
     "/docs",
     "/redoc",
@@ -234,6 +236,54 @@ TEST_SYSTEM_PROMPT = (
     "get_inbound_aircraft_status, predict_flight_assignment, get_airport_traffic, "
     "get_airspace_pulse, get_system_health, unsupported."
 )
+
+async def _weather_alert_task():
+    """Check weather thresholds for all target airports every 15 min and publish alerts."""
+    await asyncio.sleep(getattr(Config, 'WEATHER_ALERT_STARTUP_DELAY_SEC', 60))
+    while True:
+        try:
+            await asyncio.sleep(900)
+            airports = getattr(Config, 'TARGET_AIRPORTS', {})
+            if not airports:
+                continue
+            r = await get_redis_client()
+            icaos = list(airports.keys())
+            batch = await weather_service.get_batch_weather(icaos)
+            if not batch or "airports" not in batch:
+                continue
+            alerts = []
+            for ap in batch["airports"]:
+                icao = ap.get("icao", "")
+                current = ap.get("current", {})
+                ap_alerts = weather_service._check_thresholds(current)
+                severity = 0
+                for a in ap_alerts:
+                    if a in ("thunderstorm", "snow", "extreme_wind"):
+                        severity = max(severity, 3)
+                    elif a in ("strong_wind", "heavy_rain", "dense_fog"):
+                        severity = max(severity, 2)
+                    elif a in ("low_visibility", "windy", "extreme_heat"):
+                        severity = max(severity, 1)
+                if severity > 0:
+                    alerts.append({
+                        "icao": icao,
+                        "severity": severity,
+                        "types": ap_alerts,
+                        "message": f"Weather alert at {airports.get(icao, {}).get('name', icao)} ({icao}): {', '.join(ap_alerts)}"
+                    })
+                    await r.setex(f"weather:alert:{icao}", 3600, json.dumps(alerts[-1]))
+            if alerts:
+                await r.delete("weather:alerts")
+                for a in alerts:
+                    await r.zadd("weather:alerts", {a["icao"]: a["severity"]})
+                await r.publish("weather:alerts", json.dumps({"type": "weather_alert", "alerts": alerts}))
+                logger.info(f"Weather alerts published: {len(alerts)} active")
+            else:
+                await r.delete("weather:alerts")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning(f"Weather alert task error: {e}")
 
 async def _feeder_health_monitor_task():
     """Periodically check receivers.json, update feeder health status and user contributor tiers."""
@@ -480,17 +530,23 @@ async def lifespan(app: FastAPI):
 
     health_task = asyncio.create_task(_feeder_health_monitor_task())
     stats_task = asyncio.create_task(_feeder_stats_parser_task())
+    weather_alert_task = asyncio.create_task(_weather_alert_task())
 
     yield
     logger.info("🛑 Shutting down Web API...")
     health_task.cancel()
     stats_task.cancel()
+    weather_alert_task.cancel()
     try:
         await health_task
     except asyncio.CancelledError:
         pass
     try:
         await stats_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await weather_alert_task
     except asyncio.CancelledError:
         pass
     await db_pool.close()
@@ -582,7 +638,11 @@ app.mount("/sw", StaticFiles(directory="static"), name="sw")
 @app.get("/")
 @app.get("/")
 async def serve_dashboard_root(request: Request):
-    return FileResponse("static/dashboard.html")
+    response = FileResponse("static/dashboard.html")
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.get("/login")
 @app.get("/login/")
@@ -604,7 +664,11 @@ async def logout():
 async def serve_dashboard(request: Request):
     if not is_session_valid(request):
         return RedirectResponse(url="/login")
-    return FileResponse("static/dashboard.html")
+    response = FileResponse("static/dashboard.html")
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.get("/testmodel")
 @app.get("/testmodel/")
@@ -1556,6 +1620,28 @@ async def get_airport_delay_stats():
     except Exception as e:
         logger.error(f"Airport stats error: {e}")
         return {"error": str(e), "airports": []}
+
+# ============================================================
+# 🌤️ Weather API (Open-Meteo Integration)
+# ============================================================
+
+@app.get("/api/weather/coords")
+async def api_coords_weather(lat: float = Query(...), lon: float = Query(...), label: str = Query("My Location")):
+    """Get current weather by lat/lon coordinates (for user's location)."""
+    return await weather_service.get_weather_by_coords(lat, lon, label)
+
+@app.get("/api/weather/batch")
+async def api_batch_weather(icaos: str = Query("")):
+    """Get weather for multiple airports. Pass comma-separated ICAO codes."""
+    codes = [c.strip().upper() for c in icaos.split(",") if c.strip()]
+    if not codes:
+        return {"airports": []}
+    return await weather_service.get_batch_weather(codes)
+
+@app.get("/api/weather/{icao}")
+async def api_airport_weather(icao: str):
+    """Get current weather + 48h forecast for an airport by ICAO code."""
+    return await weather_service.get_airport_weather(icao)
 
 # ============================================================
 # 🌟 Community Feeder Network API

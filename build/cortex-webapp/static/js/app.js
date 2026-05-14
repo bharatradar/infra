@@ -134,7 +134,36 @@ function handleWebSocketMessage(msg) {
     } else if (msg.type === 'aircraft_data') {
         // Response to get_aircraft
         console.log('WS: Aircraft data:', msg.data);
+    } else if (msg.type === 'weather_alert') {
+        console.log('WS: Weather alerts:', msg.alerts);
+        showWeatherAlerts(msg.alerts || []);
     }
+}
+
+function showWeatherAlerts(alerts) {
+    let container = document.getElementById('weather-alert-banner');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'weather-alert-banner';
+        container.className = 'fixed top-14 left-0 right-0 z-50 flex flex-col gap-1 px-4 py-2';
+        document.body.appendChild(container);
+    }
+    if (!alerts.length) {
+        container.innerHTML = '';
+        container.classList.add('hidden');
+        return;
+    }
+    container.classList.remove('hidden');
+    container.innerHTML = alerts.map(a => {
+        const colors = {3: 'bg-red-900/80 border-red-600 text-red-200', 2: 'bg-orange-900/80 border-orange-600 text-orange-200', 1: 'bg-yellow-900/80 border-yellow-600 text-yellow-200'};
+        const icons = {3: 'fa-bolt', 2: 'fa-triangle-exclamation', 1: 'fa-circle-exclamation'};
+        const c = colors[a.severity] || colors[1];
+        const i = icons[a.severity] || icons[1];
+        return `<div class="${c} border-l-4 rounded-lg px-3 py-2 text-xs font-bold flex items-center gap-2 shadow-lg backdrop-blur-sm">
+            <i class="fa-solid ${i}"></i>
+            <span>${a.message || `${a.icao}: ${(a.types || []).join(', ')}`}</span>
+        </div>`;
+    }).join('');
 }
 
 function fixLatLon(ac) {
@@ -299,6 +328,7 @@ function switchTab(target) {
     // Start polling for active tab only
     if (target === 'atc') {
         fetchATC();
+        fetchWeather();
         if (!(FRONTEND_CONFIG.ws_use_for_atc && FRONTEND_CONFIG.ws_enabled)) {
             tabTimers.atc = setInterval(fetchATC, FRONTEND_CONFIG.atc_poll_interval_ms);
         }
@@ -357,6 +387,7 @@ function applyFilters() {
     fetchOps();
     fetchExec();
     fetchSchedules();
+    fetchWeather();
     handleAirportZoom();
 }
 
@@ -1011,7 +1042,7 @@ function updateFeaturePosition(feature, now) {
 
 function updateOLAircraft(flights) {
     if (!olAircraftLayer || !map) {
-        console.warn('[updateOLAircraft] Layer or map not ready', { olAircraftLayer, map });
+        //console.warn('[updateOLAircraft] Layer or map not ready', { olAircraftLayer, map });
         return;
     }
     try {
@@ -1106,7 +1137,7 @@ function updateOLAircraft(flights) {
             }
         });
 
-        console.log(`[updateOLAircraft] added=${added}, updated=${updated}, removed=${removed}, total=${source.getFeatures().length}`);
+        //console.log(`[updateOLAircraft] added=${added}, updated=${updated}, removed=${removed}, total=${source.getFeatures().length}`);
         
         // Start animation loop if not already running
         if (!animationFrameId) {
@@ -1576,22 +1607,33 @@ async function fetchATC() {
             updateOLAircraft(flights);
         }
 
-        // Congestion heatmap overlay
+        // Congestion data (always fetch, toggle only controls map overlay)
         if (olMapInitialized && map) {
-            if (showingHeatmap) {
-                if (!olHeatmapLayer) {
-                    olHeatmapLayer = new ol.layer.Heatmap({
-                        source: new ol.source.Vector(),
-                        blur: 20,
-                        radius: 12,
-                        gradient: ['#00f', '#0ff', '#0f0', '#ff0', '#f00']
-                    });
-                    map.addLayer(olHeatmapLayer);
-                }
-                try {
-                    const hRes = await fetch('/api/atc/congestion');
-                    const hData = await hRes.json();
-                    if (Array.isArray(hData)) {
+            try {
+                const hRes = await fetch('/api/atc/congestion');
+                const hData = await hRes.json();
+                if (Array.isArray(hData)) {
+                    // Always update peak display
+                    const peak = hData.reduce((a, b) => a.density > b.density ? a : b, hData[0]);
+                    const peakEl = document.getElementById('peak-display');
+                    if (peak) {
+                        const ap = _nearestAirport(peak.lat_grid, peak.lon_grid);
+                        if (peakEl) peakEl.textContent = (ap ? ap.icao + ' · ' : '') + peak.density + ' flights';
+                    } else if (peakEl) {
+                        peakEl.textContent = '0 flights';
+                    }
+
+                    // Heatmap overlay only when toggle is on
+                    if (showingHeatmap) {
+                        if (!olHeatmapLayer) {
+                            olHeatmapLayer = new ol.layer.Heatmap({
+                                source: new ol.source.Vector(),
+                                blur: 20,
+                                radius: 12,
+                                gradient: ['#00f', '#0ff', '#0f0', '#ff0', '#f00']
+                            });
+                            map.addLayer(olHeatmapLayer);
+                        }
                         const maxDensity = Math.max(1, ...hData.map(d => d.density));
                         const features = hData.map(d => {
                             const f = new ol.Feature({
@@ -1602,23 +1644,13 @@ async function fetchATC() {
                         });
                         olHeatmapLayer.getSource().clear();
                         olHeatmapLayer.getSource().addFeatures(features);
-
-                        // Find peak density cell and nearest airport
-                        let peak = hData.reduce((a, b) => a.density > b.density ? a : b, hData[0]);
-                        const peakEl = document.getElementById('peak-display');
-                        if (peak) {
-                            const ap = _nearestAirport(peak.lat_grid, peak.lon_grid);
-                            if (peakEl) peakEl.textContent = ap.icao + ' · ' + peak.density + ' flights';
-                        }
+                    } else if (olHeatmapLayer) {
+                        map.removeLayer(olHeatmapLayer);
+                        olHeatmapLayer = null;
                     }
-                } catch (e) {
-                    console.warn('[fetchATC] Congestion heatmap fetch failed:', e);
                 }
-            } else if (olHeatmapLayer) {
-                map.removeLayer(olHeatmapLayer);
-                olHeatmapLayer = null;
-                const peakEl = document.getElementById('peak-display');
-                if (peakEl) peakEl.textContent = '--';
+            } catch (e) {
+                console.warn('[fetchATC] Congestion heatmap fetch failed:', e);
             }
         }
 
@@ -1628,6 +1660,7 @@ async function fetchATC() {
         }
         
         if (currentTab === 'atc') {
+            fetchWeather();
             try {
                 const atcRes = await fetch('/api/atc/data', {
                     method: 'POST',
@@ -1657,6 +1690,148 @@ async function fetchATC() {
         
     } catch(e) {
         console.error('fetchATC error:', e);
+    }
+}
+
+let weatherExpandListener = null;
+
+let userLocation = null;
+let userCity = null;
+
+async function getUserLocation() {
+    if (userLocation) return userLocation;
+    const geo = new Promise((resolve) => {
+        if (!navigator.geolocation) { resolve(null); return; }
+        navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+            () => resolve(null),
+            { timeout: 5000, enableHighAccuracy: false }
+        );
+    });
+    const fromGeo = await geo;
+    if (fromGeo) {
+        userLocation = fromGeo;
+        return userLocation;
+    }
+    try {
+        const res = await fetch('https://ip-api.com/json/?fields=lat,lon,city');
+        const data = await res.json();
+        if (data.lat && data.lon) {
+            userLocation = { lat: data.lat, lon: data.lon };
+            userCity = data.city || null;
+        }
+    } catch (e) {
+        console.warn('[weather] IP geolocation failed:', e);
+    }
+    return userLocation;
+}
+
+async function fetchWeather() {
+    const airport = document.getElementById('filter-airport').value;
+    const widget = document.getElementById('weather-widget');
+    console.log('[weather] fetchWeather airport=', airport);
+    
+    try {
+        let data;
+        if (airport === 'ALL') {
+            const loc = await getUserLocation();
+            if (loc) {
+                const city = userCity || 'My Location';
+                const res = await fetch(`/api/weather/coords?lat=${loc.lat}&lon=${loc.lon}&label=${encodeURIComponent(city)}`);
+                if (res.ok) data = await res.json();
+            }
+            if (!data || data.error) {
+                data = { icao: '--', current: {}, hourly: [], daily: [] };
+            }
+        } else {
+            const res = await fetch(`/api/weather/${airport}`);
+            if (res.ok) data = await res.json();
+            if (!data || data.error) {
+                console.warn('[weather] API error:', data?.error);
+                return;
+            }
+        }
+        displayWeather(data);
+    } catch (e) {
+        console.warn('[weather] fetch failed:', e);
+    }
+}
+
+function toggleWeatherExpand() {
+    const expanded = document.getElementById('weather-expanded');
+    const chevron = document.getElementById('weather-chevron');
+    const isHidden = expanded.classList.contains('hidden');
+    expanded.classList.toggle('hidden');
+    chevron.className = isHidden ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down';
+}
+
+function displayWeather(data) {
+    const widget = document.getElementById('weather-widget');
+    widget.classList.remove('hidden');
+    
+    const current = data.current || {};
+    const airportName = data.airport || data.icao || '';
+    const weatherCode = current.weather_code || 0;
+    const iconMap = {
+        0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',
+        45: '🌫️', 48: '🌫️',
+        51: '🌦️', 53: '🌦️', 55: '🌦️',
+        56: '🌧️', 57: '🌧️',
+        61: '🌧️', 63: '🌧️', 65: '🌧️',
+        66: '🌧️', 67: '🌧️',
+        71: '❄️', 73: '❄️', 75: '❄️', 77: '❄️',
+        80: '🌦️', 81: '🌦️', 82: '🌦️',
+        85: '❄️', 86: '❄️',
+        95: '⛈️', 96: '⛈️', 99: '⛈️'
+    };
+    
+    document.getElementById('weather-airport-name').textContent = airportName;
+    document.getElementById('weather-icon').textContent = iconMap[weatherCode] || '☀️';
+    document.getElementById('weather-temp').textContent = current.temperature_2m != null ? `${Math.round(current.temperature_2m)}°C` : '--';
+    document.getElementById('weather-desc').textContent = current.weather_description || '--';
+    
+    const windDir = current.wind_direction_10m != null ? ` ${current.wind_direction_10m}°` : '';
+    document.getElementById('weather-wind').textContent = current.wind_speed_10m != null ? `${current.wind_speed_10m} kn${windDir}` : '--';
+    
+    const vis = current.visibility;
+    document.getElementById('weather-visibility').textContent = vis != null ? vis >= 1000 ? `${(vis / 1000).toFixed(1)} km` : `${vis} m` : '--';
+    document.getElementById('weather-pressure').textContent = current.pressure_msl != null ? `${current.pressure_msl} hPa` : '--';
+    document.getElementById('weather-humidity').textContent = current.relative_humidity_2m != null ? `${current.relative_humidity_2m}%` : '--';
+    document.getElementById('weather-updated').textContent = data.cached_at ? new Date(data.cached_at).toLocaleTimeString() : '';
+    
+    // Forecast strip
+    const forecastContainer = document.getElementById('weather-forecast');
+    forecastContainer.innerHTML = '';
+    if (data.hourly && data.hourly.length > 0) {
+        data.hourly.slice(0, 6).forEach(h => {
+            const time = new Date(h.time);
+            const hour = time.getHours();
+            const icon = iconMap[h.weather_code] || '☀️';
+            const div = document.createElement('div');
+            div.className = 'flex flex-col items-center min-w-[52px] py-1 px-1.5 rounded bg-gray-800/40';
+            div.innerHTML = `
+                <span class="text-[10px] text-gray-400">${hour}:00</span>
+                <span class="text-base">${icon}</span>
+                <span class="text-xs font-bold text-white">${h.temperature_2m != null ? Math.round(h.temperature_2m) : '--'}°</span>
+            `;
+            forecastContainer.appendChild(div);
+        });
+    }
+    
+    // Click-to-expand handler (only attach once)
+    if (!weatherExpandListener) {
+        weatherExpandListener = true;
+        widget.addEventListener('click', (e) => {
+            if (e.target.closest('#weather-forecast')) return;
+            toggleWeatherExpand();
+        });
+    }
+    
+    // Auto-collapse on new data
+    const expanded = document.getElementById('weather-expanded');
+    if (!expanded.classList.contains('hidden')) {
+        expanded.classList.add('hidden');
+        document.getElementById('weather-chevron').className = 'fa-solid fa-chevron-down';
     }
 }
 
