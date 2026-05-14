@@ -1593,12 +1593,11 @@ async function fetchATC() {
 
                         // Find peak density cell and nearest airport
                         let peak = hData.reduce((a, b) => a.density > b.density ? a : b, hData[0]);
-                        const peakEl = document.getElementById('peak-airport');
-                        const peakDensEl = document.getElementById('peak-density');
+                        const peakEl = document.getElementById('peak-display');
                         if (peak) {
                             const ap = _nearestAirport(peak.lat_grid, peak.lon_grid);
-                            if (peakEl) peakEl.textContent = ap ? ap.icao : peak.lat_grid.toFixed(1) + 'N ' + peak.lon_grid.toFixed(1) + 'E';
-                            if (peakDensEl) peakDensEl.textContent = peak.density + ' flights';
+                            const label = ap ? ap.icao : peak.lat_grid.toFixed(1) + 'N ' + peak.lon_grid.toFixed(1) + 'E';
+                            if (peakEl) peakEl.textContent = label + ' · ' + peak.density + ' flights';
                         }
                     }
                 } catch (e) {
@@ -1607,10 +1606,8 @@ async function fetchATC() {
             } else if (olHeatmapLayer) {
                 map.removeLayer(olHeatmapLayer);
                 olHeatmapLayer = null;
-                const peakEl = document.getElementById('peak-airport');
-                const peakDensEl = document.getElementById('peak-density');
+                const peakEl = document.getElementById('peak-display');
                 if (peakEl) peakEl.textContent = '--';
-                if (peakDensEl) peakDensEl.textContent = '--';
             }
         }
 
