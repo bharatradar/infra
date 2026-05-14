@@ -197,6 +197,26 @@ async def get_airport_weather(icao):
         logger.warning(f"Weather fetch failed for {icao}: {e}")
         return {"error": str(e)}
 
+async def get_weather_by_coords(lat, lon, label="My Location"):
+    cache_key = f"weather:current:coord:{lat:.2f}:{lon:.2f}"
+    r = await get_redis_client()
+    cached = await r.get(cache_key)
+    if cached:
+        try:
+            return json.loads(cached)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    try:
+        raw = await _fetch_from_openmeteo([lat], [lon])
+        result = _parse_response(raw, label)
+        if result:
+            result["icao"] = label
+            await r.setex(cache_key, 900, json.dumps(result))
+        return result
+    except Exception as e:
+        logger.warning(f"Weather fetch failed for coords ({lat},{lon}): {e}")
+        return {"error": str(e)}
+
 async def get_batch_weather(icaos):
     if not icaos:
         return {"airports": []}

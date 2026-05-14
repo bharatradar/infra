@@ -638,7 +638,11 @@ app.mount("/sw", StaticFiles(directory="static"), name="sw")
 @app.get("/")
 @app.get("/")
 async def serve_dashboard_root(request: Request):
-    return FileResponse("static/dashboard.html")
+    response = FileResponse("static/dashboard.html")
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.get("/login")
 @app.get("/login/")
@@ -660,7 +664,11 @@ async def logout():
 async def serve_dashboard(request: Request):
     if not is_session_valid(request):
         return RedirectResponse(url="/login")
-    return FileResponse("static/dashboard.html")
+    response = FileResponse("static/dashboard.html")
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 @app.get("/testmodel")
 @app.get("/testmodel/")
@@ -1617,10 +1625,10 @@ async def get_airport_delay_stats():
 # 🌤️ Weather API (Open-Meteo Integration)
 # ============================================================
 
-@app.get("/api/weather/{icao}")
-async def api_airport_weather(icao: str):
-    """Get current weather + 48h forecast for an airport by ICAO code."""
-    return await weather_service.get_airport_weather(icao)
+@app.get("/api/weather/coords")
+async def api_coords_weather(lat: float = Query(...), lon: float = Query(...), label: str = Query("My Location")):
+    """Get current weather by lat/lon coordinates (for user's location)."""
+    return await weather_service.get_weather_by_coords(lat, lon, label)
 
 @app.get("/api/weather/batch")
 async def api_batch_weather(icaos: str = Query("")):
@@ -1629,6 +1637,11 @@ async def api_batch_weather(icaos: str = Query("")):
     if not codes:
         return {"airports": []}
     return await weather_service.get_batch_weather(codes)
+
+@app.get("/api/weather/{icao}")
+async def api_airport_weather(icao: str):
+    """Get current weather + 48h forecast for an airport by ICAO code."""
+    return await weather_service.get_airport_weather(icao)
 
 # ============================================================
 # 🌟 Community Feeder Network API
