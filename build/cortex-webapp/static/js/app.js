@@ -1691,6 +1691,8 @@ async function fetchATC() {
     }
 }
 
+let weatherExpandListener = null;
+
 async function fetchWeather() {
     const airport = document.getElementById('filter-airport').value;
     const widget = document.getElementById('weather-widget');
@@ -1716,11 +1718,20 @@ async function fetchWeather() {
     }
 }
 
+function toggleWeatherExpand() {
+    const expanded = document.getElementById('weather-expanded');
+    const chevron = document.getElementById('weather-chevron');
+    const isHidden = expanded.classList.contains('hidden');
+    expanded.classList.toggle('hidden');
+    chevron.className = isHidden ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down';
+}
+
 function displayWeather(data) {
     const widget = document.getElementById('weather-widget');
     widget.classList.remove('hidden');
     
     const current = data.current || {};
+    const airportName = data.airport || data.icao || '';
     const weatherCode = current.weather_code || 0;
     const iconMap = {
         0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️',
@@ -1735,7 +1746,7 @@ function displayWeather(data) {
         95: '⛈️', 96: '⛈️', 99: '⛈️'
     };
     
-    document.getElementById('weather-airport-name').textContent = `@ ${data.airport || data.icao || ''}`;
+    document.getElementById('weather-airport-name').textContent = airportName;
     document.getElementById('weather-icon').textContent = iconMap[weatherCode] || '☀️';
     document.getElementById('weather-temp').textContent = current.temperature_2m != null ? `${Math.round(current.temperature_2m)}°C` : '--';
     document.getElementById('weather-desc').textContent = current.weather_description || '--';
@@ -1758,14 +1769,30 @@ function displayWeather(data) {
             const hour = time.getHours();
             const icon = iconMap[h.weather_code] || '☀️';
             const div = document.createElement('div');
-            div.className = 'flex flex-col items-center min-w-[60px] py-1 px-2 rounded-lg bg-gray-800/40';
+            div.className = 'flex flex-col items-center min-w-[52px] py-1 px-1.5 rounded bg-gray-800/40';
             div.innerHTML = `
-                <span class="text-xs text-gray-400">${hour}:00</span>
-                <span class="text-lg my-1">${icon}</span>
-                <span class="text-sm font-bold text-white">${h.temperature_2m != null ? Math.round(h.temperature_2m) : '--'}°</span>
+                <span class="text-[10px] text-gray-400">${hour}:00</span>
+                <span class="text-base">${icon}</span>
+                <span class="text-xs font-bold text-white">${h.temperature_2m != null ? Math.round(h.temperature_2m) : '--'}°</span>
             `;
             forecastContainer.appendChild(div);
         });
+    }
+    
+    // Click-to-expand handler (only attach once)
+    if (!weatherExpandListener) {
+        weatherExpandListener = true;
+        widget.addEventListener('click', (e) => {
+            if (e.target.closest('#weather-forecast')) return;
+            toggleWeatherExpand();
+        });
+    }
+    
+    // Auto-collapse on new data
+    const expanded = document.getElementById('weather-expanded');
+    if (!expanded.classList.contains('hidden')) {
+        expanded.classList.add('hidden');
+        document.getElementById('weather-chevron').className = 'fa-solid fa-chevron-down';
     }
 }
 

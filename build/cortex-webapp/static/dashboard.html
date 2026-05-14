@@ -426,19 +426,22 @@
                         </div>
                     </div>
                     
-                    <!-- Delay Prediction Stats -->
+                    <!-- Delay + Weather Stats Row -->
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4">
-                        <div class="theme-bg-sidebar border theme-border rounded-xl p-4 flex items-center shadow-md">
-                            <div class="bg-orange-900/50 p-3 rounded-lg mr-4 border border-orange-500/30">
-                                <i class="fa-solid fa-clock text-orange-400 text-xl"></i>
+                        <div class="theme-bg-sidebar border theme-border rounded-xl p-4 shadow-md md:col-span-1">
+                            <p class="theme-text-muted text-xs font-bold uppercase tracking-wider flex items-center gap-2 mb-1">
+                                <i class="fa-solid fa-clock text-orange-400"></i> Delays
+                            </p>
+                            <div class="flex items-baseline gap-4">
+                                <div>
+                                    <span class="text-xs text-gray-500">Avg</span>
+                                    <h3 class="text-xl font-black text-white font-mono" id="avg-delay">--</h3>
+                                </div>
+                                <div>
+                                    <span class="text-xs text-gray-500">Flights</span>
+                                    <h3 class="text-xl font-black text-white font-mono" id="delayed-flights">--</h3>
+                                </div>
                             </div>
-                            <div><p class="theme-text-muted text-xs font-bold uppercase tracking-wider">Avg Delay</p><h3 class="text-2xl font-black text-white font-mono" id="avg-delay">--</h3></div>
-                        </div>
-                        <div class="theme-bg-sidebar border theme-border rounded-xl p-4 flex items-center shadow-md">
-                            <div class="bg-red-900/50 p-3 rounded-lg mr-4 border border-red-500/30">
-                                <i class="fa-solid fa-triangle-exclamation text-red-400 text-xl"></i>
-                            </div>
-                            <div><p class="theme-text-muted text-xs font-bold uppercase tracking-wider">Delayed Flights</p><h3 class="text-2xl font-black text-white font-mono" id="delayed-flights">--</h3></div>
                         </div>
                         <div class="theme-bg-sidebar border theme-border rounded-xl p-4 flex items-center shadow-md">
                             <div class="bg-yellow-900/50 p-3 rounded-lg mr-4 border border-yellow-500/30">
@@ -452,57 +455,58 @@
                             </div>
                             <div><p class="theme-text-muted text-xs font-bold uppercase tracking-wider">Most Delayed</p><h3 class="text-2xl font-black text-white font-mono" id="airport-congestion">--</h3></div>
                         </div>
-                    </div>
-
-                    <!-- Weather Widget (shown when an airport is selected) -->
-                    <div id="weather-widget" class="hidden mb-4 theme-bg-sidebar border theme-border rounded-xl p-4 shadow-md">
-                        <div class="flex items-center justify-between mb-3">
-                            <div class="flex items-center gap-2">
-                                <i class="fa-solid fa-cloud-sun text-cyan-400 text-lg"></i>
-                                <span class="text-sm font-bold text-white uppercase tracking-wider">
-                                    Weather <span id="weather-airport-name" class="text-gray-400 font-normal text-xs"></span>
-                                </span>
+                        <!-- Weather Card (compact, click to expand) -->
+                        <div id="weather-widget" class="hidden cursor-pointer theme-bg-sidebar border theme-border rounded-xl p-4 shadow-md hover:border-blue-500/50 transition relative">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span id="weather-icon" class="text-2xl flex-shrink-0">☀️</span>
+                                    <div class="min-w-0">
+                                        <p class="theme-text-muted text-xs font-bold uppercase tracking-wider truncate" id="weather-airport-name">Weather</p>
+                                        <div class="flex items-baseline gap-1.5">
+                                            <span id="weather-temp" class="text-xl font-black text-white">--</span>
+                                            <span id="weather-desc" class="text-xs text-gray-400 truncate">--</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-right flex-shrink-0">
+                                    <span id="weather-wind" class="text-sm font-bold text-blue-400 block">--</span>
+                                    <span class="text-[10px] text-gray-500">Wind</span>
+                                </div>
                             </div>
-                            <span class="text-xs text-gray-500" id="weather-updated"></span>
+                            <!-- Expanded details (hidden by default) -->
+                            <div id="weather-expanded" class="hidden mt-3 pt-3 border-t theme-border space-y-3">
+                                <div class="grid grid-cols-2 gap-3 text-xs">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fa-solid fa-eye text-green-400 w-4 text-center"></i>
+                                        <div>
+                                            <span id="weather-visibility" class="text-white font-bold">--</span>
+                                            <span class="text-gray-500 ml-1">Vis</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fa-solid fa-gauge text-yellow-400 w-4 text-center"></i>
+                                        <div>
+                                            <span id="weather-pressure" class="text-white font-bold">--</span>
+                                            <span class="text-gray-500 ml-1">hPa</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <i class="fa-solid fa-droplet text-cyan-400 w-4 text-center"></i>
+                                        <div>
+                                            <span id="weather-humidity" class="text-white font-bold">--</span>
+                                            <span class="text-gray-500 ml-1">Humidity</span>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="text-gray-500" id="weather-updated"></span>
+                                    </div>
+                                </div>
+                                <div id="weather-forecast" class="flex gap-1.5 overflow-x-auto"></div>
+                            </div>
+                            <div class="absolute bottom-1 right-2 text-[10px] text-gray-600">
+                                <i class="fa-solid fa-chevron-down" id="weather-chevron"></i>
+                            </div>
                         </div>
-                        <div class="grid grid-cols-2 md:grid-cols-6 gap-3 items-center">
-                            <div class="flex items-center gap-2 col-span-2 md:col-span-1">
-                                <span id="weather-icon" class="text-3xl">☀️</span>
-                                <div>
-                                    <span id="weather-temp" class="text-2xl font-black text-white">--</span>
-                                    <span class="text-xs text-gray-400 block" id="weather-desc">--</span>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2 text-sm">
-                                <i class="fa-solid fa-wind text-blue-400 w-5 text-center"></i>
-                                <div>
-                                    <span id="weather-wind" class="text-white font-bold">--</span>
-                                    <span class="text-xs text-gray-400 block">Wind</span>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2 text-sm">
-                                <i class="fa-solid fa-eye text-green-400 w-5 text-center"></i>
-                                <div>
-                                    <span id="weather-visibility" class="text-white font-bold">--</span>
-                                    <span class="text-xs text-gray-400 block">Visibility</span>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2 text-sm">
-                                <i class="fa-solid fa-gauge text-yellow-400 w-5 text-center"></i>
-                                <div>
-                                    <span id="weather-pressure" class="text-white font-bold">--</span>
-                                    <span class="text-xs text-gray-400 block">Pressure</span>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2 text-sm">
-                                <i class="fa-solid fa-droplet text-cyan-400 w-5 text-center"></i>
-                                <div>
-                                    <span id="weather-humidity" class="text-white font-bold">--</span>
-                                    <span class="text-xs text-gray-400 block">Humidity</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div id="weather-forecast" class="mt-3 flex gap-2 overflow-x-auto pt-2 border-t theme-border"></div>
                     </div>
                     
                     <!-- Main Radar + Side Panel -->

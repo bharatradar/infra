@@ -13,6 +13,7 @@ Data flow: user → ingest → hub → planes
 | Node | IP | Role | OS | Arch |
 |------|----|------|----|------|
 | Hub | 45.88.189.38 | K3s server + Shared Services (PostgreSQL, Redis, InfluxDB, MinIO) | Ubuntu | amd64 |
+| | SSH: `ssh -i /Users/raghavan/.ssh/id_ed25519_bharatradar_contabo_com.prv bharatradar@45.88.189.38` | | | |
 | Feeder Pi | 192.168.200.127 | RTL-SDR readsb + mlat-client (not K3s) | Raspberry Pi OS | arm64 |
 
 Services (manifests/default):
