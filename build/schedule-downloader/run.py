@@ -27,32 +27,21 @@ if __name__ == "__main__":
 
         # Pre-check: skip if now < next_run
         next_run = await db.get_next_run()
-        now_ist = datetime.now(IST)
-        if next_run is not None and now_ist < next_run:
-            logger.info(f"⏭️ Skipping: next_run at {next_run.isoformat()}, current time {now_ist.isoformat()}")
+        now_naive = datetime.now(IST).replace(tzinfo=None)
+        if next_run is not None and now_naive < next_run.replace(tzinfo=None):
+            logger.info(f"⏭️ Skipping: next_run at {next_run.isoformat()}, current time {now_naive.isoformat()}")
             await db_pool.close()
             return
 
-        # Select which days to fetch based on IST time
-        if now_ist.hour >= 22:
-            days = ['TODAY', 'TOMORROW']
-        else:
-            days = ['TODAY']
-        sched_config.Config.GET_SCHEDULES_FOR = days
-        logger.info(f"📅 Fetching schedules for: {', '.join(days)}")
+        # Always fetch both today and tomorrow to catch incomplete same-day data
+        sched_config.Config.GET_SCHEDULES_FOR = ['TODAY', 'TOMORROW']
+        logger.info("📅 Fetching schedules for: TODAY, TOMORROW")
 
         async with aiohttp.ClientSession() as session:
             await download_schedules(db, session, {}, {})
 
         # Post-download: compute and store next_run
         next_run_time = await compute_next_run_time(db)
-
-        # If only TODAY was fetched, ensure a 22:00 run to pre-fetch TOMORROW
-        if days == ['TODAY']:
-            twentytwo_ist = now_ist.replace(hour=22, minute=0, second=0, microsecond=0)
-            if now_ist < twentytwo_ist and (next_run_time > twentytwo_ist or next_run_time <= now_ist):
-                next_run_time = twentytwo_ist
-
         await db.set_next_run(next_run_time, "SUCCESS")
         logger.info(f"📅 Next run scheduled at {next_run_time.isoformat()}")
         await db_pool.close()

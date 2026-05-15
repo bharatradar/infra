@@ -477,12 +477,15 @@ async def execute_download(iata_to_icao: dict, days_to_run: list = None):
 async def compute_next_run_time(db: AsyncDatabaseManager) -> datetime:
     """Compute next run: 1.5h before the earliest 'last flight' among all airports today (IST)."""
     now_ist = datetime.now(IST)
-    today_midnight_ist = now_ist.replace(hour=0, minute=0, second=0, microsecond=0)
-    tomorrow_midnight_ist = today_midnight_ist + timedelta(days=1)
-    fallback = (now_ist + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
+    now_naive = now_ist.replace(tzinfo=None)
+    today_midnight_naive = now_naive.replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_midnight_naive = today_midnight_naive + timedelta(days=1)
+    next_6am = now_naive.replace(hour=6, minute=0, second=0, microsecond=0)
+    fallback = next_6am if now_naive < next_6am else next_6am + timedelta(days=1)
 
     try:
         async with db.pool.acquire() as conn:
+            noon_naive = today_midnight_naive.replace(hour=12)
             row = await conn.fetchrow("""
                 SELECT MIN(airport_last_flight) AS earliest_last_flight
                 FROM (
@@ -490,15 +493,16 @@ async def compute_next_run_time(db: AsyncDatabaseManager) -> datetime:
                     FROM flight_schedules
                     WHERE scheduled_time >= $1 AND scheduled_time < $2
                     GROUP BY airport_code
+                    HAVING MAX(scheduled_time) >= $3
                 ) sub
-            """, today_midnight_ist, tomorrow_midnight_ist)
+            """, today_midnight_naive, tomorrow_midnight_naive, noon_naive)
     except Exception as e:
         logger.error(f"compute_next_run_time query failed: {e}")
         return fallback
 
     if row and row['earliest_last_flight']:
         next_time = row['earliest_last_flight'] - timedelta(hours=1, minutes=30)
-        if next_time > now_ist:
+        if next_time > now_naive:
             logger.info(f"Next run scheduled at {next_time} (1.5h before earliest last flight)")
             return next_time
 
@@ -509,15 +513,9 @@ async def main():
     importlib.reload(config)
     iata_to_icao = await get_iata_to_icao_map()
 
-    now_ist = datetime.now(IST)
-    if now_ist.hour >= 22:
-        days = ['TODAY', 'TOMORROW']
-    else:
-        days = ['TODAY']
-
-    config.Config.GET_SCHEDULES_FOR = days
-    logger.info(f"📅 Fetching schedules: {', '.join(days)}")
-    await execute_download(iata_to_icao, days)
+    config.Config.GET_SCHEDULES_FOR = ['TODAY', 'TOMORROW']
+    logger.info("📅 Fetching schedules: TODAY, TOMORROW")
+    await execute_download(iata_to_icao, ['TODAY', 'TOMORROW'])
 
 if __name__ == "__main__":
     try: asyncio.run(main())
