@@ -1,0 +1,30 @@
+{
+  "name": "BharatRadar Command Center",
+  "short_name": "BharatRadar",
+  "description": "India's Open ADS-B Flight Tracking Network — live flight tracking, ATC dashboard, airport analytics",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f0f1a",
+  "theme_color": "#111827",
+  "orientation": "any",
+  "categories": ["travel", "aviation", "utilities"],
+  "lang": "en",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

@@ -637,6 +637,21 @@ async def auth_middleware(request: Request, call_next):
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/sw", StaticFiles(directory="static"), name="sw")
 
+@app.get("/sw.js")
+async def serve_sw():
+    response = FileResponse("static/service-worker.js")
+    response.headers["Content-Type"] = "application/javascript"
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return response
+
+@app.get("/manifest.json")
+async def serve_manifest():
+    response = FileResponse("static/manifest.json")
+    response.headers["Content-Type"] = "application/json"
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return response
+
 @app.get("/")
 @app.get("/")
 async def serve_dashboard_root(request: Request):

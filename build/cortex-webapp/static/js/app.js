@@ -2419,7 +2419,7 @@ async function enableWebPush() {
         }
 
         // Register the background Service Worker
-        const swReg = await navigator.serviceWorker.register('/sw/service-worker.js');
+        const swReg = await navigator.serviceWorker.register('/sw.js');
         
         // Fetch your server's VAPID Public Key
         const pkRes = await fetch('/api/push/public_key');
