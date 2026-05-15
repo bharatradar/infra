@@ -17,6 +17,7 @@ from config import Config
 from typing import Optional
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 import json
+import orjson
 import logging
 import sys
 import urllib.request
@@ -996,11 +997,41 @@ async def api_aircraft_all():
             logger.error("aircraft/all error: Could not get database pool")
             return []
             
+        result = []
+        try:
+            r = await web_app_db.get_redis_client()
+            exists = await r.exists(Config.REDIS_LIVE_FLIGHTS_KEY)
+            if exists:
+                all_flights = await r.hgetall(Config.REDIS_LIVE_FLIGHTS_KEY)
+                if all_flights:
+                    for hex_id, data in all_flights.items():
+                        fl = orjson.loads(data)
+                        ac = {
+                            'hexid': hex_id,
+                            'callsign': fl.get('callsign', ''),
+                            'lat': fl.get('lat'),
+                            'lon': fl.get('lon'),
+                            'alt': fl.get('alt'),
+                            'speed': fl.get('speed', 0),
+                            'heading': fl.get('heading', 0),
+                            'gs': fl.get('speed', 0),
+                        }
+                        if ac.get('callsign'):
+                            sched = await pool.fetchrow("""
+                                SELECT airport_code, route_airport FROM flight_schedules 
+                                WHERE callsign ILIKE $1 AND scheduled_time >= NOW() - INTERVAL '12 hours'
+                                ORDER BY ABS(EXTRACT(EPOCH FROM (scheduled_time - NOW()))) ASC LIMIT 1
+                            """, ac['callsign'])
+                            if sched:
+                                ac['origin'] = sched.get('airport_code', '')
+                                ac['destination'] = sched.get('route_airport', '')
+                        result.append(ac)
+                    logger.info(f"aircraft/all: Returning {len(result)} aircraft from Redis")
+                    return result
+        except Exception as e:
+            logger.warning(f"aircraft/all Redis error, falling back to DB: {e}")
+
         async with pool.acquire() as conn:
-            # Check if table has data
-            count = await conn.fetchval("SELECT COUNT(*) FROM flights_in_air WHERE last_seen > NOW() - INTERVAL '30 seconds'")
-            logger.info(f"aircraft/all: Found {count} aircraft in flights_in_air")
-            
             rows = await conn.fetch("""
                 SELECT f.hexid, f.callsign, f.lat, f.lon, f.alt, f.speed, f.heading, f.last_seen
                 FROM flights_in_air f
@@ -1008,11 +1039,9 @@ async def api_aircraft_all():
                 ORDER BY f.last_seen DESC
                 LIMIT 500
             """)
-            result = []
             for r in rows:
                 ac = dict(r)
                 ac['gs'] = ac.get('speed', 0)
-                # Try to get origin/destination from schedules
                 if ac.get('callsign'):
                     sched = await conn.fetchrow("""
                         SELECT airport_code, route_airport FROM flight_schedules 
@@ -1023,7 +1052,7 @@ async def api_aircraft_all():
                         ac['origin'] = sched.get('airport_code', '')
                         ac['destination'] = sched.get('route_airport', '')
                 result.append(ac)
-            logger.info(f"aircraft/all: Returning {len(result)} aircraft")
+            logger.info(f"aircraft/all: Returning {len(result)} aircraft from DB")
             return result
     except Exception as e:
         logger.error(f"aircraft/all error: {e}")

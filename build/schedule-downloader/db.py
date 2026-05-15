@@ -100,11 +100,9 @@ class AsyncDatabaseManager:
                 
     async def reset_system_state(self, redis_client=None):
         try:
-            async with self.pool.acquire() as conn:
-                await conn.execute("DELETE FROM flights_in_air")
             if redis_client:
                 await redis_client.flushdb()
-            logger.info("♻️ System State Reset: Cleared flights_in_air and flushed Redis cache.")
+            logger.info("♻️ System State Reset: Flushed Redis cache. (flights_in_air is deprecated, no-op)")
         except Exception as e:
             logger.error(f"❌ [DB ERROR] reset_system_state failed: {e}")
 
@@ -331,47 +329,16 @@ class AsyncDatabaseManager:
             return None
 
     async def upsert_flight_in_air(self, hexid, callsign, lat, lon, alt, speed, heading):
-        try:
-            async with self.pool.acquire() as conn:
-                await conn.execute("""
-                    INSERT INTO flights_in_air (hexid, callsign, lat, lon, alt, speed, heading, last_seen)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() AT TIME ZONE 'UTC')
-                    ON CONFLICT (hexid) DO UPDATE
-                    SET callsign = EXCLUDED.callsign, lat = EXCLUDED.lat, lon = EXCLUDED.lon,
-                        alt = EXCLUDED.alt, speed = EXCLUDED.speed, heading = EXCLUDED.heading,
-                        last_seen = NOW() AT TIME ZONE 'UTC'
-                """, hexid, callsign, lat, lon, alt, speed, heading)
-        except Exception as e:
-            logger.warning(f"Failed to upsert flight in air {callsign}: {e}")
+        pass  # DEPRECATED: flights_in_air no longer used (Redis-only)
 
     async def bulk_upsert_flights_in_air(self, flights_list):
-        if not flights_list: return
-        try:
-            async with self.pool.acquire() as conn:
-                await conn.executemany("""
-                    INSERT INTO flights_in_air (hexid, callsign, lat, lon, alt, speed, heading, last_seen)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() AT TIME ZONE 'UTC')
-                    ON CONFLICT (hexid) DO UPDATE 
-                    SET callsign = EXCLUDED.callsign, lat = EXCLUDED.lat, lon = EXCLUDED.lon, 
-                        alt = EXCLUDED.alt, speed = EXCLUDED.speed, heading = EXCLUDED.heading, 
-                        last_seen = NOW() AT TIME ZONE 'UTC'
-                """, flights_list)
-        except Exception as e:
-            logger.error(f"❌ [DB ERROR] bulk_upsert_flights_in_air failed: {e}")
+        pass  # DEPRECATED: flights_in_air no longer used (Redis-only)
 
     async def cleanup_stale_flights(self):
-        try:
-            async with self.pool.acquire() as conn:
-                await conn.execute("DELETE FROM flights_in_air WHERE last_seen < (NOW() AT TIME ZONE 'UTC') - INTERVAL '3 minutes'")
-        except Exception as e:
-            logger.warning(f"Failed to cleanup stale flights: {e}")
+        pass  # DEPRECATED: flights_in_air no longer used (Redis handles TTL)
 
     async def remove_flight_from_air(self, hexid):
-        try:
-            async with self.pool.acquire() as conn:
-                await conn.execute("DELETE FROM flights_in_air WHERE hexid = $1", hexid)
-        except Exception as e:
-            logger.warning(f"Failed to remove flight from air {hexid}: {e}")
+        pass  # DEPRECATED: flights_in_air no longer used (Redis-only)
 
     async def get_historical_route(self, hex_id, callsign=None):
         try:
@@ -473,15 +440,7 @@ class AsyncDatabaseManager:
             return None, None
 
     async def get_planes_missing_enrichment(self):
-        try:
-            async with self.pool.acquire() as conn:
-                return await conn.fetch("""
-                    SELECT f.hexid, f.callsign FROM flights_in_air f
-                    LEFT JOIN flight_events e ON f.callsign = e.callsign AND e.event_type = 'ENRICHMENT'
-                    WHERE e.id IS NULL
-                """)
-        except Exception as e:
-            return []
+        return []  # DEPRECATED: flights_in_air no longer used (Redis-only)
 
     async def cleanup_stale_ground_ops(self, hours=4):
         try:

@@ -34,7 +34,7 @@ spec:
             imagePullPolicy: Always
             env:
             - name: DB_HOST
-              value: "SHARED_SERVICES_HOST"
+              value: "45.88.189.38"
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME

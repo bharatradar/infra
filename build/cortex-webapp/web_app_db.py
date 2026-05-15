@@ -740,6 +740,49 @@ async def fetch_drilldown_demand(db_pool, hour_bucket, airport):
         return results
     
 async def fetch_drilldown_altitude(db_pool, band, airline, airport):
+    if '<10k' in band: max_alt = 10000; min_alt = 0
+    elif '10k-20k' in band: min_alt = 10000; max_alt = 20000
+    else: min_alt = 20000; max_alt = 999999
+
+    try:
+        r = await get_redis_client()
+        all_flights = await r.hgetall(Config.REDIS_LIVE_FLIGHTS_KEY)
+        if not all_flights:
+            return []
+        results = []
+        for hex_id, data in all_flights.items():
+            fl = orjson.loads(data)
+            alt = fl.get('alt')
+            if alt is None:
+                continue
+            alt_f = float(alt)
+            if alt_f < min_alt or alt_f >= max_alt:
+                continue
+            cs = fl.get('callsign', '')
+            if airline and airline != 'ALL' and not cs.startswith(airline.upper()):
+                continue
+            if airport and airport != 'ALL':
+                ap_data = Config.TARGET_AIRPORTS.get(airport.upper())
+                ap_lat = ap_data.get('lat') if ap_data else None
+                ap_lon = ap_data.get('lon') if ap_data else None
+                fl_lat, fl_lon = fl.get('lat'), fl.get('lon')
+                if ap_lat is not None and ap_lon is not None and fl_lat is not None and fl_lon is not None:
+                    if abs(float(fl_lat) - float(ap_lat)) > 1.5 or abs(float(fl_lon) - float(ap_lon)) > 1.5:
+                        continue
+                elif not cs or airport.upper() not in cs:
+                    continue
+            results.append({
+                'hex_id': hex_id,
+                'callsign': cs,
+                'alt': alt_f,
+                'speed': fl.get('speed', 0),
+                'heading': fl.get('heading', 0),
+            })
+        results.sort(key=lambda x: x['alt'], reverse=True)
+        return results[:100]
+    except Exception as e:
+        logger.warning(f"Redis fetch_drilldown_altitude error, falling back to DB: {e}")
+
     async with db_pool.acquire() as conn:
         if '<10k' in band: alt_condition = "alt < 10000"
         elif '10k-20k' in band: alt_condition = "alt >= 10000 AND alt < 20000"

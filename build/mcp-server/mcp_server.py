@@ -175,6 +175,52 @@ async def _set_cached_route(conn, callsign, origin, dest):
     except Exception as e:
         logger.warning(f"Cache write failed for {callsign}: {e}")
 
+async def _fetch_aircraft_from_redis(callsign: str) -> Optional[dict]:
+    if not REDIS_POOL:
+        return None
+    try:
+        import orjson
+        flights = await REDIS_POOL.hgetall(Config.REDIS_LIVE_FLIGHTS_KEY)
+        for hex_id, data_json in flights.items():
+            try:
+                data = orjson.loads(data_json)
+                if data.get("callsign", "").upper().strip() == callsign.upper().strip():
+                    return {"hexid": hex_id.upper(), "lat": data.get("lat"), "lon": data.get("lon"), "alt": data.get("alt"), "speed": data.get("speed"), "heading": data.get("heading")}
+            except Exception:
+                continue
+    except Exception as e:
+        logger.warning(f"Redis scan for {callsign} failed: {e}")
+    return None
+
+async def _fetch_aircraft_from_redis_by_hex(hex_id: str) -> Optional[dict]:
+    if not REDIS_POOL:
+        return None
+    try:
+        import orjson
+        data = await REDIS_POOL.hget(Config.REDIS_LIVE_FLIGHTS_KEY, hex_id.upper())
+        if data:
+            parsed = orjson.loads(data)
+            return {"hexid": hex_id.upper(), "callsign": parsed.get("callsign"), "lat": parsed.get("lat"), "lon": parsed.get("lon"), "alt": parsed.get("alt"), "speed": parsed.get("speed"), "heading": parsed.get("heading")}
+    except Exception as e:
+        logger.warning(f"Redis hex lookup for {hex_id} failed: {e}")
+    return None
+
+async def _get_airspace_stats_from_redis() -> Optional[dict]:
+    if not REDIS_POOL:
+        return None
+    try:
+        import orjson
+        flights = await REDIS_POOL.hgetall(Config.REDIS_LIVE_FLIGHTS_KEY)
+        if not flights:
+            return {"count": 0, "avg_speed": 0, "avg_alt": 0}
+        count = len(flights)
+        total_speed = sum(orjson.loads(v).get("speed", 0) or 0 for v in flights.values())
+        total_alt = sum(orjson.loads(v).get("alt", 0) or 0 for v in flights.values())
+        return {"count": count, "avg_speed": int(total_speed / count) if count else 0, "avg_alt": int(total_alt / count) if count else 0}
+    except Exception as e:
+        logger.warning(f"Redis stats failed: {e}")
+    return None
+
 async def _get_unified_eta_and_dest(conn, target_cs, c_lat, c_lon, c_alt, c_spd):
     norm_cs = await normalize_callsign(target_cs)
     dest_code, origin_code, dest_lat, dest_lon, dest_from_web = None, None, None, None, False
@@ -265,17 +311,12 @@ async def _fetch_flight_status_logic(callsign_raw: str, depth: int = 0) -> str:
     if depth > 1: return ""
     raw = callsign_raw.upper().replace(" ", "").strip()
     norm = await normalize_callsign(raw)
-    clean_raw = raw.strip()
-    clean_norm = norm.strip() if norm else None
     
     try:
         async with DB_POOL.acquire() as conn:
-            air = await conn.fetchrow("""
-                SELECT hexid, lat, lon, alt, speed, heading 
-                FROM flights_in_air 
-                WHERE callsign = $1 OR callsign = $2 
-                ORDER BY last_seen DESC LIMIT 1
-            """, clean_raw, clean_norm)
+            air = await _fetch_aircraft_from_redis(raw)
+            if not air and norm:
+                air = await _fetch_aircraft_from_redis(norm)
 
             live_from_web = False
             if not air:
@@ -433,7 +474,7 @@ async def get_inbound_aircraft_status(departing_callsign: str) -> str:
     norm, raw = await normalize_callsign(departing_callsign), departing_callsign.upper().replace(" ", "").strip()
     try:
         async with DB_POOL.acquire() as conn:
-            is_airborne = await conn.fetchrow("SELECT hexid FROM flights_in_air WHERE TRIM(callsign) = $1 OR TRIM(callsign) = $2 LIMIT 1", raw, norm)
+            is_airborne = await _fetch_aircraft_from_redis(raw) or (await _fetch_aircraft_from_redis(norm) if norm else None)
             if is_airborne:
                 status_text = await _fetch_flight_status_logic(departing_callsign)
                 return f"✈️ <b>Flight {raw} is currently active and airborne!</b>\n\n{status_text}"
@@ -460,8 +501,8 @@ async def get_inbound_aircraft_status(departing_callsign: str) -> str:
                 if inbound_sched and inbound_sched['callsign']:
                     inbound_cs, assignment_method = inbound_sched['callsign'], "📡 <b>Confirmed via Official Airline Schedule (Same Aircraft)</b>"
                 else:
-                    air = await conn.fetchrow("SELECT callsign FROM flights_in_air WHERE LOWER(hexid) = LOWER($1)", hex_assigned)
-                    if air and air['callsign']: inbound_cs, assignment_method = air['callsign'], "📡 <b>Confirmed via Live Radar (Airborne Aircraft)</b>"
+                    air = await _fetch_aircraft_from_redis_by_hex(hex_assigned)
+                    if air: inbound_cs, assignment_method = air['callsign'], "📡 <b>Confirmed via Live Radar (Airborne Aircraft)</b>"
                     else:
                         ground = await conn.fetchrow("SELECT current_callsign FROM ground_ops WHERE LOWER(hex_id) = LOWER($1) ORDER BY landed_at DESC LIMIT 1", hex_assigned)
                         if ground and ground['current_callsign']: inbound_cs, assignment_method = ground['current_callsign'], "📡 <b>Confirmed via Live Schedule (Already on Ground)</b>"
@@ -585,7 +626,7 @@ async def predict_flight_assignment(future_callsign: str) -> str:
                 return f"⚠️ Aircraft <code>{hex_id}</code> is assigned to {future_callsign}, but its inbound routing is unknown."
                 
             inbound_cs = arr_sched['callsign']
-            live = await conn.fetchrow("SELECT hexid, alt FROM flights_in_air WHERE TRIM(callsign) = $1", inbound_cs)
+            live = await _fetch_aircraft_from_redis(inbound_cs)
             p_msg = f"🔮 <b>Assignment Confirmed for {future_callsign}</b>\nThe schedule guarantees this route is operated by aircraft arriving as <b>{inbound_cs}</b> (Hex: <code>{hex_id}</code>).\n\n"
             if live: p_msg += f"✅ <b>Live Status:</b> {inbound_cs} is IN THE AIR at {live['alt']:,}ft. This plane will operate {future_callsign} next."
             else: p_msg += f"⚠️ <b>Live Status:</b> {inbound_cs} is not currently tracked on live radar."
@@ -706,31 +747,48 @@ async def get_inbound_flights(airport_code: str, origin_airport: Optional[str] =
                     hist_buffer_mins = max(5, min(45, int(avg_app_row['avg_mins'])))
             except: pass
 
-            # 3. Fetch the active flights
-            query = """
-                SELECT f.callsign, f.hexid, f.alt, f.lat, f.lon, f.speed, e.origin 
-                FROM flights_in_air f 
-                JOIN (
-                    SELECT DISTINCT ON (hex_id) hex_id, origin, destination 
-                    FROM flight_events WHERE destination IS NOT NULL 
-                    ORDER BY hex_id, timestamp DESC
-                ) e ON f.hexid = e.hex_id 
-                WHERE e.destination = $1
-            """
-            
-            if orig_icao:
-                query += " AND e.origin = $2"
-                rows = await conn.fetch(query, icao, orig_icao)
-            else:
-                rows = await conn.fetch(query, icao)
-            
             orig_str = f" from {orig_icao}" if orig_icao else ""
-            if not rows: return f"No active inbound flights heading to {icao}{orig_str}."
+
+            # 3. Fetch from Redis + flight_events for route data
+            flights_data = await REDIS_POOL.hgetall(Config.REDIS_LIVE_FLIGHTS_KEY) if REDIS_POOL else {}
+            if not flights_data:
+                return f"No active inbound flights heading to {icao}{orig_str}."
             
-            msg = f"🛬 <b>Active Inbounds to {icao}{orig_str}: {len(rows)} aircraft</b>\n"
+            hex_ids = list(flights_data.keys())
+            route_rows = await conn.fetch("""
+                SELECT DISTINCT ON (hex_id) hex_id, origin, destination 
+                FROM flight_events WHERE destination IS NOT NULL AND hex_id = ANY($1::text[])
+                ORDER BY hex_id, timestamp DESC
+            """, hex_ids) if hex_ids else []
+            route_map = {r['hex_id']: r for r in route_rows}
             
-            # 4. 🌟 NEW: Calculate ETAs in memory instantly without any DB or API calls!
-            for r in rows: 
+            inbounds = []
+            for hex_id, data_json in flights_data.items():
+                import orjson
+                fl = orjson.loads(data_json)
+                route = route_map.get(hex_id.upper())
+                if not route:
+                    continue
+                if route['destination'] != icao:
+                    continue
+                if orig_icao and route.get('origin') != orig_icao:
+                    continue
+                inbounds.append({
+                    'callsign': fl.get('callsign', hex_id),
+                    'hexid': hex_id,
+                    'lat': fl.get('lat'),
+                    'lon': fl.get('lon'),
+                    'alt': fl.get('alt'),
+                    'speed': fl.get('speed'),
+                    'origin': route.get('origin'),
+                })
+            
+            if not inbounds: return f"No active inbound flights heading to {icao}{orig_str}."
+            
+            msg = f"🛬 <b>Active Inbounds to {icao}{orig_str}: {len(inbounds)} aircraft</b>\n"
+            
+            # 4. Calculate ETAs in memory
+            for r in inbounds: 
                 eta_mins = None
                 if dest_lat and dest_lon and r['speed'] and float(r['speed']) > 0:
                     dist_nm = calculate_haversine(float(r['lat'] or 0), float(r['lon'] or 0), dest_lat, dest_lon)
@@ -775,16 +833,31 @@ async def get_route_status_board(origin: str, destination: str) -> str:
 
                 msg += "\n"
 
-            airborne = await conn.fetch("""
-                SELECT f.callsign, f.lat, f.lon, f.alt, f.speed 
-                FROM flights_in_air f 
-                JOIN (
+            flights_data = await REDIS_POOL.hgetall(Config.REDIS_LIVE_FLIGHTS_KEY) if REDIS_POOL else {}
+            airborne = []
+            if flights_data:
+                hex_ids = list(flights_data.keys())
+                route_rows = await conn.fetch("""
                     SELECT DISTINCT ON (hex_id) hex_id, origin, destination 
-                    FROM flight_events WHERE destination IS NOT NULL 
+                    FROM flight_events WHERE destination IS NOT NULL AND hex_id = ANY($1::text[])
                     ORDER BY hex_id, timestamp DESC
-                ) e ON f.hexid = e.hex_id 
-                WHERE e.origin = $1 AND e.destination = $2
-            """, orig_icao, dest_icao)
+                """, hex_ids) if hex_ids else []
+                route_map = {r['hex_id']: r for r in route_rows}
+                
+                for hex_id, data_json in flights_data.items():
+                    import orjson
+                    fl = orjson.loads(data_json)
+                    route = route_map.get(hex_id.upper())
+                    if not route:
+                        continue
+                    if route.get('origin') == orig_icao and route.get('destination') == dest_icao:
+                        airborne.append({
+                            'callsign': fl.get('callsign', hex_id),
+                            'lat': fl.get('lat'),
+                            'lon': fl.get('lon'),
+                            'alt': fl.get('alt'),
+                            'speed': fl.get('speed'),
+                        })
             if airborne:
                 msg += "✈️ <b>Currently Airborne (Live Radar)</b>\n"
                 for r in airborne:
@@ -798,7 +871,6 @@ async def get_route_status_board(origin: str, destination: str) -> str:
                 FROM departures_log 
                 WHERE airport = $1 AND destination = $2 AND timestamp >= NOW() - INTERVAL '12 hours'
                 AND hex_id NOT IN (SELECT hex_id FROM arrivals_log WHERE airport = $2 AND timestamp >= NOW() - INTERVAL '12 hours')
-                AND hex_id NOT IN (SELECT hexid FROM flights_in_air)
                 ORDER BY timestamp DESC
             """, orig_icao, dest_icao)
             if pending:
@@ -831,11 +903,10 @@ async def get_route_status_board(origin: str, destination: str) -> str:
 @app.tool()
 async def get_airspace_pulse() -> str:
     """Get global stats on currently tracked airspace."""
-    try:
-        async with DB_POOL.acquire() as conn:
-            row = await conn.fetchrow("SELECT COUNT(*) as c, AVG(speed) as s, AVG(alt) as a FROM flights_in_air")
-            return f"🌐 <b>Airspace Pulse</b>\nTracking <b>{row['c']}</b> active flights.\nAvg Speed: {int(row['s'] or 0)}kts | Avg Altitude: {int(row['a'] or 0)}ft."
-    except: return "⚠️ Error fetching pulse."
+    stats = await _get_airspace_stats_from_redis()
+    if stats:
+        return f"🌐 <b>Airspace Pulse</b>\nTracking <b>{stats['count']}</b> active flights.\nAvg Speed: {stats['avg_speed']}kts | Avg Altitude: {stats['avg_alt']}ft."
+    return "⚠️ Error fetching pulse."
 
 @app.tool()
 async def get_system_health() -> str:

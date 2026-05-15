@@ -83,6 +83,25 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 ## Owner
 @bharatradar/sre
 
+## Credentials (session-persistent)
+
+### GHCR
+- Username: `ragavellur`
+- Email: raga.vellur@gmail.com
+- Token: `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` (classic PAT, used for `docker login`)
+- Login: `echo "$GHCR_TOKEN" | docker login ghcr.io -u ragavellur --password-stdin`
+
+### Server Access (K3s - 45.88.189.38)
+```bash
+ssh -i /Users/raghavan/.ssh/id_ed25519_bharatradar_contabo_com.prv bharatradar@45.88.189.38
+```
+
+### Image Tag Conventions
+- `:latest` + version tag (e.g., `:v5.9.0`) for cortex-webapp
+- `:latest` only for telegram-bot, ai-agents, schedule-downloader
+- Build: `docker buildx build --platform linux/amd64 -t ghcr.io/bharatradar/<image>:<tag> --push build/<image>/`
+- Multi-tag: `-t ghcr.io/bharatradar/<image>:<tag1> -t ghcr.io/bharatradar/<image>:<tag2>`
+
 ## Key Notes
 - All images are multi-arch (amd64 + arm64) for Pi compatibility
 - UUID tracking enabled via custom docker-tar1090-uuid image (rId in aircraft.json)

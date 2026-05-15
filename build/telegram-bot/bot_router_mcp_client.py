@@ -137,6 +137,31 @@ def resolve_to_icao(code):
             return icao
     return code
 
+async def _fetch_aircraft_from_redis_bot(callsign: str) -> Optional[dict]:
+    """Look up a flight by callsign from the Redis live_flights hash."""
+    if not REDIS_POOL:
+        return None
+    try:
+        import orjson
+        flights = await REDIS_POOL.hgetall(Config.REDIS_LIVE_FLIGHTS_KEY)
+        for hex_id, data_json in flights.items():
+            try:
+                data = orjson.loads(data_json)
+                if data.get("callsign", "").upper().strip() == callsign.upper().strip():
+                    return {
+                        "hexid": hex_id.upper(),
+                        "lat": data.get("lat"),
+                        "lon": data.get("lon"),
+                        "alt": data.get("alt"),
+                        "speed": data.get("speed"),
+                        "heading": data.get("heading"),
+                    }
+            except Exception:
+                continue
+    except Exception as e:
+        logger.warning(f"Redis scan for {callsign} failed: {e}")
+    return None
+
 # ==========================================
 # 🌟 MCP TOOL EXECUTOR
 # ==========================================
@@ -993,68 +1018,68 @@ async def calculate_watchdog_eta(target_cs: str):
     import aiohttp
     
     try:
-        pool = await get_db_pool()
-        async with pool.acquire() as conn:
-            air = await conn.fetchrow("SELECT lat, lon, speed, alt FROM flights_in_air WHERE callsign = $1", target_cs.upper())
-            if not air:
-                return None, None
-            
-            c_lat = float(air.get('lat') or 0)
-            c_lon = float(air.get('lon') or 0)
-            c_spd = float(air.get('speed') or 0)
-            c_alt = float(air.get('alt') or 0)
-            
-            if c_spd <= 0:
-                return None, None
-            
-            dest_code = None
-            dest_lat = None
-            dest_lon = None
-            
-            # Try FlightRadar24 + adsbdb (primary) for destination coordinates
-            try:
-                from utils import get_iata_from_icao_fr24
-                async with aiohttp.ClientSession() as session:
-                    norm = await normalize_callsign(target_cs)
-                    iata_code, iata_flight, operator = await get_iata_from_icao_fr24(norm, session)
-                    if iata_flight:
-                        async with aiohttp.ClientSession() as adsb_session:
-                            async with adsb_session.get(f"https://api.adsbdb.com/v0/callsign/{iata_flight}", timeout=3) as r:
-                                if r.status == 200:
-                                    d = (await r.json()).get("response", {}).get("flightroute", {})
-                                    dest_code = resolve_to_icao(d.get("destination", {}).get("icao_code") or d.get("destination", {}).get("iata_code", ""))
-                                    if d.get("destination", {}).get("latitude"):
-                                        dest_lat = float(d["destination"]["latitude"])
-                                        dest_lon = float(d["destination"]["longitude"])
-            except Exception as e:
-                logger.warning(f"FR24 resolve failed for {target_cs}: {e}")
-            
-            # Fallback: adsbdb with ICAO callsign
-            if not dest_lat or not dest_lon:
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        norm = await normalize_callsign(target_cs)
-                        async with session.get(f"https://api.adsbdb.com/v0/callsign/{norm}", timeout=3) as r:
+        air = await _fetch_aircraft_from_redis_bot(target_cs.upper())
+        if not air:
+            return None, None
+        
+        c_lat = float(air.get('lat') or 0)
+        c_lon = float(air.get('lon') or 0)
+        c_spd = float(air.get('speed') or 0)
+        c_alt = float(air.get('alt') or 0)
+        
+        if c_spd <= 0:
+            return None, None
+        
+        dest_code = None
+        dest_lat = None
+        dest_lon = None
+        
+        # Try FlightRadar24 + adsbdb (primary) for destination coordinates
+        try:
+            from utils import get_iata_from_icao_fr24
+            async with aiohttp.ClientSession() as session:
+                norm = await normalize_callsign(target_cs)
+                iata_code, iata_flight, operator = await get_iata_from_icao_fr24(norm, session)
+                if iata_flight:
+                    async with aiohttp.ClientSession() as adsb_session:
+                        async with adsb_session.get(f"https://api.adsbdb.com/v0/callsign/{iata_flight}", timeout=3) as r:
                             if r.status == 200:
                                 d = (await r.json()).get("response", {}).get("flightroute", {})
-                                if not dest_code:
-                                    dest_code = resolve_to_icao(d.get("destination", {}).get("icao_code") or d.get("destination", {}).get("iata_code", ""))
+                                dest_code = resolve_to_icao(d.get("destination", {}).get("icao_code") or d.get("destination", {}).get("iata_code", ""))
                                 if d.get("destination", {}).get("latitude"):
                                     dest_lat = float(d["destination"]["latitude"])
                                     dest_lon = float(d["destination"]["longitude"])
-                except: pass
-            
-            # Fallback: look up coordinates from Config.TARGET_AIRPORTS
-            if dest_code and (not dest_lat or not dest_lon):
-                clean_dest = dest_code.strip().upper()
-                for icao, ap_data in Config.TARGET_AIRPORTS.items():
-                    if icao == clean_dest or ap_data.get('iata', '') == clean_dest:
-                        dest_lat = float(ap_data['lat'])
-                        dest_lon = float(ap_data['lon'])
-                        break
-            
-            # Fallback to schedule
-            if not dest_code:
+        except Exception as e:
+            logger.warning(f"FR24 resolve failed for {target_cs}: {e}")
+        
+        # Fallback: adsbdb with ICAO callsign
+        if not dest_lat or not dest_lon:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    norm = await normalize_callsign(target_cs)
+                    async with session.get(f"https://api.adsbdb.com/v0/callsign/{norm}", timeout=3) as r:
+                        if r.status == 200:
+                            d = (await r.json()).get("response", {}).get("flightroute", {})
+                            if not dest_code:
+                                dest_code = resolve_to_icao(d.get("destination", {}).get("icao_code") or d.get("destination", {}).get("iata_code", ""))
+                            if d.get("destination", {}).get("latitude"):
+                                dest_lat = float(d["destination"]["latitude"])
+                                dest_lon = float(d["destination"]["longitude"])
+            except: pass
+        
+        # Fallback: look up coordinates from Config.TARGET_AIRPORTS
+        if dest_code and (not dest_lat or not dest_lon):
+            clean_dest = dest_code.strip().upper()
+            for icao, ap_data in Config.TARGET_AIRPORTS.items():
+                if icao == clean_dest or ap_data.get('iata', '') == clean_dest:
+                    dest_lat = float(ap_data['lat'])
+                    dest_lon = float(ap_data['lon'])
+                    break
+        
+        # Fallback to schedule
+        if not dest_code:
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
                 sched = await conn.fetchrow("""
                     SELECT route_airport, airport_code, direction FROM flight_schedules 
                     WHERE (callsign = $1 OR flight_number = $1) 
@@ -1063,20 +1088,21 @@ async def calculate_watchdog_eta(target_cs: str):
                 """, target_cs.upper())
                 if sched:
                     dest_code = resolve_to_icao(sched['airport_code'] if sched['direction'] == 'ARRIVALS' else sched['route_airport'])
-                    # Look up coordinates
                     clean_dest = dest_code.strip().upper()
                     for icao, ap_data in Config.TARGET_AIRPORTS.items():
                         if icao == clean_dest or ap_data.get('iata', '') == clean_dest:
                             dest_lat = float(ap_data['lat'])
                             dest_lon = float(ap_data['lon'])
                             break
-            
-            # Calculate ETA using smart model
-            if dest_lat and dest_lon:
+        
+        # Calculate ETA using smart model
+        if dest_lat and dest_lon:
+            pool = await get_db_pool()
+            async with pool.acquire() as conn:
                 eta_mins = await calculate_smart_eta(c_lat, c_lon, c_alt, c_spd, dest_lat, dest_lon, dest_code, conn)
                 return eta_mins, dest_code
-            
-            return None, dest_code
+        
+        return None, dest_code
     except Exception as e:
         logger.error(f"calculate_watchdog_eta error: {e}")
     return None, None

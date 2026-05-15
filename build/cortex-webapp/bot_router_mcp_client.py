@@ -875,13 +875,30 @@ async def calculate_watchdog_eta(target_cs: str):
     """Calculate ETA and destination for a flight."""
     import math
     import aiohttp
+    import orjson
     
     try:
         pool = await get_db_pool()
-        async with pool.acquire() as conn:
-            air = await conn.fetchrow("SELECT lat, lon, speed, alt FROM flights_in_air WHERE callsign = $1", target_cs.upper())
-            if not air or float(air.get('speed') or 0) <= 0:
-                return None, None
+        air = None
+        if REDIS_POOL:
+            try:
+                flights_data = await REDIS_POOL.hgetall(getattr(Config, 'REDIS_LIVE_FLIGHTS_KEY', 'live_flights'))
+                for data_json in flights_data.values():
+                    fl = orjson.loads(data_json)
+                    if (fl.get('callsign') or '').upper() == target_cs.upper():
+                        speed = fl.get('speed')
+                        if speed and float(speed) > 0:
+                            air = fl
+                        break
+            except:
+                pass
+        if air is None:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow("SELECT lat, lon, speed, alt FROM flights_in_air WHERE callsign = $1", target_cs.upper())
+                if row and float(row.get('speed') or 0) > 0:
+                    air = row
+        if air is None:
+            return None, None
             
             dest_code = None
             

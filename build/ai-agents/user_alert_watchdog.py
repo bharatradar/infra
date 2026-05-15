@@ -5,9 +5,11 @@ import logging
 import json
 import math
 import re
+import orjson
 from datetime import datetime
 import asyncpg
 import aiohttp
+import redis.asyncio as redis
 from aiogram import Bot
 
 from config import Config
@@ -19,14 +21,20 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 DB_POOL = None
+REDIS_POOL = None
 
 _WEB_PUSH_ENABLED = getattr(Config, 'ENABLE_WEB_NOTIFICATIONS', False)
 _WEB_PUSH_AVAILABLE = webpush is not None
 
 async def get_db_pool():
-    global DB_POOL
+    global DB_POOL, REDIS_POOL
     if DB_POOL is None:
         DB_POOL = await asyncpg.create_pool(**Config.DB_PARAMS)
+    if REDIS_POOL is None:
+        try:
+            REDIS_POOL = redis.from_url(getattr(Config, 'REDIS_URL', 'redis://localhost:6379/0'))
+        except Exception as e:
+            logger.warning(f"Redis not available: {e}")
     return DB_POOL
 
 async def send_web_push(sub_data, message_text):
@@ -129,10 +137,26 @@ async def resolve_watchdog_target(clean_cs: str):
 async def calculate_watchdog_eta(target_cs: str):
     try:
         pool = await get_db_pool()
-        async with pool.acquire() as conn:
-            air = await conn.fetchrow("SELECT lat, lon, speed, alt FROM flights_in_air WHERE callsign = $1", target_cs.upper())
-            if not air or float(air.get('speed') or 0) <= 0:
-                return None, None
+        air = None
+        if REDIS_POOL:
+            try:
+                flights_data = await REDIS_POOL.hgetall(getattr(Config, 'REDIS_LIVE_FLIGHTS_KEY', 'live_flights'))
+                for data_json in flights_data.values():
+                    fl = orjson.loads(data_json)
+                    if (fl.get('callsign') or '').upper() == target_cs.upper():
+                        speed = fl.get('speed')
+                        if speed and float(speed) > 0:
+                            air = fl
+                        break
+            except:
+                pass
+        if air is None:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow("SELECT lat, lon, speed, alt FROM flights_in_air WHERE callsign = $1", target_cs.upper())
+                if row and float(row.get('speed') or 0) > 0:
+                    air = row
+        if air is None:
+            return None, None
             
             dest_code = None
             

@@ -6,6 +6,7 @@ import asyncpg
 import logging
 import orjson
 import re
+import redis.asyncio as redis
 from datetime import datetime, timedelta
 from config import Config
 from db import AsyncDatabaseManager
@@ -18,6 +19,19 @@ class AIOperationsCenter:
         self.db = AsyncDatabaseManager(db_pool)
         self.last_watchdog_check = datetime.now()
         self.cf_key_index = 0
+        try:
+            self.redis = redis.from_url(getattr(Config, 'REDIS_URL', 'redis://localhost:6379/0'))
+        except:
+            self.redis = None
+
+    async def _count_flights_from_redis(self):
+        if not self.redis:
+            return None
+        try:
+            data = await self.redis.hgetall(getattr(Config, 'REDIS_LIVE_FLIGHTS_KEY', 'live_flights'))
+            return len(data) if data else 0
+        except:
+            return None
 
     async def get_airport_coords(self, ap_code):
         for icao, data in getattr(Config, 'TARGET_AIRPORTS', {}).items():
@@ -262,17 +276,39 @@ Examples:
                     ap_code = a['airport']
                     ap_lat, ap_lon = await self.get_airport_coords(ap_code)
                     
-                    async with self.db_pool.acquire() as conn:
-                        if ap_lat and ap_lon:
-                            inbounds = await conn.fetchval("""
-                                SELECT COUNT(*) FROM flights_in_air 
-                                WHERE lat IS NOT NULL 
-                                AND abs(lat - $1) < 1.5 AND abs(lon - $2) < 1.5
-                            """, ap_lat, ap_lon)
-                            loc_str = f"in the {ap_code} regional airspace"
-                        else:
-                            inbounds = await conn.fetchval("SELECT COUNT(*) FROM flights_in_air WHERE lat IS NOT NULL")
-                            loc_str = "in the tracked airspace"
+                    inbounds = None
+                    loc_str = "in the tracked airspace"
+                    if self.redis:
+                        try:
+                            flights_data = await self.redis.hgetall(getattr(Config, 'REDIS_LIVE_FLIGHTS_KEY', 'live_flights'))
+                            if flights_data:
+                                if ap_lat and ap_lon:
+                                    count = 0
+                                    for data_json in flights_data.values():
+                                        fl = orjson.loads(data_json)
+                                        lat = fl.get('lat')
+                                        lon = fl.get('lon')
+                                        if lat is not None and lon is not None:
+                                            if abs(float(lat) - ap_lat) < 1.5 and abs(float(lon) - ap_lon) < 1.5:
+                                                count += 1
+                                    inbounds = count
+                                    loc_str = f"in the {ap_code} regional airspace"
+                                else:
+                                    inbounds = len(flights_data)
+                        except:
+                            pass
+                    if inbounds is None:
+                        async with self.db_pool.acquire() as conn:
+                            if ap_lat and ap_lon:
+                                inbounds = await conn.fetchval("""
+                                    SELECT COUNT(*) FROM flights_in_air 
+                                    WHERE lat IS NOT NULL 
+                                    AND abs(lat - $1) < 1.5 AND abs(lon - $2) < 1.5
+                                """, ap_lat, ap_lon)
+                                loc_str = f"in the {ap_code} regional airspace"
+                            else:
+                                inbounds = await conn.fetchval("SELECT COUNT(*) FROM flights_in_air WHERE lat IS NOT NULL")
+                                loc_str = "in the tracked airspace"
                     
                     sys_prompt = "You are a Chief Air Traffic Control Analyst. Draft a concise, urgent situational report."
                     user_prompt = f"Flight {a['callsign']} just experienced a {a['anomaly_flag'].replace('_', ' ')} at {ap_code}. Details: {a['details']}. Currently, there are {inbounds} active flights {loc_str}. Write a 2-sentence alert for the airport operations team detailing the event and potential impact. Return JSON: {{\"alert_text\": \"your html formatted text\"}}"
