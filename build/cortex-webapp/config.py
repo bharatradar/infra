@@ -112,15 +112,15 @@ class Config:
     ASSUMED_LANDING_TIMEOUT_SEC = 180 
     
     # 🌟 Python Executable Path
-    PYTHON_PATH = "/home/ragaradar/miniforge3/envs/bharat-radar_env/bin/python" 
+    PYTHON_PATH = "python" 
     
 
     GET_SCHEDULES_FOR = ["TODAY", "TOMORROW"]  # Options: "TODAY", "TOMORROW", "NEXT_7_DAYS"
     GET_SCHEDULES_FROM_AVIONIO = False
     MISSING_AIRPORTS_IN_AVIONIO = {'VEAY': 'AYJ', 'VEDO': 'DGH', 'VIJW': 'DXN', 'VIDX': 'HDO', 'VEHO': 'HGI', 'VIAH': 'HRH', 'VAHS': 'HSR', 'VOKU': 'KJB', 'VANM': 'NMI', 'VARW': 'REW', 'VOSR': 'SDW'}
     # --- File Paths ---
-    AIRLINES_FILE = "/home/ragaradar/bharat-radar/data/airlines.csv"
-    AIRPORTS_CSV_FILE = "/home/ragaradar/bharat-radar/data/airports.csv"
+    AIRLINES_FILE = "/app/data/airlines.csv"
+    AIRPORTS_CSV_FILE = "/app/data/airports.csv"
     
     # --- Database & Redis ---
     DB_PARAMS = {

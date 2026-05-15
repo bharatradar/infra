@@ -86,6 +86,9 @@ spec:
                 secretKeyRef:
                   name: telegram-bot-credentials
                   key: cloudflare_keys
+          envFrom:
+            - secretRef:
+                name: cortex-webapp-credentials
           resources:
             limits:
               memory: "1Gi"

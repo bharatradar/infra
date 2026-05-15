@@ -72,7 +72,8 @@ async def init_client_state():
     server_params = StdioServerParameters(
         command=python_path, 
         args=["mcp_server.py"],
-        cwd="/home/ragaradar/bharat-radar"
+        env={**os.environ},
+        cwd="/app"
     )
     MCP_EXIT_STACK = AsyncExitStack()
     try:

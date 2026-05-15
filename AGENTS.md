@@ -83,13 +83,41 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 ## Owner
 @bharatradar/sre
 
-## Credentials (session-persistent)
+## Credentials (single source of truth)
 
-### GHCR
-- Username: `ragavellur`
-- Email: raga.vellur@gmail.com
-- Token: `xxxxx` (classic PAT, used for `docker login`) - ask the user for token
-- Login: `echo "$GHCR_TOKEN" | docker login ghcr.io -u ragavellur --password-stdin`
+All credentials are stored in **`.env`** at the repo root (gitignored, never committed).
+
+```bash
+source .env  # Load all env vars
+```
+
+### What's in `.env`
+| Env Var | Source | Used By |
+|---------|--------|---------|
+| `POSTGRES_PASSWORD` | auto-generated | DB secret (`flight-db-credentials`) |
+| `REDIS_PASSWORD` | auto-generated | DB secret (`redis-credentials`) |
+| `INFLUXDB_TOKEN` | auto-generated | DB secret (`influxdb-credentials`) |
+| `TELEGRAM_BOT_TOKEN` | BotFather | Secret `telegram-bot-credentials` |
+| `TELEGRAM_CHAT_ID` | @userinfobot | Secret `telegram-bot-credentials` |
+| `GROQ_API_KEY` | console.groq.com | Secret `cortex-webapp-credentials` |
+| `CLOUDFLARE_KEYS` | cloudflare.com | Secret `cortex-webapp-credentials` |
+| `GOOGLE_OAUTH_CLIENT_ID` | Google Cloud Console | Secret `google-oauth-credentials` |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Google Cloud Console | Secret `google-oauth-credentials` |
+| `GHCR_USERNAME` | GitHub | Docker login |
+| `GHCR_PASSWORD` | GitHub PAT | Docker login |
+| `VAPID_PUBLIC_KEY` | generated | Web Push (cortex-webapp + telegram-bot) |
+| `VAPID_PRIVATE_KEY` | generated | Web Push (telegram-bot watchdog) |
+
+### Deploying credentials to K3s
+```bash
+source .env
+kubectl create secret generic cortex-webapp-credentials -n bharatradar \
+  --from-literal=GROQ_API_KEY="$GROQ_API_KEY" \
+  --from-literal=CLOUDFLARE_KEYS="$CLOUDFLARE_KEYS" \
+  --from-literal=VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY" \
+  --from-literal=VAPID_PRIVATE_KEY="$VAPID_PRIVATE_KEY" \
+  --from-literal=ENABLE_WEB_NOTIFICATIONS="true"
+```
 
 ### Server Access (K3s - 45.88.189.38)
 ```bash

@@ -37,7 +37,7 @@ spec:
         - name: ghcr-secret
       containers:
         - name: cortex-webapp
-          image: ghcr.io/bharatradar/cortex-webapp:v5.9.0
+          image: ghcr.io/bharatradar/cortex-webapp:v5.9.2
           imagePullPolicy: Always
           ports:
             - containerPort: 8081
@@ -85,6 +85,8 @@ spec:
           envFrom:
             - secretRef:
                 name: google-oauth-credentials
+            - secretRef:
+                name: cortex-webapp-credentials
           resources:
             limits:
               memory: "2Gi"
