@@ -70,6 +70,7 @@ PUBLIC_ROUTES = [
     "/api/telemetry/",
     "/api/config",
     "/api/filters",
+    "/api/data",
     "/static/",
     "/favicon.ico",
     "/api/feeders/",
@@ -969,9 +970,17 @@ async def api_filters():
 
 @app.get("/api/atc/live")
 async def api_atc_live(request: Request, airline: str = Query("ALL"), airport: str = Query("ALL")):
-    # No auth required for radar display
-    flights = await web_app_db.fetch_live_flights(db_pool, airline, airport)
-    return _enrich_flights(flights or [])
+    result = await web_app_db.fetch_live_flights(db_pool, airline, airport) or {}
+    flights = _enrich_flights(result.get("flights", []))
+    weather = None
+    if airport and airport != "ALL":
+        try:
+            w = await weather_service.get_airport_weather(airport)
+            if w and "error" not in w:
+                weather = w
+        except Exception:
+            pass
+    return {"flights": flights, "weather": weather}
 
 @app.get("/api/aircraft/all")
 async def api_aircraft_all():
@@ -1231,6 +1240,41 @@ async def api_exec_data(request: Request):
         "approach_efficiency": cdo,
         "unscheduled": unscheduled,
         "training": training,
+    }
+
+# ---------------------------------------------------------------------
+# 🌐 DASHBOARD SCREEN API (consolidated — replaces 3 separate calls)
+# ---------------------------------------------------------------------
+@app.post("/api/data")
+async def api_data(request: Request):
+    """Return all dashboard data in one call: congestion, bands, anomalies, weather."""
+    body = await request.json()
+    airline = body.get("airline", "ALL")
+    airport = body.get("airport", "ALL")
+    lat = body.get("lat")
+    lon = body.get("lon")
+    label = body.get("label")
+
+    tasks = [
+        web_app_db.fetch_congestion_heatmap(db_pool),
+        web_app_db.fetch_altitude_bands(db_pool, airline, airport),
+        web_app_db.fetch_live_anomalies(db_pool, airport, airline),
+    ]
+
+    if airport and airport != "ALL":
+        tasks.append(weather_service.get_airport_weather(airport))
+    elif lat is not None and lon is not None:
+        tasks.append(weather_service.get_weather_by_coords(lat, lon, label or "My Location"))
+    else:
+        tasks.append(asyncio.sleep(0, result=None))
+
+    congestion, bands, anomalies, weather = await asyncio.gather(*tasks)
+
+    return {
+        "congestion": congestion,
+        "bands": bands,
+        "anomalies": anomalies,
+        "weather": weather,
     }
 
 # Drilldown Endpoints

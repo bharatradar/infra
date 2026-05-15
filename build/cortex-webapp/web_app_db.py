@@ -187,11 +187,19 @@ async def fetch_live_flights(db_pool, airline, airport):
                         if not cs or not cs.startswith(airline.upper()):
                             continue
                     
-                    # Apply airport filter (simple substring match)
+                    # Apply airport filter (lat/lon proximity, fallback to callsign)
                     if airport and airport != 'ALL':
-                        cs = fl.get('callsign', '')
-                        if airport.upper() not in cs:
-                            continue
+                        ap_data = Config.TARGET_AIRPORTS.get(airport.upper())
+                        ap_lat = ap_data.get('lat') if ap_data else None
+                        ap_lon = ap_data.get('lon') if ap_data else None
+                        fl_lat, fl_lon = fl.get('lat'), fl.get('lon')
+                        if ap_lat is not None and ap_lon is not None and fl_lat is not None and fl_lon is not None:
+                            if abs(fl_lat - float(ap_lat)) > 1.5 or abs(fl_lon - float(ap_lon)) > 1.5:
+                                continue
+                        else:
+                            cs = fl.get('callsign', '')
+                            if not cs or airport.upper() not in cs:
+                                continue
                     
                     fl['hexid'] = hex_id
                     # Fix swapped lat/lon from binCraft decoder bug (lat should be ~6-37 for India, lon ~68-98)

@@ -176,6 +176,22 @@ function fixLatLon(ac) {
 }
 
 function processFlightData(flights) {
+    const f = getFilters();
+    // Apply airport/airline filters so count matches what fetchATC() shows
+    if (f.airport !== 'ALL' || f.airline !== 'ALL') {
+        flights = flights.filter(ac => {
+            if (f.airline !== 'ALL' && (!ac.callsign || !ac.callsign.startsWith(f.airline))) return false;
+            if (f.airport !== 'ALL') {
+                const ap = airportCoords[f.airport];
+                if (ap && ac.lat && ac.lon) {
+                    if (Math.abs(ac.lat - ap.lat) > 1.5 || Math.abs(ac.lon - ap.lon) > 1.5) return false;
+                } else if (!ac.callsign || !ac.callsign.includes(f.airport)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+    }
     const _now = Date.now();
     const newAircraft = {};
     flights.forEach(ac => {
@@ -1508,29 +1524,47 @@ function toggleHeatmap() { showingHeatmap = document.getElementById('toggle-heat
 
 async function fetchATC() {
     try {
-        // Always update viewport before fetching to ensure accurate center + radius
         updateMapViewport();
         
         const f = getFilters();
         let flights = [];
+        let weatherData = null;
         
-        // Use WebSocket data if enabled
         if (FRONTEND_CONFIG.ws_use_for_atc && wsFlightsData.length > 0) {
-            // Filter flights from WebSocket data
             flights = wsFlightsData.filter(ac => {
                 if (f.airline !== 'ALL' && (!ac.callsign || !ac.callsign.startsWith(f.airline))) return false;
-                if (f.airport !== 'ALL' && (!ac.callsign || !ac.callsign.includes(f.airport))) return false;
+                if (f.airport !== 'ALL') {
+                    const ap = airportCoords[f.airport];
+                    if (ap && ac.lat && ac.lon) {
+                        if (Math.abs(ac.lat - ap.lat) > 1.5 || Math.abs(ac.lon - ap.lon) > 1.5) return false;
+                    } else if (!ac.callsign || !ac.callsign.includes(f.airport)) {
+                        return false;
+                    }
+                }
                 return ac.lat && ac.lon;
             });
+            if (f.airport !== 'ALL') {
+                try {
+                    const wr = await fetch(`/api/atc/live?airport=${f.airport}&airline=${f.airline}`);
+                    const wp = await wr.json();
+                    if (wp.weather) weatherData = wp.weather;
+                } catch (_) {}
+            }
+        } else if (f.airport !== 'ALL') {
+            try {
+                const res = await fetch(`/api/atc/live?airport=${f.airport}&airline=${f.airline}`);
+                const payload = await res.json();
+                flights = payload.flights || [];
+                weatherData = payload.weather || null;
+            } catch (e) {
+                console.warn('[fetchATC] live endpoint failed:', e);
+            }
         } else {
-            // Use radar endpoint with dynamic center + radius based on map viewport
             try {
                 const resMap = await fetch(`/api/aircraft/radar?lat=${mapCenter.lat}&lon=${mapCenter.lon}&radius=${mapRadius}`);
                 flights = await resMap.json();
                 if (!Array.isArray(flights)) flights = [];
-                // The radar endpoint already fixes swapped lat/lon — no need for client-side fix
             } catch (e) {
-                // Fallback to live endpoint if radar endpoint fails
                 console.warn('[fetchATC] Radar endpoint failed, falling back to live:', e);
                 const resLive = await fetch(`/api/atc/live?airline=${f.airline}&airport=${f.airport}`);
                 const payload = await resLive.json();
@@ -1543,18 +1577,6 @@ async function fetchATC() {
                         ac.lon = lat;
                     }
                 });
-            }
-            // Apply client-side airline/airport filter (radar endpoint doesn't support them)
-            if (f.airline !== 'ALL' || f.airport !== 'ALL') {
-                flights = flights.filter(ac => {
-                    if (f.airline !== 'ALL' && (!ac.callsign || !ac.callsign.startsWith(f.airline))) return false;
-                    if (f.airport !== 'ALL' && (!ac.callsign || !ac.callsign.includes(f.airport))) return false;
-                    return true;
-                });
-            }
-            console.log(`[fetchATC] Received ${flights.length} flights from API`);
-            if (flights.length > 0) {
-                console.log('[fetchATC] Sample flight:', flights[0]);
             }
         }
 
@@ -1607,76 +1629,79 @@ async function fetchATC() {
             updateOLAircraft(flights);
         }
 
-        // Congestion data (always fetch, toggle only controls map overlay)
-        if (olMapInitialized && map) {
-            try {
-                const hRes = await fetch('/api/atc/congestion');
-                const hData = await hRes.json();
-                if (Array.isArray(hData)) {
-                    // Always update peak display
-                    const peak = hData.reduce((a, b) => a.density > b.density ? a : b, hData[0]);
-                    const peakEl = document.getElementById('peak-display');
-                    if (peak) {
-                        const ap = _nearestAirport(peak.lat_grid, peak.lon_grid);
-                        if (peakEl) peakEl.textContent = (ap ? ap.icao + ' · ' : '') + peak.density + ' flights';
-                    } else if (peakEl) {
-                        peakEl.textContent = '0 flights';
-                    }
+        // Weather from merged ATC response (no separate API call needed)
+        if (weatherData) {
+            displayWeather(weatherData);
+        }
 
-                    // Heatmap overlay only when toggle is on
-                    if (showingHeatmap) {
-                        if (!olHeatmapLayer) {
-                            olHeatmapLayer = new ol.layer.Heatmap({
-                                source: new ol.source.Vector(),
-                                blur: 20,
-                                radius: 12,
-                                gradient: ['#00f', '#0ff', '#0f0', '#ff0', '#f00']
-                            });
-                            map.addLayer(olHeatmapLayer);
-                        }
-                        const maxDensity = Math.max(1, ...hData.map(d => d.density));
-                        const features = hData.map(d => {
-                            const f = new ol.Feature({
-                                geometry: new ol.geom.Point(ol.proj.fromLonLat([d.lon_grid, d.lat_grid]))
-                            });
-                            f.set('weight', Math.min(d.density / maxDensity, 1));
-                            return f;
-                        });
-                        olHeatmapLayer.getSource().clear();
-                        olHeatmapLayer.getSource().addFeatures(features);
-                    } else if (olHeatmapLayer) {
-                        map.removeLayer(olHeatmapLayer);
-                        olHeatmapLayer = null;
-                    }
+        // Consolidated API call — replaces congestion + ATC data + coords weather
+        let dataPayload = { airline: f.airline, airport: f.airport };
+        if (f.airport === 'ALL' && userLocation) {
+            dataPayload.lat = userLocation.lat;
+            dataPayload.lon = userLocation.lon;
+            dataPayload.label = userCity || 'My Location';
+        }
+        try {
+            const dataRes = await fetch('/api/data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(dataPayload)
+            });
+            const dd = await dataRes.json();
+
+            // Congestion heatmap (peak display always, map overlay on toggle)
+            if (olMapInitialized && map && Array.isArray(dd.congestion)) {
+                const hData = dd.congestion;
+                const peak = hData.reduce((a, b) => a.density > b.density ? a : b, hData[0]);
+                const peakEl = document.getElementById('peak-display');
+                if (peak) {
+                    const ap = _nearestAirport(peak.lat_grid, peak.lon_grid);
+                    if (peakEl) peakEl.textContent = (ap ? ap.icao + ' · ' : '') + peak.density + ' flights';
+                } else if (peakEl) {
+                    peakEl.textContent = '0 flights';
                 }
-            } catch (e) {
-                console.warn('[fetchATC] Congestion heatmap fetch failed:', e);
+                if (showingHeatmap) {
+                    if (!olHeatmapLayer) {
+                        olHeatmapLayer = new ol.layer.Heatmap({
+                            source: new ol.source.Vector(),
+                            blur: 20,
+                            radius: 12,
+                            gradient: ['#00f', '#0ff', '#0f0', '#ff0', '#f00']
+                        });
+                        map.addLayer(olHeatmapLayer);
+                    }
+                    const maxDensity = Math.max(1, ...hData.map(d => d.density));
+                    const features = hData.map(d => {
+                        const f = new ol.Feature({
+                            geometry: new ol.geom.Point(ol.proj.fromLonLat([d.lon_grid, d.lat_grid]))
+                        });
+                        f.set('weight', Math.min(d.density / maxDensity, 1));
+                        return f;
+                    });
+                    olHeatmapLayer.getSource().clear();
+                    olHeatmapLayer.getSource().addFeatures(features);
+                } else if (olHeatmapLayer) {
+                    map.removeLayer(olHeatmapLayer);
+                    olHeatmapLayer = null;
+                }
             }
-        }
 
-        // Update fullscreen if visible - always process, no delay
-        if (fullscreenOlInitialized && fullscreenAircraftLayer && radarFullscreen) {
-            requestAnimationFrame(() => updateFullscreenAircraft(flights));
-        }
-        
-        if (currentTab === 'atc') {
-            fetchWeather();
-            try {
-                const atcRes = await fetch('/api/atc/data', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ airline: f.airline, airport: f.airport })
-                });
-                const atcData = await atcRes.json();
+            // Coords weather (when airport=ALL, no weather from ATC merge)
+            if (!weatherData && dd.weather) {
+                displayWeather(dd.weather);
+            }
+
+            // ATC tab data (bands + anomalies)
+            if (currentTab === 'atc' && dd.bands) {
                 if (charts['bandChart']) {
                     const chart = charts['bandChart'];
                     if (!chart.data.datasets[0]) chart.data.datasets[0] = { data: [] };
-                    chart.data.labels = atcData.bands.map(b => b.band);
-                    chart.data.datasets[0].data = atcData.bands.map(b => b.count);
+                    chart.data.labels = dd.bands.map(b => b.band);
+                    chart.data.datasets[0].data = dd.bands.map(b => b.count);
                     chart.update('none');
                 }
                 let aHtml = '';
-                atcData.anomalies.forEach(a => {
+                (dd.anomalies || []).forEach(a => {
                     let color = a.anomaly_flag === 'GO_AROUND' ? 'text-yellow-400' : 'text-red-400';
                     aHtml += `<tr onclick="openForensicsModal('${a.hex_id || ''}', '${a.callsign || ''}')" class="hover:bg-gray-800 cursor-pointer">
                         <td class="py-2 px-1">${a.timestamp ? new Date(a.timestamp).toLocaleTimeString() : '---'}</td>
@@ -1685,9 +1710,15 @@ async function fetchATC() {
                     </tr>`;
                 });
                 document.getElementById('atc-anomalies').innerHTML = aHtml;
-            } catch(e) { console.warn('ATC data fetch failed:', e); }
+            }
+        } catch (e) {
+            console.warn('[fetchATC] Consolidated data fetch failed:', e);
         }
-        
+
+        // Update fullscreen if visible - always process, no delay
+        if (fullscreenOlInitialized && fullscreenAircraftLayer && radarFullscreen) {
+            requestAnimationFrame(() => updateFullscreenAircraft(flights));
+        }
     } catch(e) {
         console.error('fetchATC error:', e);
     }
@@ -1728,33 +1759,8 @@ async function getUserLocation() {
 
 async function fetchWeather() {
     const airport = document.getElementById('filter-airport').value;
-    const widget = document.getElementById('weather-widget');
-    console.log('[weather] fetchWeather airport=', airport);
-    
-    try {
-        let data;
-        if (airport === 'ALL') {
-            const loc = await getUserLocation();
-            if (loc) {
-                const city = userCity || 'My Location';
-                const res = await fetch(`/api/weather/coords?lat=${loc.lat}&lon=${loc.lon}&label=${encodeURIComponent(city)}`);
-                if (res.ok) data = await res.json();
-            }
-            if (!data || data.error) {
-                data = { icao: '--', current: {}, hourly: [], daily: [] };
-            }
-        } else {
-            const res = await fetch(`/api/weather/${airport}`);
-            if (res.ok) data = await res.json();
-            if (!data || data.error) {
-                console.warn('[weather] API error:', data?.error);
-                return;
-            }
-        }
-        displayWeather(data);
-    } catch (e) {
-        console.warn('[weather] fetch failed:', e);
-    }
+    if (airport !== 'ALL') return;
+    await getUserLocation();
 }
 
 function toggleWeatherExpand() {
@@ -1827,12 +1833,6 @@ function displayWeather(data) {
         });
     }
     
-    // Auto-collapse on new data
-    const expanded = document.getElementById('weather-expanded');
-    if (!expanded.classList.contains('hidden')) {
-        expanded.classList.add('hidden');
-        document.getElementById('weather-chevron').className = 'fa-solid fa-chevron-down';
-    }
 }
 
 async function fetchDelayPredictions() {
