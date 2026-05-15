@@ -409,7 +409,8 @@ install_readsb() {
     fi
 
     if command -v readsb &>/dev/null; then
-        log_info "readsb already installed: $(readsb --version 2>/dev/null | head -1 || echo 'unknown')"
+        local ver=$(readsb --version 2>/dev/null | head -1 || echo "unknown")
+        log_info "readsb already installed at $(command -v readsb): $ver"
         return
     fi
 
@@ -463,7 +464,7 @@ install_mlat_client() {
 }
 
 configure_readsb() {
-    if [ "$INSTALL_MODE" = "feeder-only" ]; then
+    if [ "$INSTALL_MODE" != "fresh" ]; then
         return
     fi
 
@@ -535,6 +536,14 @@ add_bharatradar_to_existing_readsb() {
 create_feeder_service() {
     log_step "Creating bharatradar-feeder Service"
 
+    # Verify readsb binary exists (needed for the beast bridge)
+    if [ ! -x "$READSB_BIN" ]; then
+        log_error "readsb binary not found at ${READSB_BIN}"
+        log_error "Feeder bridge requires readsb to be installed."
+        log_error "Either run the script without 'feeder-only' mode, or install readsb first."
+        exit 1
+    fi
+
     if [ "$INSTALL_MODE" = "feeder-only" ]; then
         # In feeder-only mode, readsb is external — we still need a beast bridge
         cat > /etc/systemd/system/bharatradar-feeder.service <<EOF
@@ -545,7 +554,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/readsb --net-only --uuid-file /etc/bharat-radar-id \\
+ExecStart=${READSB_BIN} --net-only --uuid-file /etc/bharat-radar-id \\
   --net-connector 127.0.0.1,30005,beast_in \\
   --net-connector ${FEEDER_DOMAIN},30004,beast_reduce_plus_out
 Restart=always
@@ -563,7 +572,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/readsb --net-only --uuid-file /etc/bharat-radar-id \\
+ExecStart=${READSB_BIN} --net-only --uuid-file /etc/bharat-radar-id \\
   --net-connector 127.0.0.1,30005,beast_in \\
   --net-connector ${FEEDER_DOMAIN},30004,beast_reduce_plus_out
 Restart=always
@@ -614,7 +623,7 @@ EOF
 }
 
 create_readsb_service() {
-    if [ "$INSTALL_MODE" = "feeder-only" ]; then
+    if [ "$INSTALL_MODE" != "fresh" ]; then
         return
     fi
 
@@ -628,7 +637,7 @@ After=network.target
 [Service]
 Type=simple
 ExecStartPre=/bin/sleep 2
-ExecStart=/usr/bin/readsb \$(cat /etc/default/readsb | grep -v "^#\|^$" | tr '\n' ' ')
+ExecStart=${READSB_BIN} \$(cat /etc/default/readsb | grep -v "^#\|^$" | tr '\n' ' ')
 Restart=always
 RestartSec=5
 
@@ -645,7 +654,7 @@ After=network.target
 [Service]
 Type=simple
 EnvironmentFile=/etc/default/readsb
-ExecStart=/bin/bash -c '/usr/bin/readsb \$${RECEIVER_OPTIONS} \$${DECODER_OPTIONS} \$${NET_OPTIONS} \$${JSON_OPTIONS} \$${ADAPTIVE_DYNAMIC_RANGE:+--adaptive-dynamic-range}'
+ExecStart=/bin/bash -c '${READSB_BIN} \$${RECEIVER_OPTIONS} \$${DECODER_OPTIONS} \$${NET_OPTIONS} \$${JSON_OPTIONS} \$${ADAPTIVE_DYNAMIC_RANGE:+--adaptive-dynamic-range}'
 Restart=always
 RestartSec=5
 
@@ -845,10 +854,18 @@ main() {
     install_packages
     install_rtlsdr
     install_readsb
-    add_bharatradar_to_existing_readsb
+
+    # Determine readsb binary path (supports alternate locations like /usr/local/bin)
+    READSB_BIN=$(command -v readsb 2>/dev/null || echo "/usr/bin/readsb")
+
+    if [ "$INSTALL_MODE" = "reconfigure" ]; then
+        add_bharatradar_to_existing_readsb
+    else
+        configure_readsb
+        create_readsb_service
+    fi
+
     install_mlat_client
-    configure_readsb
-    create_readsb_service
     create_feeder_service
     create_mlat_service
     start_services
