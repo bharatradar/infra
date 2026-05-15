@@ -88,7 +88,7 @@ Fork repos (bharatradar/*) hold source code only — no CI workflows.
 ### GHCR
 - Username: `ragavellur`
 - Email: raga.vellur@gmail.com
-- Token: `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` (classic PAT, used for `docker login`)
+- Token: `xxxxx` (classic PAT, used for `docker login`) - ask the user for token
 - Login: `echo "$GHCR_TOKEN" | docker login ghcr.io -u ragavellur --password-stdin`
 
 ### Server Access (K3s - 45.88.189.38)
