@@ -101,6 +101,13 @@ spec:
   - host: bharatradar.com
     http:
       paths:
+      - path: /api/chat
+        pathType: Prefix
+        backend:
+          service:
+            name: cortex-webapp
+            port:
+              number: 8081
       - path: /
         pathType: Prefix
         backend:

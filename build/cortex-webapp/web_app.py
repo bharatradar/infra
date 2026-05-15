@@ -78,6 +78,7 @@ PUBLIC_ROUTES = [
     "/favicon.ico",
     "/api/feeders/",
     "/api/weather/",
+    "/api/chat",
     # API docs (public access)
     "/docs",
     "/redoc",

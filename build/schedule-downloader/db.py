@@ -764,6 +764,26 @@ class AsyncDatabaseManager:
         except Exception as e:
             logger.error(f"❌ [DB ERROR] log_ai_insight failed: {e}")
 
+    async def get_next_run(self):
+        try:
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow("SELECT next_run FROM download_config WHERE id = 1")
+                return row['next_run'] if row else None
+        except Exception as e:
+            logger.error(f"Failed to get next_run: {e}")
+            return None
+
+    async def set_next_run(self, dt, status=None):
+        try:
+            async with self.pool.acquire() as conn:
+                await conn.execute("""
+                    UPDATE download_config
+                    SET next_run = $1, last_status = COALESCE($2, last_status), updated_at = CURRENT_TIMESTAMP
+                    WHERE id = 1
+                """, dt, status)
+        except Exception as e:
+            logger.error(f"Failed to set next_run: {e}")
+
     async def update_schedule_with_csv(self, callsign, hex_id, origin, destination):
         """Heals the database using offline routes.csv data when the API fails."""
         try:

@@ -474,25 +474,48 @@ async def execute_download(iata_to_icao: dict, days_to_run: list = None):
     await asyncio.sleep(5)
     await pool.close()
 
+async def compute_next_run_time(db: AsyncDatabaseManager) -> datetime:
+    """Compute next run: 1.5h before the earliest 'last flight' among all airports today (IST)."""
+    now_ist = datetime.now(IST)
+    today_midnight_ist = now_ist.replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_midnight_ist = today_midnight_ist + timedelta(days=1)
+    fallback = (now_ist + timedelta(days=1)).replace(hour=6, minute=0, second=0, microsecond=0)
+
+    try:
+        async with db.pool.acquire() as conn:
+            row = await conn.fetchrow("""
+                SELECT MIN(airport_last_flight) AS earliest_last_flight
+                FROM (
+                    SELECT airport_code, MAX(scheduled_time) AS airport_last_flight
+                    FROM flight_schedules
+                    WHERE scheduled_time >= $1 AND scheduled_time < $2
+                    GROUP BY airport_code
+                ) sub
+            """, today_midnight_ist, tomorrow_midnight_ist)
+    except Exception as e:
+        logger.error(f"compute_next_run_time query failed: {e}")
+        return fallback
+
+    if row and row['earliest_last_flight']:
+        next_time = row['earliest_last_flight'] - timedelta(hours=1, minutes=30)
+        if next_time > now_ist:
+            logger.info(f"Next run scheduled at {next_time} (1.5h before earliest last flight)")
+            return next_time
+
+    logger.info(f"Using fallback next_run: {fallback}")
+    return fallback
+
 async def main():
     importlib.reload(config)
     iata_to_icao = await get_iata_to_icao_map()
 
-    schedule_days = os.environ.get('SCHEDULE_DAYS', '').lower()
-
-    if schedule_days == 'today':
-        days = ['TODAY']
-    elif schedule_days == 'tomorrow':
-        days = ['TOMORROW']
-    elif schedule_days == 'both':
+    now_ist = datetime.now(IST)
+    if now_ist.hour >= 22:
         days = ['TODAY', 'TOMORROW']
     else:
-        now_ist = datetime.now(IST)
-        if 6 <= now_ist.hour < 21:
-            days = ['TODAY']
-        else:
-            days = ['TOMORROW']
+        days = ['TODAY']
 
+    config.Config.GET_SCHEDULES_FOR = days
     logger.info(f"📅 Fetching schedules: {', '.join(days)}")
     await execute_download(iata_to_icao, days)
 

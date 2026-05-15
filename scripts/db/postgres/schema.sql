@@ -375,6 +375,7 @@ CREATE TABLE IF NOT EXISTS download_config (
     enabled BOOLEAN DEFAULT TRUE,
     last_run TIMESTAMP,
     last_status TEXT,
+    next_run TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -382,6 +383,9 @@ CREATE TABLE IF NOT EXISTS download_config (
 INSERT INTO download_config (schedule_time, scheduler_enabled, enabled)
 VALUES ('22:00:00', FALSE, TRUE)
 ON CONFLICT DO NOTHING;
+
+-- migration: add next_run column if missing (safe for existing DBs)
+ALTER TABLE download_config ADD COLUMN IF NOT EXISTS next_run TIMESTAMP;
 
 -- ============================================================================
 -- Missing Tables from db_reset.py
