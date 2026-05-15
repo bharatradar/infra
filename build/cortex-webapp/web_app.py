@@ -73,6 +73,8 @@ PUBLIC_ROUTES = [
     "/api/filters",
     "/api/data",
     "/static/",
+    "/sw.js",
+    "/manifest.json",
     "/favicon.ico",
     "/api/feeders/",
     "/api/weather/",
