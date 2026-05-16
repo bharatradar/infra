@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BharatRadar Admin</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.header{background:#1e293b;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #334155}
+.header h1{font-size:20px;color:#38bdf8}
+.header a{color:#94a3b8;text-decoration:none;font-size:14px}
+.header a:hover{color:#38bdf8}
+.container{max-width:800px;margin:0 auto;padding:24px}
+.card{background:#1e293b;border-radius:8px;padding:20px;margin-bottom:16px;border:1px solid #334155}
+.card h2{font-size:16px;color:#38bdf8;margin-bottom:12px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.stat{background:#0f172a;border-radius:6px;padding:12px;text-align:center}
+.stat .label{font-size:12px;color:#94a3b8;text-transform:uppercase}
+.stat .value{font-size:24px;font-weight:700;color:#e2e8f0;margin-top:4px}
+.stat .value.warn{color:#fbbf24}
+.stat .value.danger{color:#ef4444}
+.stat .value.ok{color:#22c55e}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;font-size:13px;color:#94a3b8;margin-bottom:4px}
+.form-group input{width:100%;padding:8px 12px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:14px}
+.form-group input:focus{outline:none;border-color:#38bdf8}
+.form-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.btn{display:inline-block;padding:8px 20px;border-radius:4px;font-size:14px;cursor:pointer;border:none;font-weight:600}
+.btn-primary{background:#38bdf8;color:#0f172a}
+.btn-primary:hover{background:#7dd3fc}
+.btn-danger{background:#ef4444;color:#fff}
+.btn-danger:hover{background:#dc2626}
+.btn-outline{background:transparent;border:1px solid #334155;color:#94a3b8}
+.btn-outline:hover{background:#334155;color:#e2e8f0}
+.alert{padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:14px}
+.alert-success{background:#166534;color:#bbf7d0}
+.alert-error{background:#991b1b;color:#fecaca}
+#login-overlay{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0f172a;z-index:100}
+#login-overlay.hidden{display:none}
+.login-box{text-align:center;padding:48px}
+.login-box h2{font-size:24px;color:#38bdf8;margin-bottom:8px}
+.login-box p{color:#94a3b8;margin-bottom:24px}
+.login-box .btn{font-size:16px;padding:12px 32px}
+.hidden-section{display:none}
+#error-msg{text-align:center;padding:48px}
+#error-msg h2{color:#ef4444;margin-bottom:8px}
+</style>
+</head>
+<body>
+<div id="login-overlay">
+  <div class="login-box" id="login-box">
+    <h2>BharatRadar Admin</h2>
+    <p>Sign in with Google to manage API settings</p>
+    <button class="btn btn-primary" onclick="login()">Login with Google</button>
+  </div>
+  <div id="error-msg" class="hidden-section">
+    <h2>Access Denied</h2>
+    <p>Your account is not authorized as an admin.</p>
+  </div>
+</div>
+
+<div id="app" class="hidden-section">
+  <div class="header">
+    <h1>BharatRadar Admin</h1>
+    <a href="#" onclick="logout()">Logout</a>
+  </div>
+  <div class="container">
+    <div id="alerts"></div>
+
+    <div class="card">
+      <h2>API Usage</h2>
+      <div class="stat-grid" id="usage-stats">
+        <div class="stat"><div class="label">Used</div><div class="value" id="stat-used">—</div></div>
+        <div class="stat"><div class="label">Limit</div><div class="value" id="stat-limit">—</div></div>
+        <div class="stat"><div class="label">Remaining</div><div class="value" id="stat-remaining">—</div></div>
+        <div class="stat"><div class="label">Days Left</div><div class="value" id="stat-days">—</div></div>
+        <div class="stat"><div class="label">Last Alert</div><div class="value" id="stat-alert" style="font-size:13px">—</div></div>
+        <div class="stat"><div class="label">Status</div><div class="value" id="stat-status" style="font-size:14px">—</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Plan Settings</h2>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Units Limit</label>
+          <input type="number" id="input-limit" min="100" max="99999">
+        </div>
+        <div class="form-group">
+          <label>Daily Burn (est.)</label>
+          <input type="number" id="input-burn" min="1" max="9999">
+        </div>
+        <div class="form-group">
+          <label>Alert Days</label>
+          <input type="number" id="input-days" min="1" max="365">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+        <button class="btn btn-outline" onclick="resetUsage()">Reset Usage Counter</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Update RapidAPI Key</h2>
+      <p style="font-size:13px;color:#94a3b8;margin-bottom:12px">
+        Paste your new RapidAPI key below. This stores the key hash and resets usage tracking.
+        The actual key must also be updated in the K8s secret:
+        <code style="display:block;margin-top:4px;background:#0f172a;padding:6px 10px;border-radius:4px;font-size:12px">
+          ./scripts/admin/update-rapidapi-key.sh &lt;NEW_KEY&gt; pro
+        </code>
+      </p>
+      <div class="form-group">
+        <label>New RapidAPI Key</label>
+        <input type="text" id="input-new-key" placeholder="Paste new key here">
+      </div>
+      <button class="btn btn-primary" onclick="updateKey()">Store Key Hash &amp; Reset Usage</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let authenticated = false;
+
+async function checkAuth() {
+  try {
+    const resp = await fetch('/admin/api/usage');
+    if (resp.ok) {
+      authenticated = true;
+      document.getElementById('login-overlay').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden-section');
+      loadUsage();
+    }
+  } catch {}
+}
+checkAuth();
+
+function login() {
+  window.location.href = '/auth/login';
+}
+
+function logout() {
+  window.location.href = '/auth/logout';
+}
+
+function showAlert(msg, type) {
+  const el = document.getElementById('alerts');
+  el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+  setTimeout(() => el.innerHTML = '', 5000);
+}
+
+async function loadUsage() {
+  try {
+    const resp = await fetch('/admin/api/usage');
+    if (!resp.ok) { authenticated = false; location.reload(); return; }
+    const d = await resp.json();
+
+    document.getElementById('stat-used').textContent = d.units_used.toLocaleString();
+    document.getElementById('stat-limit').textContent = d.units_limit.toLocaleString();
+    document.getElementById('stat-remaining').textContent = d.remaining.toLocaleString();
+    document.getElementById('stat-days').textContent = d.days_left + ' days';
+
+    const remEl = document.getElementById('stat-remaining');
+    if (d.remaining < 100) remEl.className = 'value danger';
+    else if (d.remaining < d.units_limit * 0.2) remEl.className = 'value warn';
+    else remEl.className = 'value ok';
+
+    const daysEl = document.getElementById('stat-days');
+    if (d.days_left < 7) daysEl.className = 'value danger';
+    else if (d.days_left < 23) daysEl.className = 'value warn';
+    else daysEl.className = 'value';
+
+    document.getElementById('stat-alert').textContent = d.last_alert_at || 'None';
+    document.getElementById('stat-status').textContent = d.last_status || '—';
+
+    document.getElementById('input-limit').value = d.units_limit;
+    document.getElementById('input-burn').value = d.daily_burn;
+    document.getElementById('input-days').value = d.alert_days;
+  } catch(e) {
+    showAlert('Failed to load usage data', 'error');
+  }
+}
+
+async function saveSettings() {
+  const body = {};
+  const limit = parseInt(document.getElementById('input-limit').value);
+  const burn = parseInt(document.getElementById('input-burn').value);
+  const days = parseInt(document.getElementById('input-days').value);
+  if (!isNaN(limit)) body.units_limit = limit;
+  if (!isNaN(burn)) body.daily_burn = burn;
+  if (!isNaN(days)) body.alert_days = days;
+
+  try {
+    const resp = await fetch('/admin/api/settings', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (resp.ok) { showAlert('Settings saved', 'success'); loadUsage(); }
+    else showAlert('Save failed', 'error');
+  } catch { showAlert('Save failed', 'error'); }
+}
+
+async function resetUsage() {
+  if (!confirm('Reset usage counter to 0?')) return;
+  try {
+    const resp = await fetch('/admin/api/reset-usage', {method: 'POST'});
+    if (resp.ok) { showAlert('Usage counter reset', 'success'); loadUsage(); }
+    else showAlert('Reset failed', 'error');
+  } catch { showAlert('Reset failed', 'error'); }
+}
+
+async function updateKey() {
+  const key = document.getElementById('input-new-key').value.trim();
+  if (!key) { showAlert('Please enter a key', 'error'); return; }
+  if (!confirm('Store this key hash and reset usage tracking?')) return;
+  try {
+    const resp = await fetch('/admin/api/key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({key}),
+    });
+    if (resp.ok) {
+      showAlert('Key hash stored and usage reset. Don\'t forget to update the K8s secret!', 'success');
+      document.getElementById('input-new-key').value = '';
+      loadUsage();
+    } else showAlert('Failed to store key', 'error');
+  } catch { showAlert('Failed to store key', 'error'); }
+}
+</script>
+</body>
+</html>

@@ -181,6 +181,7 @@ CREATE TABLE IF NOT EXISTS api_users (
     contributor_status VARCHAR(20) DEFAULT 'STANDARD',
     contributor_since TIMESTAMP,
     contributor_changed_at TIMESTAMP,
+    is_admin BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (email)
@@ -389,6 +390,13 @@ CREATE TABLE IF NOT EXISTS download_config (
     last_run TIMESTAMP,
     last_status TEXT,
     next_run TIMESTAMP,
+    rapidapi_units_used INTEGER DEFAULT 0,
+    rapidapi_units_limit INTEGER DEFAULT 600,
+    rapidapi_unit_cost INTEGER DEFAULT 2,
+    rapidapi_daily_burn INTEGER DEFAULT 280,
+    rapidapi_alert_days INTEGER DEFAULT 23,
+    rapidapi_key_hash VARCHAR(64) DEFAULT '',
+    rapidapi_last_alert_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
