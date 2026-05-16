@@ -2265,7 +2265,7 @@ setInterval(() => {
 // =====================================================================
 // 🌟 NEW: FLOATING WEB CHAT ASSISTANT LOGIC
 // =====================================================================
-let chatOpen = true;
+let chatOpen = false;
 
 function toggleChat() {
     const chatWindow = document.getElementById('web-chat-window');
