@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS airports (
     timezone VARCHAR(50),
     hub_for TEXT[],
     metro_connected BOOLEAN DEFAULT FALSE,
-    mag_var_w DOUBLE PRECISION DEFAULT 0.0
+    mag_var_w DOUBLE PRECISION DEFAULT 0.0,
+    download_schedules BOOLEAN DEFAULT FALSE
 );
 
 -- Runways table

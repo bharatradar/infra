@@ -289,7 +289,7 @@ class Config:
             cur = conn.cursor(cursor_factory=RealDictCursor)
 
             # 1. Load Airports
-            cur.execute("SELECT * FROM airports;")
+            cur.execute("SELECT * FROM airports WHERE download_schedules = TRUE;")
             airports = cur.fetchall()
 
             for apt in airports:

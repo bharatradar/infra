@@ -384,6 +384,11 @@ async function loadFilterOptions() {
             }
         });
         
+        // Populate AIRPORTS from airports with download_schedules enabled
+        AIRPORTS = data.airports
+            .filter(ap => ap.download_schedules && ap.lat && ap.lon)
+            .map(ap => ({icao: ap.code, lat: ap.lat, lon: ap.lon}));
+        
         const apSelect = document.getElementById('filter-airport');
         apSelect.innerHTML = '<option value="ALL">🌐 ALL Airports</option>';
         data.airports.forEach(ap => apSelect.add(new Option(ap.display, ap.code)));
@@ -445,43 +450,8 @@ function handleAirportZoom() {
 // --- 2. MAP SETUP (OpenLayers - tar1090 Style) ---
 let map = null;
 // Major Indian airports for congestion heatmap peak lookup
-const AIRPORTS = [
-  {"icao":"VABB","lat":19.0887,"lon":72.8679},
-  {"icao":"VIDP","lat":28.5665,"lon":77.1031},
-  {"icao":"VOBL","lat":13.1979,"lon":77.7063},
-  {"icao":"VOMM","lat":12.99,"lon":80.1693},
-  {"icao":"VECC","lat":22.6547,"lon":88.4467},
-  {"icao":"VAPO","lat":18.5821,"lon":73.9197},
-  {"icao":"VAAH","lat":23.0772,"lon":72.6347},
-  {"icao":"VOHS","lat":17.2313,"lon":78.4299},
-  {"icao":"VOCI","lat":10.152,"lon":76.4019},
-  {"icao":"VOTV","lat":8.4821,"lon":76.9201},
-  {"icao":"VANP","lat":21.0922,"lon":79.0472},
-  {"icao":"VOGO","lat":15.3808,"lon":73.8314},
-  {"icao":"VOGA","lat":15.7444,"lon":73.8613},
-  {"icao":"VILK","lat":26.7606,"lon":80.8893},
-  {"icao":"VIJP","lat":26.8242,"lon":75.8122},
-  {"icao":"VICG","lat":30.6735,"lon":76.7885},
-  {"icao":"VEPT","lat":25.5913,"lon":85.088},
-  {"icao":"VEGT","lat":26.1061,"lon":91.5859},
-  {"icao":"VEBS","lat":20.2444,"lon":85.8178},
-  {"icao":"VABP","lat":23.2875,"lon":77.3374},
-  {"icao":"VAUD","lat":24.6177,"lon":73.8961},
-  {"icao":"VASU","lat":21.1241,"lon":72.7418},
-  {"icao":"VEBN","lat":25.4524,"lon":82.8593},
-  {"icao":"VIJO","lat":26.2511,"lon":73.0489},
-  {"icao":"VARK","lat":22.3092,"lon":70.7795},
-  {"icao":"VEGK","lat":26.7397,"lon":83.4497},
-  {"icao":"VISR","lat":33.9871,"lon":74.7742},
-  {"icao":"VERC","lat":23.3143,"lon":85.3217},
-  {"icao":"VABO","lat":22.3362,"lon":73.2263},
-  {"icao":"VEBD","lat":26.6812,"lon":88.3286},
-  {"icao":"VIBL","lat":26.9883,"lon":80.8931},
-  {"icao":"VANR","lat":19.9637,"lon":73.8076},
-  {"icao":"VIAR","lat":31.7096,"lon":74.7973},
-  {"icao":"VOCB","lat":11.0300,"lon":77.0434},
-  {"icao":"VOML","lat":12.9547,"lon":74.8868}
-];
+// Populated dynamically from /api/filters on page load
+let AIRPORTS = [];
 function _nearestAirport(lat, lon) {
     let best = null, bestDist = Infinity;
     for (const ap of AIRPORTS) {
