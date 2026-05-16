@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY run.py aerodatabox.py route_schedule_downloader.py backfill_schedule.py config.py db.py ./
+COPY run.py aerodatabox.py telegram.py route_schedule_downloader.py backfill_schedule.py config.py db.py ./
 
 ENV PYTHONUNBUFFERED=1
 

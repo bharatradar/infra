@@ -2,6 +2,7 @@ import os
 import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
+from telegram import send_telegram_message
 
 RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "")
 RAPIDAPI_HOST = "aerodatabox.p.rapidapi.com"
@@ -158,6 +159,26 @@ def _parse_flights(raw, airport_icao, direction):
     return rows
 
 
+async def _health_check(session):
+    url = f"https://{RAPIDAPI_HOST}/health/services/feeds/FlightSchedules"
+    headers = {
+        "X-RapidAPI-Key": RAPIDAPI_KEY,
+        "X-RapidAPI-Host": RAPIDAPI_HOST,
+    }
+    try:
+        async with session.get(url, headers=headers, timeout=10) as resp:
+            if resp.status != 200:
+                return False
+            data = await resp.json()
+            ok = data.get("status") == "OK"
+            if ok:
+                logger.info("AeroDataBox health check: OK")
+            return ok
+    except Exception as e:
+        logger.warning(f"Health check failed: {e}")
+        return False
+
+
 async def fetch_airport(session, iata):
     url = f"https://{RAPIDAPI_HOST}/flights/airports/iata/{iata}"
     params = {
@@ -185,6 +206,10 @@ async def fetch_airport(session, iata):
 async def aerodatabox_download(db_pool, session, target_airports):
     if not RAPIDAPI_KEY:
         logger.warning("RAPIDAPI_KEY not set, skipping AeroDataBox download")
+        return 0
+
+    if not await _health_check(session):
+        logger.warning("AeroDataBox FlightSchedules feed unhealthy, skipping run")
         return 0
 
     logger.info("=" * 50)
@@ -263,6 +288,61 @@ async def aerodatabox_download(db_pool, session, target_airports):
         """, all_rows)
 
     logger.info(f"AeroDataBox download complete: {len(all_rows)} rows upserted")
+
+    units_cost = int(os.environ.get("RAPIDAPI_UNIT_COST", "2"))
+    units_limit = int(os.environ.get("RAPIDAPI_UNITS_LIMIT", "600"))
+    daily_burn = int(os.environ.get("RAPIDAPI_DAILY_BURN", "280"))
+    alert_days = int(os.environ.get("RAPIDAPI_ALERT_DAYS", "23"))
+    airports_queried = airports_ok + api_errors
+    units_used_run = airports_queried * units_cost
+
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT rapidapi_units_used, rapidapi_units_limit, "
+            "rapidapi_last_alert_at FROM download_config WHERE id = 1"
+        )
+        if row:
+            prev_used = row["rapidapi_units_used"] or 0
+            prev_limit = row["rapidapi_units_limit"] or units_limit
+            last_alert = row["rapidapi_last_alert_at"]
+            new_used = prev_used + units_used_run
+            await conn.execute(
+                "UPDATE download_config SET rapidapi_units_used = $1, "
+                "rapidapi_units_limit = $2, updated_at = NOW() WHERE id = 1",
+                new_used, units_limit,
+            )
+
+            remaining = prev_limit - new_used
+            days_remaining = remaining / max(daily_burn, 1)
+            now = datetime.utcnow()
+            cooldown = timedelta(hours=12)
+            should_alert = (
+                remaining <= 0
+                or days_remaining < alert_days
+            )
+            if should_alert and (
+                last_alert is None or (now - last_alert) > cooldown
+            ):
+                pct = remaining / max(prev_limit, 1) * 100
+                msg = (
+                    "\u26a0\ufe0f *AeroDataBox API Limit Alert*\n"
+                    f"Used: ~{new_used}/{prev_limit} units\n"
+                    f"Remaining: ~{remaining} ({pct:.0f}%) — ~{days_remaining:.0f} days left\n"
+                    f"Threshold: Alert when < {alert_days} days remaining\n\n"
+                    f"Please upgrade the RapidAPI plan to avoid interruption."
+                )
+                logger.warning(f"Low API units: ~{days_remaining:.0f} days remaining. Alert sent.")
+                await send_telegram_message(session, msg)
+                await conn.execute(
+                    "UPDATE download_config SET rapidapi_last_alert_at = NOW() "
+                    "WHERE id = 1"
+                )
+            elif not should_alert:
+                pct = new_used / max(prev_limit, 1) * 100
+                logger.info(f"RapidAPI usage: ~{new_used}/{prev_limit} ({pct:.0f}%, ~{days_remaining:.0f} days left)")
+            else:
+                logger.warning(f"Low API units (~{days_remaining:.0f} days left), alert suppressed (cooldown)")
+
     return airports_ok
 
 

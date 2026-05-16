@@ -51,6 +51,16 @@ spec:
                 secretKeyRef:
                   name: aerodatabox-credentials
                   key: rapidapi_key
+            - name: TELEGRAM_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-bot-credentials
+                  key: telegram_token
+            - name: TELEGRAM_ALERT_CHAT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-bot-credentials
+                  key: telegram_chat_id
             - name: AIRLINES_FILE
               value: "/opt/bharatradar/flight_radar/data/airlines.csv"
             resources:
