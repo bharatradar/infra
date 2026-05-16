@@ -138,8 +138,8 @@ async def init_web_app_db(db_pool):
 
 async def fetch_filter_options(db_pool):
     async with db_pool.acquire() as conn:
-        airports = await conn.fetch("SELECT icao, lat, lon FROM airports")
-        ap_list = [{"code": r['icao'], "display": fmt_apt(r['icao']), "lat": r['lat'], "lon": r['lon']} for r in airports if r['icao']]
+        airports = await conn.fetch("SELECT icao, lat, lon, download_schedules FROM airports")
+        ap_list = [{"code": r['icao'], "display": fmt_apt(r['icao']), "lat": r['lat'], "lon": r['lon'], "download_schedules": r['download_schedules']} for r in airports if r['icao']]
 
     airline_codes = set()
     try:

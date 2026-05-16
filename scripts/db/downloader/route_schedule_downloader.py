@@ -66,9 +66,9 @@ async def load_config_from_db(pool):
     
     async with pool.acquire() as conn:
         rows = await conn.fetch("""
-            SELECT icao, iata, name, city, lat, lon 
+            SELECT icao, iata, name, city, lat, lon, download_schedules
             FROM airports 
-            WHERE lat IS NOT NULL AND lon IS NOT NULL
+            WHERE download_schedules = TRUE AND lat IS NOT NULL AND lon IS NOT NULL
         """)
         
         for row in rows:
