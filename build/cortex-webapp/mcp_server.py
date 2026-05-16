@@ -6,7 +6,7 @@ import re
 import csv
 import os
 import redis.asyncio as redis
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
 from fastmcp.server.lifespan import lifespan
@@ -14,6 +14,11 @@ from config import Config
 
 # Import delay predictor for NLP delay queries
 import delay_predictor as dp_module
+
+def utc_to_ist(dt):
+    if dt is None:
+        return None
+    return dt.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=5, minutes=30)))
 
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -360,7 +365,7 @@ async def _fetch_flight_status_logic(callsign_raw: str, depth: int = 0) -> str:
                 AND landed_at >= NOW() - INTERVAL '24 hours' ORDER BY landed_at DESC LIMIT 1
             """, raw, norm)
 
-            if ground: return f"🅿️ <b>Ground Status:</b>\nFlight <b>{raw}</b> is currently parked at {ground['airport']}.\n✅ <b>Landed:</b> {ground['landed_at'].strftime('%H:%M')}"
+            if ground: return f"🅿️ <b>Ground Status:</b>\nFlight <b>{raw}</b> is currently parked at {ground['airport']}.\n✅ <b>Landed:</b> {utc_to_ist(ground['landed_at']).strftime('%H:%M')}"
             return f"❌ No live or historical data found for {raw} in the last 24 hours."
     except Exception as e: return f"⚠️ DB Error: {e}"
 
@@ -458,7 +463,7 @@ async def get_unified_airport_timetable(airport: str, board_type: str = "DEPARTU
             msg = f"{title_icon} <b>{icao} Timetable - {direction.title()}</b> {p_str} | Window: {tm.title()}\n\n"
             
             for r in rows:
-                t_str = r['timestamp'].strftime('%H:%M')
+                t_str = utc_to_ist(r['timestamp']).strftime('%H:%M')
                 status_icon = "✅" if r['status'] in ['Landed', 'Departed'] else "⏳"
                 rwy = f" [RWY {r['runway']}]" if r['runway'] else ""
                 partner_str = f" ({'To' if direction=='DEPARTURES' else 'From'}: {r['partner'] or 'UNK'})" if not partner_icao else ""
@@ -585,7 +590,7 @@ async def get_airframe_history(identifier: str) -> str:
             if not events: return msg + "No recorded history in the last 24 hours."
             last_arr_time, last_arr_loc = None, None
             for e in events:
-                ts = e['timestamp'].strftime('%H:%M')
+                ts = utc_to_ist(e['timestamp']).strftime('%H:%M')
                 rwy_str = f" [RWY {e.get('runway')}]" if e.get('runway') else ""
                 if e['type'] == 'ARRIVED':
                     msg += f"🛬 <b>{ts}</b> - Landed at {e['loc']}{rwy_str} (as {e['callsign']})\n"
@@ -641,7 +646,7 @@ async def get_airport_traffic(code: str) -> str:
         async with DB_POOL.acquire() as conn:
             rows = await conn.fetch("SELECT current_callsign, landed_at FROM ground_ops WHERE airport = $1 ORDER BY landed_at DESC", icao)
             msg = f"🅿️ <b>Ground Traffic at {icao}: {len(rows)} aircraft</b>\n"
-            for r in rows: msg += f"• {r['current_callsign']} (Since {r['landed_at'].strftime('%H:%M')})\n"
+            for r in rows: msg += f"• {r['current_callsign']} (Since {utc_to_ist(r['landed_at']).strftime('%H:%M')})\n"
             return msg
     except: return "⚠️ Error fetching roster."
 
@@ -673,7 +678,7 @@ async def get_airport_turnarounds(airport_code: str, airline_code: Optional[str]
             if not rows: return f"No completed turnarounds recorded for airline {airline_code.upper()} at {icao} in the last 24 hours." if airline_code else f"No completed turnarounds recorded at {icao} in the last 24 hours."
             msg = f"🔄 <b>Recent Turnarounds at {icao}</b>\n\n"
             for r in rows:
-                msg += f"✈️ <b>Hex:</b> <code>{r['hex_id']}</code> | <b>Turnaround:</b> {int(r['turnaround_mins'])} mins\n🛬 {r['arrival_callsign']} (From: {r['origin'] or 'UNK'}) at {r['arrival_time'].strftime('%H:%M')}\n🛫 {r['departure_callsign']} (To: {r['destination'] or 'UNK'}) at {r['departure_time'].strftime('%H:%M')}\n\n"
+                msg += f"✈️ <b>Hex:</b> <code>{r['hex_id']}</code> | <b>Turnaround:</b> {int(r['turnaround_mins'])} mins\n🛬 {r['arrival_callsign']} (From: {r['origin'] or 'UNK'}) at {utc_to_ist(r['arrival_time']).strftime('%H:%M')}\n🛫 {r['departure_callsign']} (To: {r['destination'] or 'UNK'}) at {utc_to_ist(r['departure_time']).strftime('%H:%M')}\n\n"
             return msg.strip()
     except Exception as e: return f"⚠️ Error fetching turnarounds: {e}"
 
@@ -716,7 +721,7 @@ async def get_airport_anomalies(airport_code: str) -> str:
             rows = await conn.fetch("SELECT callsign, event_type, details, anomaly_flag, timestamp FROM flight_events WHERE airport = $1 AND anomaly_flag IS NOT NULL AND timestamp >= NOW() - INTERVAL '24 hours' ORDER BY timestamp DESC", icao)
             if not rows: return f"✅ No anomalies or irregular operations recorded at {icao} in the last 24 hours."
             msg = f"⚠️ <b>Anomaly Report for {icao} (Last 24h)</b>\n\n"
-            for r in rows: msg += f"• <b>{r['timestamp'].strftime('%H:%M')}</b> | {r['callsign']} | <b>{r['anomaly_flag']}</b>: {r['details']}\n"
+            for r in rows: msg += f"• <b>{utc_to_ist(r['timestamp']).strftime('%H:%M')}</b> | {r['callsign']} | <b>{r['anomaly_flag']}</b>: {r['details']}\n"
             return msg.strip()
     except Exception as e: return f"⚠️ Error fetching anomalies: {e}"
 
@@ -828,8 +833,8 @@ async def get_route_status_board(origin: str, destination: str) -> str:
                 msg += "✅ <b>Already Landed</b>\n"
                 for r in landed:
                     rwy_str = f" [RWY {r['runway']}]" if r.get('runway') else ""
-                    #msg += f"• {r['timestamp'].strftime('%H:%M')} | <b>{r['callsign']}</b>{rwy_str}\n"
-                    msg += f"• {r['timestamp'].strftime('%d %b %H:%M')} | <b>{r['callsign']}</b>{rwy_str}\n"
+                    #msg += f"• {utc_to_ist(r['timestamp']).strftime('%H:%M')} | <b>{r['callsign']}</b>{rwy_str}\n"
+                    msg += f"• {utc_to_ist(r['timestamp']).strftime('%d %b %H:%M')} | <b>{r['callsign']}</b>{rwy_str}\n"
 
                 msg += "\n"
 
@@ -876,7 +881,7 @@ async def get_route_status_board(origin: str, destination: str) -> str:
             if pending:
                 msg += "📡 <b>Departed (Out of Radar Range)</b>\n"
                 for r in pending:
-                    msg += f"• <b>{r['callsign']}</b> | Departed at {r['timestamp'].strftime('%d %b %H:%M')}\n"
+                    msg += f"• <b>{r['callsign']}</b> | Departed at {utc_to_ist(r['timestamp']).strftime('%d %b %H:%M')}\n"
                 msg += "\n"
 
             scheduled = await conn.fetch("""
@@ -891,7 +896,7 @@ async def get_route_status_board(origin: str, destination: str) -> str:
                 msg += "⏳ <b>Upcoming / Scheduled</b>\n"
                 for r in scheduled:
                     cs_str = f" <i>(Live: {r['callsign']})</i>" if r['callsign'] and r['callsign'] != r['flight_number'] else ""
-                    msg += f"• {r['scheduled_time'].strftime('%d %b %H:%M')} | <b>{r['flight_number']}</b>{cs_str}\n"
+                    msg += f"• {utc_to_ist(r['scheduled_time']).strftime('%d %b %H:%M')} | <b>{r['flight_number']}</b>{cs_str}\n"
                 msg += "\n"
 
             if not landed and not airborne and not pending and not scheduled:
