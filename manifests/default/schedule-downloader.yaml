@@ -46,6 +46,11 @@ spec:
                 secretKeyRef:
                   name: flight-db-credentials
                   key: password
+            - name: RAPIDAPI_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aerodatabox-credentials
+                  key: rapidapi_key
             - name: AIRLINES_FILE
               value: "/opt/bharatradar/flight_radar/data/airlines.csv"
             resources:

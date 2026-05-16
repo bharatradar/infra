@@ -1,20 +1,21 @@
 import os
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from route_schedule_downloader import download_schedules, compute_next_run_time
+from route_schedule_downloader import download_schedules
+from aerodatabox import aerodatabox_download
 import config as sched_config
 
 IST = timezone(timedelta(hours=5, minutes=30))
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    import asyncio
     import aiohttp
     import asyncpg
     from db import AsyncDatabaseManager
 
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    
+
     async def main():
         db_pool = await asyncpg.create_pool(
             host=os.environ.get("DB_HOST", "localhost"),
@@ -38,12 +39,18 @@ if __name__ == "__main__":
         logger.info("📅 Fetching schedules for: TODAY, TOMORROW")
 
         async with aiohttp.ClientSession() as session:
-            await download_schedules(db, session, {}, {})
+            # 1. AeroDataBox (next 12 hours, high precision) — PRIMARY
+            aero_ok = await aerodatabox_download(db_pool, session, sched_config.Config.TARGET_AIRPORTS)
 
-        # Post-download: compute and store next_run
-        next_run_time = await compute_next_run_time(db)
+            # 2. FR24 + Avionio — FALLBACK only if AeroDataBox failed completely
+            if aero_ok == 0:
+                logger.warning("AeroDataBox failed entirely, falling back to FR24/Avionio")
+                await download_schedules(db, session, {}, {})
+
+        # Post-download: schedule next run in 10 hours
+        next_run_time = now_naive + timedelta(hours=10)
         await db.set_next_run(next_run_time, "SUCCESS")
         logger.info(f"📅 Next run scheduled at {next_run_time.isoformat()}")
         await db_pool.close()
-    
+
     asyncio.run(main())
