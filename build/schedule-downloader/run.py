@@ -31,7 +31,7 @@ if __name__ == "__main__":
             row = await conn.fetchrow("SELECT scheduler_enabled FROM download_config WHERE id = 1")
             if not row or not row["scheduler_enabled"]:
                 logger.info("⏸️ Scheduler disabled (scheduler_enabled = FALSE), exiting")
-                await db_pool.close()
+                db_pool.terminate()
                 return
 
         # Pre-check: skip if now < next_run
@@ -39,7 +39,7 @@ if __name__ == "__main__":
         now_naive = datetime.now(IST).replace(tzinfo=None)
         if next_run is not None and now_naive < next_run.replace(tzinfo=None):
             logger.info(f"⏭️ Skipping: next_run at {next_run.isoformat()}, current time {now_naive.isoformat()}")
-            await db_pool.close()
+            db_pool.terminate()
             return
 
         # Always fetch both today and tomorrow to catch incomplete same-day data
@@ -61,6 +61,6 @@ if __name__ == "__main__":
         async with db_pool.acquire() as conn:
             await conn.execute("UPDATE download_config SET last_run = NOW() WHERE id = 1")
         logger.info(f"📅 Last run updated, next run at {next_run_time.isoformat()}")
-        await db_pool.close()
+        db_pool.terminate()
 
     asyncio.run(main())

@@ -19,6 +19,7 @@ spec:
   suspend: false
   jobTemplate:
     spec:
+      activeDeadlineSeconds: 1800
       template:
         metadata:
           labels:
