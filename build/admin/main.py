@@ -281,7 +281,11 @@ async def api_usage(request: Request):
             raise HTTPException(404, "No config found")
         used = row["rapidapi_units_used"] or 0
         limit = row["rapidapi_units_limit"] or 600
-        burn = row["rapidapi_daily_burn"] or 280
+        actual = await conn.fetchval("""
+            SELECT SUM(units_used)::float / GREATEST(COUNT(DISTINCT date(logged_at)), 1)
+            FROM api_usage_log WHERE logged_at >= NOW() - INTERVAL '7 days'
+        """)
+        burn = round(max(actual or row["rapidapi_daily_burn"] or 280, 1))
         days = row["rapidapi_alert_days"] or 23
         remaining = limit - used
         days_left = remaining / max(burn, 1)

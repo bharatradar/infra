@@ -172,7 +172,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
       <!-- ═══════════ Dashboard: Plan Overview ═══════════ -->
       <div class="section" id="section-dashboard/overview">
         <div class="card">
-          <h2>Plan Overview <span id="data-freshness" class="stale-tag">stale</span></h2>
+          <h2>Plan Overview <span id="data-freshness" class="fresh-tag" style="display:none"></span></h2>
           <div id="usage-stats" class="stat-grid"></div>
           <div class="toolbar">
             <button class="btn btn-primary" id="btn-refresh" onclick="refreshPlan()">&#8635; Refresh from API</button>
@@ -316,7 +316,7 @@ function navigate() {
   if (section === 'dashboard/overview') loadData();
   else if (section === 'dashboard/usage') loadUsage(usageDays);
   else if (section === 'rapidapi/keys') loadKeys();
-  else if (section === 'rapidapi/schedule') loadSchedule();
+  else if (section === 'rapidapi/schedule') { loadData(); loadSchedule(); }
   else if (section === 'rapidapi/airports') loadAirports();
 }
 
@@ -406,7 +406,7 @@ async function refreshPlan() {
       errorsEl.classList.add('show');
     }
     showAlert('Refreshed: ' + d.total_units_limit + ' total units, ' + d.total_units_remaining + ' remaining across ' + (d.keys || []).length + ' key(s)', 'success');
-    if (freshTag) { freshTag.className = 'fresh-tag'; freshTag.textContent = 'live'; }
+    if (freshTag) { freshTag.style.display = ''; freshTag.textContent = 'Updated ' + new Date().toLocaleTimeString(); }
     await loadData();
     if (statusEl) statusEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
   } catch(e) {
@@ -504,8 +504,8 @@ async function addKey() {
     keyInput.value = '';
     nameInput.value = '';
     if (document.getElementById('data-freshness')) {
-      document.getElementById('data-freshness').className = 'fresh-tag';
-      document.getElementById('data-freshness').textContent = 'live';
+      document.getElementById('data-freshness').style.display = '';
+      document.getElementById('data-freshness').textContent = 'Updated ' + new Date().toLocaleTimeString();
     }
     await loadData();
     if (location.hash === '#rapidapi/keys') await loadKeys();
@@ -525,8 +525,8 @@ async function deleteKey(keyName) {
     if (!r.ok) { showAlert('Failed: ' + (d.detail || r.statusText), 'error'); return; }
     showAlert('Removed ' + keyName + ' and refreshed', 'success');
     if (document.getElementById('data-freshness')) {
-      document.getElementById('data-freshness').className = 'fresh-tag';
-      document.getElementById('data-freshness').textContent = 'live';
+      document.getElementById('data-freshness').style.display = '';
+      document.getElementById('data-freshness').textContent = 'Updated ' + new Date().toLocaleTimeString();
     }
     await loadData();
     if (location.hash === '#rapidapi/keys') await loadKeys();
