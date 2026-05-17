@@ -6,227 +6,675 @@
 <title>BharatRadar Admin</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
-.header{background:#1e293b;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #334155}
-.header h1{font-size:20px;color:#38bdf8}
-.header a{color:#94a3b8;text-decoration:none;font-size:14px}
-.header a:hover{color:#38bdf8}
-.container{max-width:800px;margin:0 auto;padding:24px}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;margin:0}
+#app{display:flex;min-height:100vh}
+#app.hidden{display:none}
+
+.sidebar{width:220px;flex-shrink:0;background:#1e293b;border-right:1px solid #334155;display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.sidebar-brand{padding:20px 16px 12px;border-bottom:1px solid #334155}
+.sidebar-brand h1{font-size:16px;color:#38bdf8;font-weight:700}
+.sidebar-brand .sub{font-size:11px;color:#64748b;margin-top:2px}
+.sidebar-nav{padding:4px 0;flex:1;overflow-y:auto}
+.nav-section-label{padding:12px 16px 4px;font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:1px;font-weight:700}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 16px 8px 24px;color:#94a3b8;text-decoration:none;font-size:12px;cursor:pointer;border-left:3px solid transparent;transition:all .12s}
+.nav-item:hover{background:#334155;color:#e2e8f0}
+.nav-item.active{background:#0f172a;color:#38bdf8;border-left-color:#38bdf8;font-weight:600}
+.nav-item.disabled{opacity:.4;cursor:not-allowed}
+.nav-item.disabled:hover{background:transparent;color:#94a3b8}
+.nav-icon{width:16px;text-align:center;font-size:12px}
+.sidebar-footer{padding:12px 16px;border-top:1px solid #334155;font-size:10px;color:#475569}
+
+.main-area{flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 24px;background:#1e293b;border-bottom:1px solid #334155}
+.topbar h2{font-size:15px;color:#e2e8f0;font-weight:600}
+.topbar a{color:#94a3b8;text-decoration:none;font-size:12px}
+.topbar a:hover{color:#38bdf8}
+.content{padding:20px 24px;flex:1}
+
+.section{display:none}
+.section.active{display:block}
+
 .card{background:#1e293b;border-radius:8px;padding:20px;margin-bottom:16px;border:1px solid #334155}
-.card h2{font-size:16px;color:#38bdf8;margin-bottom:12px}
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
-.stat{background:#0f172a;border-radius:6px;padding:12px;text-align:center}
-.stat .label{font-size:12px;color:#94a3b8;text-transform:uppercase}
-.stat .value{font-size:24px;font-weight:700;color:#e2e8f0;margin-top:4px}
+.card h2{font-size:14px;color:#38bdf8;margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h2 .count{font-size:11px;color:#64748b;font-weight:400}
+.card h2 .stale-tag{font-size:10px;background:#3f1d2b;color:#fb7185;padding:2px 6px;border-radius:3px;font-weight:400}
+.card h2 .fresh-tag{font-size:10px;background:#1e3a5f;color:#93c5fd;padding:2px 6px;border-radius:3px;font-weight:400}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px}
+.stat{background:#0f172a;border-radius:6px;padding:10px;text-align:center}
+.stat .label{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.3px}
+.stat .value{font-size:20px;font-weight:700;color:#e2e8f0;margin-top:3px}
 .stat .value.warn{color:#fbbf24}
 .stat .value.danger{color:#ef4444}
 .stat .value.ok{color:#22c55e}
-.form-group{margin-bottom:12px}
-.form-group label{display:block;font-size:13px;color:#94a3b8;margin-bottom:4px}
-.form-group input{width:100%;padding:8px 12px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:14px}
-.form-group input:focus{outline:none;border-color:#38bdf8}
-.form-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-.btn{display:inline-block;padding:8px 20px;border-radius:4px;font-size:14px;cursor:pointer;border:none;font-weight:600}
+.stat .sub{font-size:10px;color:#64748b;margin-top:2px}
+
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 16px;border-radius:4px;font-size:12px;cursor:pointer;border:none;font-weight:600;transition:all .12s}
 .btn-primary{background:#38bdf8;color:#0f172a}
 .btn-primary:hover{background:#7dd3fc}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
 .btn-danger{background:#ef4444;color:#fff}
 .btn-danger:hover{background:#dc2626}
 .btn-outline{background:transparent;border:1px solid #334155;color:#94a3b8}
 .btn-outline:hover{background:#334155;color:#e2e8f0}
-.alert{padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:14px}
+.btn-success{background:#22c55e;color:#0f172a}
+.btn-success:hover{background:#4ade80}
+.btn-sm{padding:3px 10px;font-size:11px}
+.btn-xs{padding:2px 8px;font-size:10px}
+
+.key-group{margin-bottom:10px}
+.key-group:last-child{margin-bottom:0}
+.key-header{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#0f172a;border-radius:6px 6px 0 0;border:1px solid #334155;border-bottom:none;flex-wrap:wrap}
+.key-header .name{font-family:monospace;font-size:12px;color:#e2e8f0;font-weight:600}
+.key-header .tier-badge{padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.tier-pro{background:#1e3a5f;color:#60a5fa}
+.tier-free{background:#3f1d2b;color:#fb7185}
+.tier-unknown{background:#332b1d;color:#fbbf24}
+.key-header .hash{font-family:monospace;font-size:10px;color:#475569;margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
+.key-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px;padding:8px 12px 10px;background:#0f172a;border:1px solid #334155;border-top:none;border-radius:0 0 6px 6px}
+.key-stat{text-align:center}
+.key-stat .label{font-size:9px;color:#64748b;text-transform:uppercase}
+.key-stat .value{font-size:14px;font-weight:600;color:#e2e8f0;margin-top:2px}
+.key-stat .value.warn{color:#fbbf24}
+.key-stat .value.danger{color:#ef4444}
+.key-stat .value.ok{color:#22c55e}
+.key-stat .na{color:#475569;font-weight:400}
+.key-error{grid-column:1/-1;background:#3f1d2b;color:#fb7185;padding:5px 8px;border-radius:4px;font-size:11px}
+
+.add-key-form{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid #334155}
+.add-key-form .form-group{flex:1;min-width:180px}
+.add-key-form label{display:block;font-size:10px;color:#94a3b8;margin-bottom:3px}
+.add-key-form input{width:100%;padding:7px 10px;background:#0f172a;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;font-family:monospace}
+.add-key-form input:focus{outline:none;border-color:#38bdf8}
+
+.alert{padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:12px;display:none}
+.alert.show{display:block}
 .alert-success{background:#166534;color:#bbf7d0}
 .alert-error{background:#991b1b;color:#fecaca}
+.alert-info{background:#1e3a5f;color:#93c5fd}
+
+.table{width:100%;border-collapse:collapse;font-size:12px}
+.table th{text-align:left;padding:8px 10px;background:#0f172a;color:#94a3b8;font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.3px;border-bottom:1px solid #334155}
+.table td{padding:7px 10px;border-bottom:1px solid #1e293b;color:#e2e8f0}
+.table tr:hover td{background:#1e293b}
+
+.loading{text-align:center;padding:30px;color:#64748b;font-size:12px}
+.loading .spinner{display:inline-block;width:16px;height:16px;border:2px solid #334155;border-top-color:#38bdf8;border-radius:50%;animation:spin .6s linear infinite;margin-right:6px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+
 #login-overlay{position:fixed;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0f172a;z-index:100}
 #login-overlay.hidden{display:none}
 .login-box{text-align:center;padding:48px}
 .login-box h2{font-size:24px;color:#38bdf8;margin-bottom:8px}
 .login-box p{color:#94a3b8;margin-bottom:24px}
-.login-box .btn{font-size:16px;padding:12px 32px}
-.hidden-section{display:none}
-#error-msg{text-align:center;padding:48px}
-#error-msg h2{color:#ef4444;margin-bottom:8px}
+.login-box .btn{font-size:15px;padding:12px 32px}
+.hidden{display:none}
+
+.schedule-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #1e293b;font-size:13px}
+.schedule-row:last-child{border-bottom:none}
+.schedule-row .label{color:#94a3b8;min-width:100px}
+.schedule-row .value{color:#e2e8f0;font-weight:500}
+.toggle{position:relative;display:inline-block;width:36px;height:20px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;inset:0;background:#475569;border-radius:10px;transition:.2s}
+.toggle .slider::before{content:"";position:absolute;height:16px;width:16px;left:2px;bottom:2px;background:#fff;border-radius:50%;transition:.2s}
+.toggle input:checked+.slider{background:#22c55e}
+.toggle input:checked+.slider::before{transform:translateX(16px)}
+
+.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600}
+.badge-success{background:#166534;color:#bbf7d0}
+.badge-danger{background:#991b1b;color:#fecaca}
+.badge-muted{background:#334155;color:#94a3b8}
 </style>
 </head>
 <body>
+
 <div id="login-overlay">
   <div class="login-box" id="login-box">
     <h2>BharatRadar Admin</h2>
-    <p>Sign in with Google to manage API settings</p>
+    <p>Sign in with Google</p>
     <button class="btn btn-primary" onclick="login()">Login with Google</button>
   </div>
-  <div id="error-msg" class="hidden-section">
+  <div id="error-msg" class="hidden">
     <h2>Access Denied</h2>
     <p>Your account is not authorized as an admin.</p>
   </div>
 </div>
 
-<div id="app" class="hidden-section">
-  <div class="header">
-    <h1>BharatRadar Admin</h1>
-    <a href="#" onclick="logout()">Logout</a>
+<div id="app" class="hidden">
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      <h1>BharatRadar</h1>
+      <div class="sub">Admin Console</div>
+    </div>
+    <nav class="sidebar-nav" id="sidebar-nav">
+      <div class="nav-section-label">Dashboard</div>
+      <div class="nav-item active" data-href="#dashboard/overview"><span class="nav-icon">&#9679;</span> Plan Overview</div>
+      <div class="nav-item" data-href="#dashboard/usage"><span class="nav-icon">&#9679;</span> API Usage</div>
+      <div class="nav-item" data-href="#dashboard/activity"><span class="nav-icon">&#9679;</span> Activity Log</div>
+      <div class="nav-section-label">RapidAPI-aerodatabox</div>
+      <div class="nav-item" data-href="#rapidapi/keys"><span class="nav-icon">&#9881;</span> API Keys</div>
+      <div class="nav-item" data-href="#rapidapi/schedule"><span class="nav-icon">&#128197;</span> Schedule</div>
+      <div class="nav-item" data-href="#rapidapi/airports"><span class="nav-icon">&#9992;</span> Airports</div>
+    </nav>
+    <div class="sidebar-footer">bharatradar/infra</div>
   </div>
-  <div class="container">
-    <div id="alerts"></div>
 
-    <div class="card">
-      <h2>API Usage</h2>
-      <div class="stat-grid" id="usage-stats">
-        <div class="stat"><div class="label">Used</div><div class="value" id="stat-used">—</div></div>
-        <div class="stat"><div class="label">Limit</div><div class="value" id="stat-limit">—</div></div>
-        <div class="stat"><div class="label">Remaining</div><div class="value" id="stat-remaining">—</div></div>
-        <div class="stat"><div class="label">Days Left</div><div class="value" id="stat-days">—</div></div>
-        <div class="stat"><div class="label">Last Alert</div><div class="value" id="stat-alert" style="font-size:13px">—</div></div>
-        <div class="stat"><div class="label">Status</div><div class="value" id="stat-status" style="font-size:14px">—</div></div>
-      </div>
+  <div class="main-area">
+    <div class="topbar">
+      <h2 id="page-title">Plan Overview</h2>
+      <a href="#" onclick="logout()">Logout</a>
     </div>
 
-    <div class="card">
-      <h2>Plan Settings</h2>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Units Limit</label>
-          <input type="number" id="input-limit" min="100" max="99999">
-        </div>
-        <div class="form-group">
-          <label>Daily Burn (est.)</label>
-          <input type="number" id="input-burn" min="1" max="9999">
-        </div>
-        <div class="form-group">
-          <label>Alert Days</label>
-          <input type="number" id="input-days" min="1" max="365">
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn btn-primary" onclick="saveSettings()">Save</button>
-        <button class="btn btn-outline" onclick="resetUsage()">Reset Usage Counter</button>
-      </div>
-    </div>
+    <div class="content" id="content-area">
 
-    <div class="card">
-      <h2>Update RapidAPI Key</h2>
-      <p style="font-size:13px;color:#94a3b8;margin-bottom:12px">
-        Paste your new RapidAPI key below. This stores the key hash and resets usage tracking.
-        The actual key must also be updated in the K8s secret:
-        <code style="display:block;margin-top:4px;background:#0f172a;padding:6px 10px;border-radius:4px;font-size:12px">
-          ./scripts/admin/update-rapidapi-key.sh &lt;NEW_KEY&gt; pro
-        </code>
-      </p>
-      <div class="form-group">
-        <label>New RapidAPI Key</label>
-        <input type="text" id="input-new-key" placeholder="Paste new key here">
+      <!-- ═══════════ Dashboard: Plan Overview ═══════════ -->
+      <div class="section" id="section-dashboard/overview">
+        <div class="card">
+          <h2>Plan Overview <span id="data-freshness" class="stale-tag">stale</span></h2>
+          <div id="usage-stats" class="stat-grid"></div>
+          <div class="toolbar">
+            <button class="btn btn-primary" id="btn-refresh" onclick="refreshPlan()">&#8635; Refresh from API</button>
+            <span id="refresh-status" style="font-size:11px;color:#64748b"></span>
+          </div>
+          <div id="plan-errors" class="alert alert-error"></div>
+        </div>
+        <div class="card">
+          <h2>Download Schedule</h2>
+          <div class="schedule-row"><span class="label">Last run</span><span class="value" id="last-run">—</span></div>
+          <div class="schedule-row"><span class="label">Next run</span><span class="value" id="next-run">—</span></div>
+          <div class="schedule-row"><span class="label">Status</span><span class="value" id="last-status">—</span></div>
+        </div>
       </div>
-      <button class="btn btn-primary" onclick="updateKey()">Store Key Hash &amp; Reset Usage</button>
+
+      <!-- ═══════════ Dashboard: API Usage ═══════════ -->
+      <div class="section" id="section-dashboard/usage">
+        <div class="card">
+          <h2>API Usage <span class="count" id="usage-range-label">(last 7 days)</span></h2>
+          <div class="toolbar">
+            <button class="btn btn-outline btn-sm" onclick="loadUsage(1)">1d</button>
+            <button class="btn btn-outline btn-sm" onclick="loadUsage(7)">7d</button>
+            <button class="btn btn-outline btn-sm" onclick="loadUsage(30)">30d</button>
+            <span id="usage-total" style="font-size:11px;color:#64748b;margin-left:8px"></span>
+          </div>
+          <div id="usage-table-wrapper"><div class="loading"><div class="spinner"></div>Loading usage data...</div></div>
+        </div>
+      </div>
+
+      <!-- ═══════════ Dashboard: Activity Log ═══════════ -->
+      <div class="section" id="section-dashboard/activity">
+        <div class="card">
+          <h2>Recent Activity</h2>
+          <div id="activity-content">
+            <p style="color:#64748b;font-size:12px">Schedule runs and key changes will appear here.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════ RapidAPI: Keys ═══════════ -->
+      <div class="section" id="section-rapidapi/keys">
+        <div class="card">
+          <h2>API Keys <span class="count" id="key-count"></span></h2>
+          <p style="font-size:11px;color:#64748b;margin-bottom:10px">
+            Keys are stored in K8s secret <code>aerodatabox-credentials</code>.
+          </p>
+          <div id="key-list"></div>
+          <div class="add-key-form">
+            <div class="form-group" style="flex:0 0 180px">
+              <label>Name</label>
+              <input type="text" id="input-key-name" placeholder="e.g. free-tier-1">
+            </div>
+            <div class="form-group" style="flex:2">
+              <label>Key Value</label>
+              <input type="text" id="input-new-key" placeholder="Paste the full API key value here">
+            </div>
+            <button class="btn btn-primary" onclick="addKey()">Add Key</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════ RapidAPI: Schedule ═══════════ -->
+      <div class="section" id="section-rapidapi/schedule">
+        <div class="card">
+          <h2>Schedule Controls</h2>
+          <div class="schedule-row">
+            <span class="label">Scheduler</span>
+            <label class="toggle"><input type="checkbox" id="scheduler-enabled" onchange="toggleScheduler()"><span class="slider"></span></label>
+            <span style="font-size:11px;color:#64748b" id="scheduler-label">Disabled</span>
+          </div>
+          <div class="schedule-row">
+            <span class="label">Last run</span>
+            <span class="value" id="sched-last-run">—</span>
+          </div>
+          <div class="schedule-row">
+            <span class="label">Next run</span>
+            <span class="value" id="sched-next-run">—</span>
+          </div>
+          <div class="schedule-row">
+            <span class="label">Status</span>
+            <span class="value" id="sched-last-status">—</span>
+          </div>
+          <div class="toolbar" style="margin-top:10px">
+            <button class="btn btn-success" onclick="runNow()">&#9654; Run Now</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════ RapidAPI: Airports ═══════════ -->
+      <div class="section" id="section-rapidapi/airports">
+        <div class="card">
+          <h2>Tracked Airports <span class="count" id="airport-count"></span></h2>
+          <div id="airport-table-wrapper"><div class="loading"><div class="spinner"></div>Loading airports...</div></div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
 
 <script>
 let authenticated = false;
+let usageDays = 7;
 
+// ═══ Auth ═══
 async function checkAuth() {
   try {
-    const resp = await fetch('/admin/api/usage');
-    if (resp.ok) {
+    const r = await fetch('/admin/api/usage');
+    if (r.ok) {
       authenticated = true;
       document.getElementById('login-overlay').classList.add('hidden');
-      document.getElementById('app').classList.remove('hidden-section');
-      loadUsage();
+      document.getElementById('app').classList.remove('hidden');
+      navigate();
+    } else if (r.status === 403) {
+      document.getElementById('login-box').style.display = 'none';
+      document.getElementById('error-msg').classList.remove('hidden');
     }
   } catch {}
 }
 checkAuth();
 
-function login() {
-  window.location.href = '/auth/login';
+function login() { window.location.href = '/auth/login'; }
+function logout() { window.location.href = '/auth/logout'; }
+
+// ═══ Routing ═══
+function navigate() {
+  const hash = location.hash || '#dashboard/overview';
+  if (!hash.startsWith('#')) return;
+  const section = hash.substring(1);
+
+  document.querySelectorAll('.section').forEach(function(s) { s.classList.remove('active'); });
+  document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
+
+  const el = document.getElementById('section-' + section);
+  if (el) el.classList.add('active');
+
+  const nav = document.querySelector('.nav-item[data-href="#' + section + '"]');
+  if (nav) nav.classList.add('active');
+
+  // Reload data for the active section
+  if (section === 'dashboard/overview') loadData();
+  else if (section === 'dashboard/usage') loadUsage(usageDays);
+  else if (section === 'rapidapi/keys') loadKeys();
+  else if (section === 'rapidapi/schedule') loadSchedule();
+  else if (section === 'rapidapi/airports') loadAirports();
 }
 
-function logout() {
-  window.location.href = '/auth/logout';
-}
+window.addEventListener('hashchange', navigate);
+
+document.querySelectorAll('.nav-item').forEach(function(n) {
+  n.addEventListener('click', function() {
+    const href = this.getAttribute('data-href');
+    if (href) location.hash = href.substring(1);
+  });
+});
 
 function showAlert(msg, type) {
-  const el = document.getElementById('alerts');
-  el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
-  setTimeout(() => el.innerHTML = '', 5000);
+  const el = document.getElementById('content-area');
+  const div = document.createElement('div');
+  div.className = 'alert alert-' + type + ' show';
+  div.textContent = msg;
+  el.insertBefore(div, el.firstChild);
+  setTimeout(function() { if (div.parentNode) div.remove(); }, 6000);
 }
 
-async function loadUsage() {
+function cls(value, warn, danger) {
+  if (danger !== undefined && value <= danger) return 'danger';
+  if (warn !== undefined && value <= warn) return 'warn';
+  return '';
+}
+
+// ═══ Plan Overview (shared) ═══
+async function loadData() {
   try {
-    const resp = await fetch('/admin/api/usage');
-    if (!resp.ok) { authenticated = false; location.reload(); return; }
-    const d = await resp.json();
+    const r = await fetch('/admin/api/usage');
+    if (!r.ok) { if (!authenticated) location.reload(); return; }
+    const d = await r.json();
 
-    document.getElementById('stat-used').textContent = d.units_used.toLocaleString();
-    document.getElementById('stat-limit').textContent = d.units_limit.toLocaleString();
-    document.getElementById('stat-remaining').textContent = d.remaining.toLocaleString();
-    document.getElementById('stat-days').textContent = d.days_left + ' days';
+    const remainingCls = cls(d.remaining, d.units_limit * 0.2, 100);
+    const daysCls = cls(d.days_left, 23, 7);
+    document.getElementById('usage-stats').innerHTML = [
+      '<div class="stat"><div class="label">Units Limit</div><div class="value">' + (d.units_limit || 0).toLocaleString() + '</div></div>',
+      '<div class="stat"><div class="label">Units Used</div><div class="value">' + (d.units_used || 0).toLocaleString() + '</div></div>',
+      '<div class="stat"><div class="label">Remaining</div><div class="value ' + remainingCls + '">' + (d.remaining || 0).toLocaleString() + '</div></div>',
+      '<div class="stat"><div class="label">Days Left</div><div class="value ' + daysCls + '">' + (d.days_left || 0) + '</div></div>',
+    ].join('');
 
-    const remEl = document.getElementById('stat-remaining');
-    if (d.remaining < 100) remEl.className = 'value danger';
-    else if (d.remaining < d.units_limit * 0.2) remEl.className = 'value warn';
-    else remEl.className = 'value ok';
+    // Update schedule info in both Plan Overview and Schedule sections
+    const upd = function(id, val) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = val || '—';
+    };
+    upd('last-run', d.last_run);
+    upd('next-run', d.next_run);
+    upd('sched-last-run', d.last_run);
+    upd('sched-next-run', d.next_run);
 
-    const daysEl = document.getElementById('stat-days');
-    if (d.days_left < 7) daysEl.className = 'value danger';
-    else if (d.days_left < 23) daysEl.className = 'value warn';
-    else daysEl.className = 'value';
+    var st = d.last_status || '—';
+    var color = st === 'SUCCESS' ? '#22c55e' : st === 'FAILED' ? '#ef4444' : '#94a3b8';
+    ['last-status', 'sched-last-status'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) { el.textContent = st; el.style.color = color; }
+    });
 
-    document.getElementById('stat-alert').textContent = d.last_alert_at || 'None';
-    document.getElementById('stat-status').textContent = d.last_status || '—';
-
-    document.getElementById('input-limit').value = d.units_limit;
-    document.getElementById('input-burn').value = d.daily_burn;
-    document.getElementById('input-days').value = d.alert_days;
+    loadAirportCount();
   } catch(e) {
-    showAlert('Failed to load usage data', 'error');
+    showAlert('Failed to load data: ' + e.message, 'error');
   }
 }
 
-async function saveSettings() {
-  const body = {};
-  const limit = parseInt(document.getElementById('input-limit').value);
-  const burn = parseInt(document.getElementById('input-burn').value);
-  const days = parseInt(document.getElementById('input-days').value);
-  if (!isNaN(limit)) body.units_limit = limit;
-  if (!isNaN(burn)) body.daily_burn = burn;
-  if (!isNaN(days)) body.alert_days = days;
+async function refreshPlan() {
+  const btn = document.getElementById('btn-refresh');
+  const statusEl = document.getElementById('refresh-status');
+  const errorsEl = document.getElementById('plan-errors');
+  const freshTag = document.getElementById('data-freshness');
+  if (btn) btn.disabled = true;
+  if (statusEl) statusEl.textContent = 'Refreshing...';
+  if (errorsEl) { errorsEl.classList.remove('show'); errorsEl.innerHTML = ''; }
 
   try {
-    const resp = await fetch('/admin/api/settings', {
-      method: 'PUT',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(body),
-    });
-    if (resp.ok) { showAlert('Settings saved', 'success'); loadUsage(); }
-    else showAlert('Save failed', 'error');
-  } catch { showAlert('Save failed', 'error'); }
+    const r = await fetch('/admin/api/plan/refresh', {method: 'POST'});
+    const d = await r.json();
+    if (!r.ok) {
+      if (statusEl) statusEl.textContent = '';
+      if (btn) btn.disabled = false;
+      showAlert('Refresh failed: ' + (d.detail || r.statusText), 'error');
+      return;
+    }
+    if (d.errors && d.errors.length > 0 && errorsEl) {
+      errorsEl.innerHTML = '<strong>Warnings:</strong> ' + d.errors.join('<br>');
+      errorsEl.classList.add('show');
+    }
+    showAlert('Refreshed: ' + d.total_units_limit + ' total units, ' + d.total_units_remaining + ' remaining across ' + (d.keys || []).length + ' key(s)', 'success');
+    if (freshTag) { freshTag.className = 'fresh-tag'; freshTag.textContent = 'live'; }
+    await loadData();
+    if (statusEl) statusEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch(e) {
+    showAlert('Refresh failed: ' + e.message, 'error');
+    if (statusEl) statusEl.textContent = '';
+  }
+  if (btn) btn.disabled = false;
+  if (statusEl) setTimeout(function() { statusEl.textContent = ''; }, 10000);
 }
 
-async function resetUsage() {
-  if (!confirm('Reset usage counter to 0?')) return;
+// ═══ API Keys ═══
+async function loadKeys() {
   try {
-    const resp = await fetch('/admin/api/reset-usage', {method: 'POST'});
-    if (resp.ok) { showAlert('Usage counter reset', 'success'); loadUsage(); }
-    else showAlert('Reset failed', 'error');
-  } catch { showAlert('Reset failed', 'error'); }
+    const r = await fetch('/admin/api/keys');
+    if (!r.ok) return;
+    const d = await r.json();
+    renderKeys(d.keys || []);
+  } catch(e) {
+    showAlert('Failed to load keys: ' + e.message, 'error');
+  }
 }
 
-async function updateKey() {
-  const key = document.getElementById('input-new-key').value.trim();
-  if (!key) { showAlert('Please enter a key', 'error'); return; }
-  if (!confirm('Store this key hash and reset usage tracking?')) return;
+function renderKeys(keys) {
+  const el = document.getElementById('key-list');
+  const countEl = document.getElementById('key-count');
+  if (!el) return;
+  if (countEl) countEl.textContent = '(' + keys.length + (keys.length === 1 ? ' key' : ' keys') + ')';
+  if (keys.length === 0) {
+    el.innerHTML = '<p style="color:#64748b;font-size:12px;text-align:center;padding:16px">No keys. Go to Plan Overview and click "Refresh from API" to load from the K8s secret.</p>';
+    return;
+  }
+  el.innerHTML = keys.map(function(k, i) {
+    const tier = k.tier || 'unknown';
+    const tierCls = tier === 'free' ? 'tier-free' : tier === 'pro' ? 'tier-pro' : 'tier-unknown';
+    const hashShort = k.hash ? k.hash.substring(0, 12) + '...' : '(no hash)';
+    const nameLabel = k.key_name || 'Key #' + (i + 1);
+
+    let bodyHtml = '';
+    if (k.error) {
+      bodyHtml += '<div class="key-error">&#9888; ' + k.error + '</div>';
+    }
+    const ul = k.units_limit;
+    const ur = k.units_remaining;
+    if (ul !== undefined && ur !== undefined) {
+      const uu = ul - ur;
+      const pct = Math.round((uu / ul) * 100) + '%';
+      const c = cls(ur, ul * 0.2, 10);
+      bodyHtml += '<div class="key-stat"><div class="label">API Units</div><div class="value ' + c + '">' + uu.toLocaleString() + ' / ' + ul.toLocaleString() + '</div><div class="sub">' + pct + '</div></div>';
+    } else {
+      bodyHtml += '<div class="key-stat"><div class="label">API Units</div><div class="value na">Not fetched yet</div></div>';
+    }
+    const rl = k.requests_limit;
+    const rr = k.requests_remaining;
+    if (rl !== undefined && rr !== undefined) {
+      const ru = rl - rr;
+      const rc = cls(rr, rl * 0.2, 50);
+      bodyHtml += '<div class="key-stat"><div class="label">Requests</div><div class="value ' + rc + '">' + ru.toLocaleString() + ' / ' + rl.toLocaleString() + '</div></div>';
+    } else {
+      bodyHtml += '<div class="key-stat"><div class="label">Requests</div><div class="value na">—</div></div>';
+    }
+    if (k.days_until_reset !== undefined) {
+      bodyHtml += '<div class="key-stat"><div class="label">Reset</div><div class="value" style="font-size:11px;font-weight:400">~' + k.days_until_reset + ' days</div></div>';
+    }
+
+    return '<div class="key-group">' +
+      '<div class="key-header">' +
+        '<span class="name">' + nameLabel + '</span>' +
+        '<span class="tier-badge ' + tierCls + '">' + tier + '</span>' +
+        '<span class="hash" title="' + (k.hash || '') + '">' + hashShort + '</span>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteKey(\'' + k.key_name + '\')">Remove</button>' +
+      '</div>' +
+      '<div class="key-body">' + bodyHtml + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function addKey() {
+  const nameInput = document.getElementById('input-key-name');
+  const keyInput = document.getElementById('input-new-key');
+  const name = nameInput.value.trim();
+  const key = keyInput.value.trim();
+  if (!key) { showAlert('Please paste an API key', 'error'); return; }
+  if (!confirm('Add this key to the K8s secret and refresh from API?')) return;
+  keyInput.disabled = true;
+  nameInput.disabled = true;
   try {
-    const resp = await fetch('/admin/api/key', {
+    const r = await fetch('/admin/api/keys', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({key}),
+      body: JSON.stringify({key: key, name: name || undefined}),
     });
-    if (resp.ok) {
-      showAlert('Key hash stored and usage reset. Don\'t forget to update the K8s secret!', 'success');
-      document.getElementById('input-new-key').value = '';
-      loadUsage();
-    } else showAlert('Failed to store key', 'error');
-  } catch { showAlert('Failed to store key', 'error'); }
+    const d = await r.json();
+    if (!r.ok) { showAlert('Failed: ' + (d.detail || r.statusText), 'error'); keyInput.disabled = false; nameInput.disabled = false; return; }
+    showAlert('Key added as ' + d.key_name + ' and refreshed', 'success');
+    keyInput.value = '';
+    nameInput.value = '';
+    if (document.getElementById('data-freshness')) {
+      document.getElementById('data-freshness').className = 'fresh-tag';
+      document.getElementById('data-freshness').textContent = 'live';
+    }
+    await loadData();
+    if (location.hash === '#rapidapi/keys') await loadKeys();
+  } catch(e) {
+    showAlert('Error: ' + e.message, 'error');
+  }
+  keyInput.disabled = false;
+  nameInput.disabled = false;
+}
+
+async function deleteKey(keyName) {
+  if (!keyName) { showAlert('Cannot remove: key has no name in DB', 'error'); return; }
+  if (!confirm('Remove ' + keyName + ' from the K8s secret?')) return;
+  try {
+    const r = await fetch('/admin/api/keys/' + encodeURIComponent(keyName), {method: 'DELETE'});
+    const d = await r.json();
+    if (!r.ok) { showAlert('Failed: ' + (d.detail || r.statusText), 'error'); return; }
+    showAlert('Removed ' + keyName + ' and refreshed', 'success');
+    if (document.getElementById('data-freshness')) {
+      document.getElementById('data-freshness').className = 'fresh-tag';
+      document.getElementById('data-freshness').textContent = 'live';
+    }
+    await loadData();
+    if (location.hash === '#rapidapi/keys') await loadKeys();
+  } catch(e) {
+    showAlert('Error: ' + e.message, 'error');
+  }
+}
+
+// ═══ Schedule ═══
+async function loadSchedule() {
+  try {
+    const r = await fetch('/admin/api/schedule');
+    if (!r.ok) return;
+    const d = await r.json();
+    var en = d.scheduler_enabled;
+    var cb = document.getElementById('scheduler-enabled');
+    if (cb) { cb.checked = en; }
+    if (document.getElementById('scheduler-label')) {
+      document.getElementById('scheduler-label').textContent = en ? 'Enabled' : 'Disabled';
+    }
+  } catch(e) {
+    showAlert('Failed to load schedule: ' + e.message, 'error');
+  }
+}
+
+async function toggleScheduler() {
+  var cb = document.getElementById('scheduler-enabled');
+  var val = cb.checked;
+  try {
+    const r = await fetch('/admin/api/schedule', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({scheduler_enabled: val}),
+    });
+    if (!r.ok) { showAlert('Failed to update scheduler', 'error'); cb.checked = !val; return; }
+    showAlert('Scheduler ' + (val ? 'enabled' : 'disabled'), 'success');
+    document.getElementById('scheduler-label').textContent = val ? 'Enabled' : 'Disabled';
+    await loadData();
+  } catch(e) {
+    showAlert('Error: ' + e.message, 'error');
+    cb.checked = !val;
+  }
+}
+
+async function runNow() {
+  if (!confirm('Trigger a download run now? This will consume API units.')) return;
+  try {
+    const r = await fetch('/admin/api/schedule', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({next_run: new Date().toISOString().replace('Z', '')}),
+    });
+    if (!r.ok) { showAlert('Failed to trigger run', 'error'); return; }
+    showAlert('Run triggered. The CronJob will pick it up within 30 minutes.', 'success');
+    await loadData();
+  } catch(e) {
+    showAlert('Error: ' + e.message, 'error');
+  }
+}
+
+// ═══ API Usage ═══
+async function loadUsage(days) {
+  usageDays = days || 7;
+  document.getElementById('usage-range-label').textContent = '(last ' + usageDays + ' days)';
+  document.getElementById('usage-table-wrapper').innerHTML = '<div class="loading"><div class="spinner"></div>Loading usage data...</div>';
+  try {
+    const r = await fetch('/admin/api/usage/daily?days=' + usageDays);
+    if (!r.ok) { document.getElementById('usage-table-wrapper').innerHTML = '<p style="color:#64748b;font-size:12px">No usage data yet.</p>'; return; }
+    const d = await r.json();
+    if (!d.logs || d.logs.length === 0) {
+      document.getElementById('usage-table-wrapper').innerHTML = '<p style="color:#64748b;font-size:12px">No API usage logged yet. Usage tracking starts after the next schedule run.</p>';
+      document.getElementById('usage-total').textContent = '';
+      return;
+    }
+    document.getElementById('usage-total').textContent = 'All-time: ' + (d.total_units_all_time || 0).toLocaleString() + ' units';
+
+    var html = '<table class="table"><thead><tr><th>Date</th><th>Endpoint</th><th>Units</th><th>Calls</th></tr></thead><tbody>';
+    d.logs.forEach(function(row) {
+      var dt = row.day ? row.day.substring(0, 10) : '—';
+      var ep = row.endpoint || '—';
+      var u = (row.total_units || 0).toLocaleString();
+      var c = (row.calls || 0).toLocaleString();
+      html += '<tr><td>' + dt + '</td><td style="font-family:monospace;font-size:11px">' + ep + '</td><td>' + u + '</td><td>' + c + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('usage-table-wrapper').innerHTML = html;
+  } catch(e) {
+    document.getElementById('usage-table-wrapper').innerHTML = '<p style="color:#ef4444;font-size:12px">Error: ' + e.message + '</p>';
+  }
+}
+
+// ═══ Airports ═══
+async function loadAirportCount() {
+  try {
+    const r = await fetch('/admin/api/airports');
+    if (!r.ok) return;
+    const d = await r.json();
+    var total = (d.airports || []).length;
+    var active = (d.airports || []).filter(function(a) { return a.download_schedules; }).length;
+    var el = document.getElementById('airport-count');
+    if (el) el.textContent = '(' + active + '/' + total + ' active)';
+  } catch(e) {}
+}
+
+async function loadAirports() {
+  document.getElementById('airport-table-wrapper').innerHTML = '<div class="loading"><div class="spinner"></div>Loading airports...</div>';
+  try {
+    const r = await fetch('/admin/api/airports');
+    if (!r.ok) return;
+    const d = await r.json();
+    var airports = d.airports || [];
+    if (airports.length === 0) {
+      document.getElementById('airport-table-wrapper').innerHTML = '<p style="color:#64748b;font-size:12px">No airports found.</p>';
+      return;
+    }
+    var total = airports.length;
+    var active = airports.filter(function(a) { return a.download_schedules; }).length;
+    var countEl = document.getElementById('airport-count');
+    if (countEl) countEl.textContent = '(' + active + '/' + total + ' active)';
+
+    var html = '<table class="table"><thead><tr><th>ICAO</th><th>IATA</th><th>Name</th><th>Tracked</th><th></th></tr></thead><tbody>';
+    airports.forEach(function(a) {
+      var on = a.download_schedules ? 'Yes' : 'No';
+      var badge = a.download_schedules ? 'badge badge-success' : 'badge badge-muted';
+      html += '<tr>' +
+        '<td style="font-family:monospace">' + (a.icao || '—') + '</td>' +
+        '<td style="font-family:monospace">' + (a.iata || '—') + '</td>' +
+        '<td>' + (a.name || '—') + '</td>' +
+        '<td><span class="' + badge + '">' + on + '</span></td>' +
+        '<td><button class="btn btn-outline btn-xs" onclick="toggleAirport(\'' + a.icao + '\')">' + (a.download_schedules ? 'Disable' : 'Enable') + '</button></td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('airport-table-wrapper').innerHTML = html;
+  } catch(e) {
+    document.getElementById('airport-table-wrapper').innerHTML = '<p style="color:#ef4444;font-size:12px">Error: ' + e.message + '</p>';
+  }
+}
+
+async function toggleAirport(icao) {
+  try {
+    const r = await fetch('/admin/api/airports/' + icao + '/toggle', {method: 'POST'});
+    if (!r.ok) { showAlert('Failed to toggle airport', 'error'); return; }
+    await loadAirports();
+    loadAirportCount();
+  } catch(e) {
+    showAlert('Error: ' + e.message, 'error');
+  }
 }
 </script>
 </body>

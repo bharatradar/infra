@@ -51,6 +51,16 @@ spec:
                 secretKeyRef:
                   name: aerodatabox-credentials
                   key: rapidapi_key
+            - name: RAPIDAPI_KEY_1
+              valueFrom:
+                secretKeyRef:
+                  name: aerodatabox-credentials
+                  key: rapidapi_key_1
+            - name: RAPIDAPI_KEY_2
+              valueFrom:
+                secretKeyRef:
+                  name: aerodatabox-credentials
+                  key: rapidapi_key_2
             - name: TELEGRAM_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -71,7 +81,6 @@ spec:
                 memory: "512Mi"
                 cpu: "500m"
 ---
-
 apiVersion: v1
 kind: ServiceAccount
 metadata:

@@ -64,6 +64,9 @@ async def get_airport_iata_to_icao_map(session: aiohttp.ClientSession):
         logger.error(f"Failed to load airports.csv: {e}")
     return airport_map
 
+def _normalize_number(number):
+    return "".join(number.upper().split())
+
 async def download_from_flightsfrom(db: AsyncDatabaseManager, session: aiohttp.ClientSession, airport_iata_to_icao: dict, days_to_run: list = None):
     logger.info("📅 Fetching Schedules from FlightsFrom (PRIMARY)...")
 
@@ -338,7 +341,7 @@ async def download_schedules(db: AsyncDatabaseManager, session: aiohttp.ClientSe
                                 
                                 safe_airport = icao_key.upper()
                                 safe_mode = mode.upper()
-                                safe_flt_num = flt_num.upper()
+                                safe_flt_num = _normalize_number(flt_num)
                                 
                                 async with db.pool.acquire() as conn:
                                     try:
@@ -421,7 +424,7 @@ async def download_schedules(db: AsyncDatabaseManager, session: aiohttp.ClientSe
                                                 if flt_num and sched_ts:
                                                     safe_airport = icao_key.upper()
                                                     safe_mode = mode.upper()
-                                                    safe_flt_num = flt_num.upper()
+                                                    safe_flt_num = _normalize_number(flt_num)
                                                     safe_hex_id = hex_id.upper() if hex_id else None
                                                     safe_route_ap = route_ap.upper() if route_ap else ""
 

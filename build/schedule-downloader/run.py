@@ -26,6 +26,14 @@ if __name__ == "__main__":
         )
         db = AsyncDatabaseManager(db_pool)
 
+        # Check if scheduler is enabled
+        async with db_pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT scheduler_enabled FROM download_config WHERE id = 1")
+            if not row or not row["scheduler_enabled"]:
+                logger.info("⏸️ Scheduler disabled (scheduler_enabled = FALSE), exiting")
+                await db_pool.close()
+                return
+
         # Pre-check: skip if now < next_run
         next_run = await db.get_next_run()
         now_naive = datetime.now(IST).replace(tzinfo=None)
@@ -47,10 +55,12 @@ if __name__ == "__main__":
                 logger.warning("AeroDataBox failed entirely, falling back to FR24/Avionio")
                 await download_schedules(db, session, {}, {})
 
-        # Post-download: schedule next run in 10 hours
+        # Post-download: update last_run, schedule next run in 10 hours
         next_run_time = now_naive + timedelta(hours=10)
         await db.set_next_run(next_run_time, "SUCCESS")
-        logger.info(f"📅 Next run scheduled at {next_run_time.isoformat()}")
+        async with db_pool.acquire() as conn:
+            await conn.execute("UPDATE download_config SET last_run = NOW() WHERE id = 1")
+        logger.info(f"📅 Last run updated, next run at {next_run_time.isoformat()}")
         await db_pool.close()
 
     asyncio.run(main())

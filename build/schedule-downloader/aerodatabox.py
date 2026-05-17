@@ -1,12 +1,114 @@
 import os
 import hashlib
+import json
 import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from telegram import send_telegram_message
 
-RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "")
 RAPIDAPI_HOST = "aerodatabox.p.rapidapi.com"
+
+logger = logging.getLogger(__name__)
+
+_key_last_limits = {}
+_key_failures = set()
+
+FREE_TIER_DELAY = 10
+PRO_TIER_DELAY = 5
+
+
+def _load_rapidapi_keys():
+    keys = []
+    legacy = os.environ.get("RAPIDAPI_KEY", "")
+    if legacy:
+        keys.append({
+            "key": legacy,
+            "hash": hashlib.sha256(legacy.encode()).hexdigest(),
+            "tier": "unknown",
+            "key_name": "rapidapi_key_1",
+        })
+        logger.info(f"Loaded RAPIDAPI_KEY (legacy) — hash={keys[0]['hash'][:12]}...")
+    i = 1
+    while True:
+        key = os.environ.get(f"RAPIDAPI_KEY_{i}")
+        if not key:
+            break
+        if not any(k["key"] == key for k in keys):
+            keys.append({
+                "key": key,
+                "hash": hashlib.sha256(key.encode()).hexdigest(),
+                "tier": "unknown",
+                "key_name": f"rapidapi_key_{i}",
+            })
+            logger.info(f"Loaded RAPIDAPI_KEY_{i} — hash={keys[-1]['hash'][:12]}...")
+        i += 1
+    logger.info(f"Total RapidAPI keys loaded: {len(keys)}")
+    return keys
+
+
+RAPIDAPI_KEYS = _load_rapidapi_keys()
+
+
+def _get_active_keys():
+    return [k for k in RAPIDAPI_KEYS if k["hash"] not in _key_failures]
+
+
+def _get_current_key():
+    active = _get_active_keys()
+    if not active:
+        logger.warning("All RapidAPI keys exhausted — resetting failures and retrying from start")
+        _key_failures.clear()
+        active = RAPIDAPI_KEYS
+    return active[0]
+
+
+def _mark_key_failed(key_hash):
+    key_info = next((k for k in RAPIDAPI_KEYS if k["hash"] == key_hash), None)
+    tier = "unknown"
+    if key_info:
+        limits = _key_last_limits.get(key_hash, {})
+        tier = limits.get("tier", "unknown")
+    logger.warning(f"Key {key_hash[:12]}... ({tier}) marked as failed this run")
+    _key_failures.add(key_hash)
+
+
+def _get_delay():
+    key = _get_current_key()
+    if not key:
+        return PRO_TIER_DELAY
+    limits = _key_last_limits.get(key["hash"], {})
+    tier = limits.get("tier", "unknown")
+    return FREE_TIER_DELAY if tier == "free" else PRO_TIER_DELAY
+
+
+def _rotate_on_status(resp_status, key_hash):
+    if resp_status in (401, 403, 429):
+        _mark_key_failed(key_hash)
+        return True
+    return False
+
+
+def _capture_rate_limits(resp, key_hash):
+    limits = {}
+    limits["tier"] = (resp.headers.get("x-tier") or "unknown").lower()
+    raw = resp.headers.get("x-ratelimit-api-units-limit")
+    if raw:
+        limits["units_limit"] = int(raw)
+    raw = resp.headers.get("x-ratelimit-api-units-remaining")
+    if raw:
+        limits["units_remaining"] = int(raw)
+    raw = resp.headers.get("x-ratelimit-api-units-reset")
+    if raw:
+        limits["units_reset"] = int(raw)
+    raw = resp.headers.get("x-ratelimit-requests-limit")
+    if raw:
+        limits["requests_limit"] = int(raw)
+    raw = resp.headers.get("x-ratelimit-requests-remaining")
+    if raw:
+        limits["requests_remaining"] = int(raw)
+    _key_last_limits[key_hash] = limits
+    return limits
+
 
 STATUS_INT_MAP = {
     0: "UNKNOWN",
@@ -56,21 +158,15 @@ def _resolve_status(raw_status):
         return STATUS_STR_MAP.get(s)
     return None
 
-REQUEST_DELAY_SEC = 5
-
-logger = logging.getLogger(__name__)
-
 
 def _normalize_number(number):
-    digits = "".join(filter(str.isdigit, number))
-    alpha = "".join(filter(str.isalpha, number))
-    return f"{alpha}{digits}".upper()
+    return "".join(number.upper().split())
 
 
 def _derive_callsign(number, airline_icao):
-    digits = "".join(filter(str.isdigit, number))
     icao = (airline_icao or "").upper()
-    return f"{icao}{digits}" if icao and digits else _normalize_number(number)
+    number = (number or "").upper()
+    return f"{icao}{number[2:]}" if len(number) > 2 else number
 
 
 def _extract_utc_dt(obj, key="utc"):
@@ -160,27 +256,34 @@ def _parse_flights(raw, airport_icao, direction):
     return rows
 
 
-async def _health_check(session):
+async def _health_check(session, api_key, key_hash):
     url = f"https://{RAPIDAPI_HOST}/health/services/feeds/FlightSchedules"
     headers = {
-        "X-RapidAPI-Key": RAPIDAPI_KEY,
+        "X-RapidAPI-Key": api_key,
         "X-RapidAPI-Host": RAPIDAPI_HOST,
     }
     try:
         async with session.get(url, headers=headers, timeout=10) as resp:
+            _capture_rate_limits(resp, key_hash)
+            if resp.status == 403:
+                logger.warning(f"Health check HTTP 403 for {key_hash[:12]}... (key may still work for data)")
+                return True
             if resp.status != 200:
+                logger.warning(f"Health check returned HTTP {resp.status}")
                 return False
             data = await resp.json()
             ok = data.get("status") == "OK"
             if ok:
-                logger.info("AeroDataBox health check: OK")
+                limits = _key_last_limits.get(key_hash, {})
+                logger.info(f"AeroDataBox health check: OK (tier={limits.get('tier', '?')}, "
+                            f"units={limits.get('units_remaining', '?')}/{limits.get('units_limit', '?')})")
             return ok
     except Exception as e:
         logger.warning(f"Health check failed: {e}")
         return False
 
 
-async def fetch_airport(session, iata):
+async def fetch_airport(session, iata, api_key, key_hash):
     url = f"https://{RAPIDAPI_HOST}/flights/airports/iata/{iata}"
     params = {
         "offsetMinutes": "0",
@@ -194,23 +297,30 @@ async def fetch_airport(session, iata):
         "withLocation": "false",
     }
     headers = {
-        "X-RapidAPI-Key": RAPIDAPI_KEY,
+        "X-RapidAPI-Key": api_key,
         "X-RapidAPI-Host": RAPIDAPI_HOST,
     }
+    prev_limits = _key_last_limits.get(key_hash, {})
+    prev_remaining = prev_limits.get("units_remaining")
     async with session.get(url, params=params, headers=headers, timeout=30) as resp:
+        _capture_rate_limits(resp, key_hash)
         if resp.status != 200:
             text = await resp.text()
             raise RuntimeError(f"HTTP {resp.status}: {text[:300]}")
-        return await resp.json()
+        data = await resp.json()
+    new_limits = _key_last_limits.get(key_hash, {})
+    new_remaining = new_limits.get("units_remaining")
+    units_used = max(0, (prev_remaining or 0) - (new_remaining or 0)) if prev_remaining is not None else 0
+    return data, units_used
 
 
 async def aerodatabox_download(db_pool, session, target_airports):
-    if not RAPIDAPI_KEY:
-        logger.warning("RAPIDAPI_KEY not set, skipping AeroDataBox download")
+    if not RAPIDAPI_KEYS:
+        logger.warning("No RapidAPI keys configured, skipping AeroDataBox download")
         return 0
 
-    if not await _health_check(session):
-        logger.warning("AeroDataBox FlightSchedules feed unhealthy, skipping run")
+    if not await _validate_any_key(session):
+        logger.warning("All RapidAPI keys failed health check, skipping run")
         return 0
 
     logger.info("=" * 50)
@@ -218,6 +328,7 @@ async def aerodatabox_download(db_pool, session, target_airports):
     logger.info("=" * 50)
 
     all_rows = []
+    usage_logs = []
     api_errors = 0
     airports_ok = 0
     total_airports = len(target_airports)
@@ -230,25 +341,44 @@ async def aerodatabox_download(db_pool, session, target_airports):
         logger.info(f"[{idx}/{total_airports}] Fetching {icao} ({iata})...")
 
         airport_has_rows = False
-        try:
-            raw = await fetch_airport(session, iata)
-            for direction in ("arrivals", "departures"):
-                rows = _parse_flights(raw, icao, direction)
-                all_rows.extend(rows)
-                if rows:
-                    airport_has_rows = True
-                logger.info(f"  {direction}: {len(rows)} flights")
-            if airport_has_rows:
-                airports_ok += 1
-        except Exception as e:
-            api_errors += 1
-            logger.error(f"[AERODATABOX] Failed {icao} ({iata}): {e}")
-            if idx < total_airports:
-                await asyncio.sleep(REQUEST_DELAY_SEC)
-            continue
+        max_attempts = max(len(RAPIDAPI_KEYS), 1) * 2
+        for attempt in range(max_attempts):
+            key = _get_current_key()
+            try:
+                raw, units_used = await fetch_airport(session, iata, key["key"], key["hash"])
+                usage_logs.append({
+                    "endpoint": f"/flights/airports/iata/{iata}",
+                    "airport_code": icao.upper(),
+                    "key_name": key["key_name"],
+                    "units_used": units_used,
+                    "status_code": 200,
+                })
+                for direction in ("arrivals", "departures"):
+                    rows = _parse_flights(raw, icao, direction)
+                    all_rows.extend(rows)
+                    if rows:
+                        airport_has_rows = True
+                    logger.info(f"  {direction}: {len(rows)} flights")
+                if airport_has_rows:
+                    airports_ok += 1
+                break
+            except RuntimeError as e:
+                err_str = str(e)
+                if any(code in err_str for code in ("401", "403", "429")):
+                    _mark_key_failed(key["hash"])
+                    logger.warning(f"Key {key['hash'][:12]}... failed ({err_str[:60]}), rotating key")
+                    continue
+                api_errors += 1
+                logger.error(f"[AERODATABOX] Failed {icao} ({iata}): {e}")
+                break
+            except Exception as e:
+                api_errors += 1
+                logger.error(f"[AERODATABOX] Failed {icao} ({iata}): {e}")
+                break
 
         if idx < total_airports:
-            await asyncio.sleep(REQUEST_DELAY_SEC)
+            delay = _get_delay()
+            await asyncio.sleep(delay)
 
     logger.info(f"Total flights parsed: {len(all_rows)} "
                 f"(airports_ok={airports_ok}, api_errors={api_errors})")
@@ -290,58 +420,95 @@ async def aerodatabox_download(db_pool, session, target_airports):
 
     logger.info(f"AeroDataBox download complete: {len(all_rows)} rows upserted")
 
+    if usage_logs:
+        async with db_pool.acquire() as conn:
+            await conn.executemany("""
+                INSERT INTO api_usage_log (endpoint, airport_code, key_name, units_used, status_code)
+                VALUES ($1, $2, $3, $4, $5)
+            """, [(r["endpoint"], r["airport_code"], r["key_name"], r["units_used"], r["status_code"])
+                  for r in usage_logs])
+        total_units = sum(r["units_used"] for r in usage_logs)
+        logger.info(f"Logged {len(usage_logs)} API calls, {total_units} units consumed")
+
+    await _update_usage_tracking(db_pool, session, airports_ok, api_errors)
+
+    return airports_ok
+
+
+async def _validate_any_key(session):
+    for key in RAPIDAPI_KEYS:
+        if key["hash"] in _key_failures:
+            continue
+        if await _health_check(session, key["key"], key["hash"]):
+            limits = _key_last_limits.get(key["hash"], {})
+            logger.info(f"Key {key['hash'][:12]}... ({limits.get('tier', '?')}) passed health check")
+            return True
+        _mark_key_failed(key["hash"])
+        logger.warning(f"Key {key['hash'][:12]}... failed health check")
+    return False
+
+
+async def _update_usage_tracking(db_pool, session, airports_ok, api_errors):
     airports_queried = airports_ok + api_errors
     units_cost = int(os.environ.get("RAPIDAPI_UNIT_COST", "2"))
     units_used_run = airports_queried * units_cost
-    current_key_hash = hashlib.sha256(RAPIDAPI_KEY.encode()).hexdigest() if RAPIDAPI_KEY else ""
+
+    current_key_hashes = [k["hash"] for k in RAPIDAPI_KEYS]
+    current_hashes_set = set(current_key_hashes)
+
+    key_metadata = []
+    for k in RAPIDAPI_KEYS:
+        limits = _key_last_limits.get(k["hash"], {})
+        entry = {
+            "key_name": k["key_name"],
+            "hash": k["hash"],
+            "tier": limits.get("tier", "unknown"),
+            "active": True,
+        }
+        for field in ("units_limit", "units_remaining", "units_reset", "requests_limit", "requests_remaining"):
+            if field in limits:
+                entry[field] = limits[field]
+        key_metadata.append(entry)
+
+    total_units_limit = sum(e.get("units_limit", 0) for e in key_metadata if "units_limit" in e)
+    total_units_remaining = sum(e.get("units_remaining", 0) for e in key_metadata if "units_remaining" in e)
 
     async with db_pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT rapidapi_units_used, rapidapi_units_limit, "
-            "rapidapi_daily_burn, rapidapi_alert_days, "
-            "rapidapi_key_hash, rapidapi_last_alert_at "
-            "FROM download_config WHERE id = 1"
-        )
-        if not row:
-            return airports_ok
-
-        prev_used = row["rapidapi_units_used"] or 0
-        prev_limit = row["rapidapi_units_limit"] or int(os.environ.get("RAPIDAPI_UNITS_LIMIT", "600"))
-        daily_burn = row["rapidapi_daily_burn"] or int(os.environ.get("RAPIDAPI_DAILY_BURN", "280"))
-        alert_days = row["rapidapi_alert_days"] or int(os.environ.get("RAPIDAPI_ALERT_DAYS", "23"))
-        stored_key_hash = row["rapidapi_key_hash"] or ""
-        last_alert = row["rapidapi_last_alert_at"]
-
-        if current_key_hash and stored_key_hash and current_key_hash != stored_key_hash:
-            logger.info("New API key detected — resetting usage tracking")
-            prev_used = 0
-            await conn.execute(
-                "UPDATE download_config SET rapidapi_units_used = 0, "
-                "rapidapi_key_hash = $1, updated_at = NOW() WHERE id = 1",
-                current_key_hash,
-            )
-
-        new_used = prev_used + units_used_run
         await conn.execute(
-            "UPDATE download_config SET rapidapi_units_used = $1, "
-            "updated_at = NOW() WHERE id = 1",
-            new_used,
+            "UPDATE download_config SET "
+            "rapidapi_keys = $1::jsonb, "
+            "rapidapi_key_hash = $2, "
+            "rapidapi_units_limit = $3, "
+            "rapidapi_units_used = GREATEST(rapidapi_units_used, $4), "
+            "updated_at = NOW() "
+            "WHERE id = 1",
+            json.dumps(key_metadata),
+            current_key_hashes[0] if current_key_hashes else "",
+            total_units_limit,
+            total_units_limit - total_units_remaining,
         )
 
-        remaining = prev_limit - new_used
+        remaining = total_units_limit - total_units_remaining - units_used_run
+        daily_burn = int(os.environ.get("RAPIDAPI_DAILY_BURN", "280"))
+        alert_days = int(os.environ.get("RAPIDAPI_ALERT_DAYS", "23"))
         days_remaining = remaining / max(daily_burn, 1)
         now = datetime.utcnow()
         cooldown = timedelta(hours=12)
         should_alert = remaining <= 0 or days_remaining < alert_days
 
+        row = await conn.fetchrow(
+            "SELECT rapidapi_last_alert_at FROM download_config WHERE id = 1"
+        )
+        last_alert = row["rapidapi_last_alert_at"] if row else None
+
         if should_alert and (last_alert is None or (now - last_alert) > cooldown):
-            pct = remaining / max(prev_limit, 1) * 100
+            pct = remaining / max(total_units_limit, 1) * 100
             msg = (
                 "\u26a0\ufe0f *AeroDataBox API Limit Alert*\n"
-                f"Used: ~{new_used}/{prev_limit} units\n"
+                f"Used: ~{total_units_limit - remaining}/{total_units_limit} units\n"
                 f"Remaining: ~{remaining} ({pct:.0f}%) — ~{days_remaining:.0f} days left\n"
                 f"Threshold: Alert when < {alert_days} days remaining\n\n"
-                f"Please upgrade the RapidAPI plan to avoid interruption."
+                f"Please add more RapidAPI keys to avoid interruption."
             )
             logger.warning(f"Low API units: ~{days_remaining:.0f} days remaining. Alert sent.")
             await send_telegram_message(session, msg)
@@ -350,12 +517,11 @@ async def aerodatabox_download(db_pool, session, target_airports):
                 "WHERE id = 1"
             )
         elif not should_alert:
-            pct = new_used / max(prev_limit, 1) * 100
-            logger.info(f"RapidAPI usage: ~{new_used}/{prev_limit} ({pct:.0f}%, ~{days_remaining:.0f} days left)")
+            pct = (total_units_limit - total_units_remaining) / max(total_units_limit, 1) * 100
+            logger.info(f"RapidAPI usage: ~{total_units_limit - total_units_remaining}/{total_units_limit} "
+                        f"({pct:.0f}%, ~{days_remaining:.0f} days left)")
         else:
             logger.warning(f"Low API units (~{days_remaining:.0f} days left), alert suppressed (cooldown)")
-
-    return airports_ok
 
 
 async def test_single_airport(db_pool, session, icao, iata):
@@ -363,7 +529,12 @@ async def test_single_airport(db_pool, session, icao, iata):
     logger.info(f"TEST MODE: Fetching single airport {icao} ({iata})")
     logger.info(f"{'='*60}")
 
-    raw = await fetch_airport(session, iata)
+    if not RAPIDAPI_KEYS:
+        logger.warning("No RapidAPI keys configured")
+        return 0
+
+    key = _get_current_key()
+    raw, _ = await fetch_airport(session, iata, key["key"], key["hash"])
 
     total = 0
     for direction in ("arrivals", "departures"):

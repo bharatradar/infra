@@ -80,6 +80,12 @@ spec:
             secretKeyRef:
               name: google-oauth-credentials
               key: GOOGLE_CLIENT_SECRET
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 3
+          periodSeconds: 5
         resources:
           requests:
             memory: "128Mi"
