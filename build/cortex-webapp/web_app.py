@@ -251,7 +251,7 @@ async def _weather_alert_task():
             airports = getattr(Config, 'TARGET_AIRPORTS', {})
             if not airports:
                 continue
-            r = await get_redis_client()
+            r = await web_app_db.get_redis_client()
             icaos = list(airports.keys())
             batch = await weather_service.get_batch_weather(icaos)
             if not batch or "airports" not in batch:

@@ -19,14 +19,19 @@ spec:
           value: "bharatradar.com"
         - name: ADSBLOL_INGEST_DNS
           value: "ingest-readsb-headless.bharatradar.svc.cluster.local"
-        - name: ADSBLOL_REDIS_HOST
-          value: "redis://:wtyLxVOgugrViWEiJRGtfmhskoYCTTQ84dwJ4akklY@127.0.0.1:6379"
+        - name: BHARATRADAR_REDIS_HOST
+          value: "redis://:SyyTpMSHpyLgwnL2LgA2OsVgnlhUEsSQg1clQEVHk@45.88.189.38:6379"
         - name: ADSBLOL_REAPI_ENDPOINT
           value: "http://reapi-readsb.bharatradar.svc.cluster.local:30152/re-api/"
         - name: ADSBLOL_STATS_URL
           value: "http://hub-readsb.bharatradar.svc.cluster.local:150/stats.json"
         - name: ADSBLOL_ENABLED_BG_TASKS
           value: "_fetch_hub_stats,_fetch_ingest,_fetch_mlat,_loop"
+        volumeMounts:
+        - name: api-app-py
+          mountPath: /app/src/adsb_api/utils/settings.py
+          subPath: settings.py
+          readOnly: true
         resources:
           requests:
             cpu: 100m
@@ -56,6 +61,9 @@ spec:
             cpu: 50m
             memory: 64Mi
       volumes:
+      - name: api-app-py
+        configMap:
+          name: api-app-py
       - name: api-index
         configMap:
           name: api-index

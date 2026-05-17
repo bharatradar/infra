@@ -759,6 +759,8 @@ class AsyncDatabaseManager:
     async def check_and_update_schedule(self, callsign, flight_number, origin_icao, dest_icao):
         if not callsign or not origin_icao or not dest_icao:
             return
+        if flight_number:
+            flight_number = "".join(flight_number.upper().split())
         try:
             async with self.pool.acquire() as conn:
                 today = datetime.now(timezone.utc).date()
@@ -778,14 +780,7 @@ class AsyncDatabaseManager:
                         """, dest_icao, row['id'])
                         logger.info(f"Updated schedule {callsign}: {origin_icao}->{dest_icao}")
                 else:
-                    await conn.execute("""
-                        INSERT INTO flight_schedules
-                            (airport_code, direction, flight_number, callsign,
-                             route_airport, scheduled_time, created_from)
-                        VALUES ($1, 'DEPARTURES', $2, $3, $4, NOW(), 'fr24_enrichment')
-                        ON CONFLICT DO NOTHING
-                    """, origin_icao, flight_number or callsign, callsign, dest_icao)
-                    logger.info(f"Inserted new schedule {callsign}: {origin_icao}->{dest_icao}")
+                    logger.debug(f"No existing schedule for {callsign}, skipping insert")
         except Exception as e:
             logger.warning(f"Failed to check/update schedule for {callsign}: {e}")
 

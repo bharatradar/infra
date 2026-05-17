@@ -423,7 +423,7 @@ async def download_schedules(db: AsyncDatabaseManager, session: aiohttp.ClientSe
                                             if flt_num and sched_ts:
                                                 safe_airport = icao_key.upper()
                                                 safe_mode = mode.upper()
-                                                safe_flt_num = flt_num.upper()
+                                                safe_flt_num = "".join(flt_num.upper().split())
                                                 safe_hex_id = hex_id.upper() if hex_id else None
                                                 safe_route_ap = route_ap.upper() if route_ap else ""
 

@@ -48,6 +48,24 @@ def load_airlines_csv():
                 if iata and iata != "\\N": AIRLINE_MAP[iata] = name
     except Exception as e: logger.error(f"CSV Airline Load Error: {e}")
 
+def load_airports_csv():
+    filepath = "data/airports.csv" if os.path.exists("data/airports.csv") else "airports.csv"
+    if not os.path.exists(filepath): return
+    count = 0
+    try:
+        with open(filepath, mode="r", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            if reader.fieldnames is None: return
+            icao_key = "ICAO" if "ICAO" in reader.fieldnames else "Code"
+            for row in reader:
+                iata = row.get("IATA", "").strip().upper()
+                icao = row.get(icao_key, "").strip().upper()
+                if iata and icao and len(iata) == 3 and len(icao) == 4:
+                    IATA_TO_ICAO_MEM[iata] = icao
+                    count += 1
+        logger.info(f"✅ Loaded {count} IATA->ICAO mappings from airports.csv")
+    except Exception as e: logger.warning(f"⚠️ airports.csv load failed: {e}")
+
 def normalize_ap(code):
     if not code or code.strip() in ('UNK', '\\N', 'ALL'): return code.strip() if code else code
     code = code.strip().upper()
@@ -93,24 +111,21 @@ async def get_airport_coords(conn, airport_code):
 async def init_web_app_db(db_pool):
     """Handles migration and RAM caching on startup."""
     load_airlines_csv()
+    load_airports_csv()
     try:
-        logger.info("🔄 Running Silent IATA -> ICAO Database Migration...")
         async with db_pool.acquire() as conn:
-            for icao, data in Config.TARGET_AIRPORTS.items():
-                iata = data.get('iata')
-                if iata:
-                    await conn.execute("UPDATE flight_schedules SET route_airport = $1 WHERE route_airport = $2", icao, iata)
-                    await conn.execute("UPDATE flight_schedules SET airport_code = $1 WHERE airport_code = $2", icao, iata)
-                    await conn.execute("UPDATE arrivals_log SET airport = $1 WHERE airport = $2", icao, iata)
-                    await conn.execute("UPDATE arrivals_log SET origin = $1 WHERE origin = $2", icao, iata)
-                    await conn.execute("UPDATE departures_log SET airport = $1 WHERE airport = $2", icao, iata)
-                    await conn.execute("UPDATE departures_log SET destination = $1 WHERE destination = $2", icao, iata)
-                    await conn.execute("UPDATE flight_events SET airport = $1 WHERE airport = $2", icao, iata)
-                    await conn.execute("UPDATE flight_events SET origin = $1 WHERE origin = $2", icao, iata)
-                    await conn.execute("UPDATE flight_events SET destination = $1 WHERE destination = $2", icao, iata)
-                    await conn.execute("UPDATE ground_ops SET airport = $1 WHERE airport = $2", icao, iata)
-                    await conn.execute("UPDATE ground_ops SET origin = $1 WHERE origin = $2", icao, iata)
-        logger.info("✅ Database Normalization Complete.")
+            has_3letter = await conn.fetchval(
+                "SELECT EXISTS(SELECT 1 FROM flight_schedules WHERE length(route_airport) = 3)"
+            )
+            if has_3letter:
+                logger.info("🔄 Normalizing IATA->ICAO codes in DB...")
+                for icao, data in Config.TARGET_AIRPORTS.items():
+                    iata = data.get('iata')
+                    if iata:
+                        await conn.execute("UPDATE flight_schedules SET route_airport = $1 WHERE route_airport = $2", icao, iata)
+                logger.info("✅ Database Normalization Complete.")
+            else:
+                logger.info("No 3-letter codes found, skipping normalization")
     except Exception as e:
         logger.warning(f"⚠️ Database Normalization Error: {e}")
         

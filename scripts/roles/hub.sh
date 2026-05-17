@@ -919,7 +919,7 @@ role_hub_deploy_services() {
     # Apply API env patch (Redis URL + domain)
     kubectl set env deployment/api \
         MY_DOMAIN="my.${BASE_DOMAIN}" \
-        ADSBLOL_REDIS_HOST="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}" \
+        BHARATRADAR_REDIS_HOST="redis://:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}" \
         -n bharatradar 2>/dev/null || true
 
     # Apply API salt ConfigMap

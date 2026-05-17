@@ -61,13 +61,13 @@ The one-time `fetchATC()` call on tab switch still fires (may use REST if `wsFli
 
 ---
 
-## 5. my.bharatradar.com 500 error: Wrong ADSBLOL_REDIS_HOST placement
+## 5. my.bharatradar.com 500 error: Wrong BHARATRADAR_REDIS_HOST placement
 
 **File:** `manifests/default/api/base/api.yaml` (note: later fixed via deployment)
 
-**Bug:** `ADSBLOL_REDIS_HOST=redis://:password@127.0.0.1:6379` was set on the **nginx sidecar container** instead of the **api container**. The api container still pointed to `redis://127.0.0.1:6379` (no password).
+**Bug:** `BHARATRADAR_REDIS_HOST=redis://:password@127.0.0.1:6379` was set on the **nginx sidecar container** instead of the **api container**. The api container still pointed to `redis://127.0.0.1:6379` (no password).
 
-**Fix:** Moved `ADSBLOL_REDIS_HOST` to the api container env. Removed wrong env vars (`MY_DOMAIN`, etc.) from nginx container.
+**Fix:** Moved `BHARATRADAR_REDIS_HOST` to the api container env. Removed wrong env vars (`MY_DOMAIN`, etc.) from nginx container.
 
 ---
 
@@ -111,7 +111,7 @@ The one-time `fetchATC()` call on tab switch still fires (may use REST if `wsFli
 
 **File:** `manifests/default/cortex-webapp/default/deployment.yaml`
 
-**Bug:** The nginx sidecar container had `MY_DOMAIN=my.bharatradar.com` and other api-specific env vars that don't apply to nginx. `ADSBLOL_REDIS_HOST` was on the nginx container instead of the api container.
+**Bug:** The nginx sidecar container had `MY_DOMAIN=my.bharatradar.com` and other api-specific env vars that don't apply to nginx. `BHARATRADAR_REDIS_HOST` was on the nginx container instead of the api container.
 
 **Fix:** Cleaned up env var placement — only the api container gets api-related env vars. Nginx container has minimal config.
 
@@ -145,7 +145,7 @@ The one-time `fetchATC()` call on tab switch still fires (may use REST if `wsFli
 | 2 | Dashboard API endpoints return 401 | Auth | `web_app.py:63-71` |
 | 3 | switchTab() unconditional REST polling | WS | `app.js:300-304` |
 | 4 | REDIS_PORT crash from K8s env injection | Crash | `config.py:369` |
-| 5 | Wrong container for ADSBLOL_REDIS_HOST | Config | `deployment.yaml` |
+| 5 | Wrong container for BHARATRADAR_REDIS_HOST | Config | `deployment.yaml` |
 | 6 | Telegram-bot unresolved SHARED_SERVICES_HOST | Config | `telegram-bot.yaml` |
 | 7 | In-cluster Redis missing password | Config | Redis manifest |
 | 8 | schedule-downloader missing deps | Build | `requirements.txt` |

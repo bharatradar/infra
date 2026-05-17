@@ -9,6 +9,7 @@ configMapGenerator:
 - name: api-app-py
   files:
   - app.py=patched-app.py
+  - settings.py=patched-settings.py
 - name: api-index
   files:
   - index.html=index.html
