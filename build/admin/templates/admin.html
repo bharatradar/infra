@@ -277,6 +277,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 let authenticated = false;
 let usageDays = 7;
 
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function escJsStr(s) { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,''); }
+
 // ═══ Auth ═══
 async function checkAuth() {
   try {
@@ -290,7 +293,9 @@ async function checkAuth() {
       document.getElementById('login-box').style.display = 'none';
       document.getElementById('error-msg').classList.remove('hidden');
     }
-  } catch {}
+  } catch(e) {
+    document.getElementById('login-box').innerHTML = '<p style="color:#ef4444;font-size:13px">Connection error: ' + e.message + '</p>';
+  }
 }
 checkAuth();
 
@@ -361,14 +366,24 @@ async function loadData() {
     ].join('');
 
     // Update schedule info in both Plan Overview and Schedule sections
+    const fmtDT = function(val) {
+      if (!val) return '—';
+      try {
+        var s = String(val).trim();
+        if (!s || s === '—') return '—';
+        if (s.indexOf('T') === -1) s = s.replace(' ', 'T');
+        if (s.indexOf('Z') === -1 && s.indexOf('+') === -1) s += 'Z';
+        return new Date(s).toLocaleString();
+      } catch(e) { return val; }
+    };
     const upd = function(id, val) {
       var el = document.getElementById(id);
       if (el) el.textContent = val || '—';
     };
-    upd('last-run', d.last_run);
-    upd('next-run', d.next_run);
-    upd('sched-last-run', d.last_run);
-    upd('sched-next-run', d.next_run);
+    upd('last-run', fmtDT(d.last_run));
+    upd('next-run', fmtDT(d.next_run));
+    upd('sched-last-run', fmtDT(d.last_run));
+    upd('sched-next-run', fmtDT(d.next_run));
 
     var st = d.last_status || '—';
     var color = st === 'SUCCESS' ? '#22c55e' : st === 'FAILED' ? '#ef4444' : '#94a3b8';
@@ -402,7 +417,8 @@ async function refreshPlan() {
       return;
     }
     if (d.errors && d.errors.length > 0 && errorsEl) {
-      errorsEl.innerHTML = '<strong>Warnings:</strong> ' + d.errors.join('<br>');
+      errorsEl.innerHTML = '<strong>Warnings:</strong><br>';
+      d.errors.forEach(function(e) { errorsEl.innerHTML += escHtml(e) + '<br>'; });
       errorsEl.classList.add('show');
     }
     showAlert('Refreshed: ' + d.total_units_limit + ' total units, ' + d.total_units_remaining + ' remaining across ' + (d.keys || []).length + ' key(s)', 'success');
@@ -421,7 +437,7 @@ async function refreshPlan() {
 async function loadKeys() {
   try {
     const r = await fetch('/admin/api/keys');
-    if (!r.ok) return;
+    if (!r.ok) { showAlert('Failed to load keys: HTTP ' + r.status, 'error'); return; }
     const d = await r.json();
     renderKeys(d.keys || []);
   } catch(e) {
@@ -446,15 +462,17 @@ function renderKeys(keys) {
 
     let bodyHtml = '';
     if (k.error) {
-      bodyHtml += '<div class="key-error">&#9888; ' + k.error + '</div>';
+      bodyHtml += '<div class="key-error">&#9888; ' + escHtml(k.error) + '</div>';
     }
     const ul = k.units_limit;
     const ur = k.units_remaining;
-    if (ul !== undefined && ur !== undefined) {
+    if (ul !== undefined && ur !== undefined && ul > 0) {
       const uu = ul - ur;
       const pct = Math.round((uu / ul) * 100) + '%';
       const c = cls(ur, ul * 0.2, 10);
       bodyHtml += '<div class="key-stat"><div class="label">API Units</div><div class="value ' + c + '">' + uu.toLocaleString() + ' / ' + ul.toLocaleString() + '</div><div class="sub">' + pct + '</div></div>';
+    } else if (ul !== undefined && ul === 0) {
+      bodyHtml += '<div class="key-stat"><div class="label">API Units</div><div class="value na">0 limit</div></div>';
     } else {
       bodyHtml += '<div class="key-stat"><div class="label">API Units</div><div class="value na">Not fetched yet</div></div>';
     }
@@ -471,12 +489,15 @@ function renderKeys(keys) {
       bodyHtml += '<div class="key-stat"><div class="label">Reset</div><div class="value" style="font-size:11px;font-weight:400">~' + k.days_until_reset + ' days</div></div>';
     }
 
+    var safeName = escHtml(nameLabel);
+    var safeHash = escHtml(k.hash || '');
+    var safeKeyName = escJsStr(k.key_name || '');
     return '<div class="key-group">' +
       '<div class="key-header">' +
-        '<span class="name">' + nameLabel + '</span>' +
-        '<span class="tier-badge ' + tierCls + '">' + tier + '</span>' +
-        '<span class="hash" title="' + (k.hash || '') + '">' + hashShort + '</span>' +
-        '<button class="btn btn-danger btn-sm" onclick="deleteKey(\'' + k.key_name + '\')">Remove</button>' +
+        '<span class="name">' + safeName + '</span>' +
+        '<span class="tier-badge ' + tierCls + '">' + escHtml(tier) + '</span>' +
+        '<span class="hash" title="' + safeHash + '">' + escHtml(hashShort) + '</span>' +
+        '<button class="btn btn-danger btn-sm" onclick="deleteKey(\'' + safeKeyName + '\')">Remove</button>' +
       '</div>' +
       '<div class="key-body">' + bodyHtml + '</div>' +
     '</div>';
@@ -539,7 +560,7 @@ async function deleteKey(keyName) {
 async function loadSchedule() {
   try {
     const r = await fetch('/admin/api/schedule');
-    if (!r.ok) return;
+    if (!r.ok) { showAlert('Failed to load schedule: HTTP ' + r.status, 'error'); return; }
     const d = await r.json();
     var en = d.scheduler_enabled;
     var cb = document.getElementById('scheduler-enabled');
@@ -577,7 +598,7 @@ async function runNow() {
     const r = await fetch('/admin/api/schedule', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({next_run: new Date().toISOString().replace('Z', '')}),
+      body: JSON.stringify({next_run: new Date().toISOString()}),
     });
     if (!r.ok) { showAlert('Failed to trigger run', 'error'); return; }
     showAlert('Run triggered. The CronJob will pick it up within 30 minutes.', 'success');
@@ -622,20 +643,22 @@ async function loadUsage(days) {
 async function loadAirportCount() {
   try {
     const r = await fetch('/admin/api/airports');
-    if (!r.ok) return;
+    if (!r.ok) { showAlert('Failed to load airports: HTTP ' + r.status, 'error'); return; }
     const d = await r.json();
     var total = (d.airports || []).length;
     var active = (d.airports || []).filter(function(a) { return a.download_schedules; }).length;
     var el = document.getElementById('airport-count');
     if (el) el.textContent = '(' + active + '/' + total + ' active)';
-  } catch(e) {}
+  } catch(e) {
+    showAlert('Failed to load airports: ' + e.message, 'error');
+  }
 }
 
 async function loadAirports() {
   document.getElementById('airport-table-wrapper').innerHTML = '<div class="loading"><div class="spinner"></div>Loading airports...</div>';
   try {
     const r = await fetch('/admin/api/airports');
-    if (!r.ok) return;
+    if (!r.ok) { document.getElementById('airport-table-wrapper').innerHTML = '<p style="color:#ef4444;font-size:12px">Failed to load airports: HTTP ' + r.status + '</p>'; return; }
     const d = await r.json();
     var airports = d.airports || [];
     if (airports.length === 0) {
@@ -656,7 +679,7 @@ async function loadAirports() {
         '<td style="font-family:monospace">' + (a.iata || '—') + '</td>' +
         '<td>' + (a.name || '—') + '</td>' +
         '<td><span class="' + badge + '">' + on + '</span></td>' +
-        '<td><button class="btn btn-outline btn-xs" onclick="toggleAirport(\'' + a.icao + '\')">' + (a.download_schedules ? 'Disable' : 'Enable') + '</button></td>' +
+        '<td><button class="btn btn-outline btn-xs" onclick="toggleAirport(\'' + escJsStr(a.icao || '') + '\')">' + (a.download_schedules ? 'Disable' : 'Enable') + '</button></td>' +
         '</tr>';
     });
     html += '</tbody></table>';

@@ -1,7 +1,7 @@
 import os
 import secrets
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import asyncpg
 from jose import jwt
@@ -29,7 +29,7 @@ def create_jwt_token(user_id: int, email: str, tier: str) -> str:
         "user_id": user_id,
         "email": email,
         "tier": tier,
-        "exp": datetime.utcnow() + timedelta(hours=TOKEN_EXPIRE_HOURS)
+        "exp": datetime.now(timezone.utc) + timedelta(hours=TOKEN_EXPIRE_HOURS)
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -129,7 +129,7 @@ async def validate_api_key(api_key: str, db_pool) -> Optional[dict]:
     
     # Check if daily limit reset needed
     last_reset = key_data['last_reset']
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     
     if last_reset.date() < now.date():
         # Reset daily counter

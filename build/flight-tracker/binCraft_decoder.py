@@ -21,7 +21,7 @@ def getHex(i):
 def genStr(data,start,end):
     s = ""
     i = start
-    while data[i] and i < end:
+    while i < end and data[i]:
         if 32 < data[i] < 127:
             s += chr(data[i])
         i += 1
@@ -137,7 +137,7 @@ def binCraftReader(file,zstd_compressed=False):
         ac['tat'] = s16[27]
 
         ac['tas'] = u16[28]
-        ac['ias'] = u16[19]
+        ac['ias'] = u16[29]
         ac['rc'] = u16[30]
         ac['messages'] = u16[31]
 

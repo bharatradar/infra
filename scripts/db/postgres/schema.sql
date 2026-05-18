@@ -402,8 +402,8 @@ CREATE TABLE IF NOT EXISTS download_config (
 );
 
 INSERT INTO download_config (schedule_time, scheduler_enabled, enabled)
-VALUES ('22:00:00', FALSE, TRUE)
-ON CONFLICT DO NOTHING;
+SELECT '22:00:00', FALSE, TRUE
+WHERE NOT EXISTS (SELECT 1 FROM download_config);
 
 -- migration: add next_run column if missing (safe for existing DBs)
 ALTER TABLE download_config ADD COLUMN IF NOT EXISTS next_run TIMESTAMP;

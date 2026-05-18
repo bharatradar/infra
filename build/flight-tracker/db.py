@@ -1,10 +1,13 @@
 # db.py
 import time
+import asyncio
 import logging
 import asyncpg
 import re
 import os
 import csv
+import urllib.parse
+import aiohttp
 from datetime import datetime, timedelta, timezone
 from config import Config
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
@@ -13,8 +16,9 @@ from influxdb_client import Point
 logger = logging.getLogger(__name__)
 
 class AsyncDatabaseManager:
-    def __init__(self, pool):
+    def __init__(self, pool, redis_client=None):
         self.pool = pool
+        self.redis = redis_client
         self._iata_to_icao_map = None 
         self._icao_to_iata_airline_map = None 
         
@@ -62,27 +66,102 @@ class AsyncDatabaseManager:
             logger.error(f"Failed to load IATA-ICAO map: {e}")
             return {}
 
+    async def _fr24_batch_query(self, prefix: str) -> dict:
+        """Query FR24 for all flights matching prefix. Returns {callsign: iata_flight}."""
+        headers = {"User-Agent": "Lynx/2.8.9rel.1 libwww-FM/2.14 SSL-MM/1.4.1"}
+        url = f"https://www.flightradar24.com/v1/search/web/find?query={urllib.parse.quote(prefix)}&limit=100"
+        try:
+            async with aiohttp.ClientSession(headers=headers) as session:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status != 200:
+                        logger.warning(f"FR24 batch {prefix}: HTTP {resp.status}")
+                        return {}
+                    data = await resp.json()
+                    mappings = {}
+                    for r in data.get("results", []):
+                        detail = r.get("detail", {})
+                        cs = detail.get("callsign", "").upper()
+                        flt = detail.get("flight", "").upper()
+                        if cs and flt:
+                            mappings[cs] = flt
+                    logger.info(f"FR24 batch {prefix}: {len(mappings)} mappings cached")
+                    return mappings
+        except Exception as e:
+            logger.warning(f"FR24 batch failed for {prefix}: {e}")
+            return {}
+
     async def _resolve_flight_number(self, code):
-        """Converts an ICAO flight number (e.g. AIC0123) to an IATA flight number (e.g. AI123)."""
+        """Converts an ICAO callsign (e.g. AIC0123) to IATA flight number (e.g. AI123)."""
         if not code: 
             return code
             
-        code = str(code).strip().upper()        
+        code = str(code).strip().upper()
+        
+        match = re.match(r"^([A-Z]{3})0*([A-Z0-9]+)$", code)
+        if not match:
+            match_iata = re.match(r"^([A-Z0-9]{2})0*([A-Z0-9]+)$", code)
+            if match_iata:
+                return f"{match_iata.group(1)}{match_iata.group(2)}"
+            return code
+        
+        icao_prefix = match.group(1)
+        suffix = match.group(2)
+        
+        # Step 1: Redis cache check
+        if self.redis:
+            cached = await self.redis.get(f"iata_icao:flight_mapping:{code}")
+            if cached:
+                val = cached.decode() if isinstance(cached, bytes) else cached
+                return val
+        
+        # Step 2: Check if airline was already batched to FR24
+        airline_batch_done = False
+        airline_batch_failed = False
+        if self.redis:
+            marker = await self.redis.get(f"iata_icao:airline_mapping:{icao_prefix}")
+            if marker is not None:
+                airline_batch_done = True
+                if marker in (b"FAILED", "FAILED"):
+                    airline_batch_failed = True
+        
+        # Step 3: Batch query FR24 by airline ICAO prefix (e.g. "IGO")
+        if not airline_batch_done:
+            mappings = await self._fr24_batch_query(icao_prefix)
+            if mappings:
+                if self.redis:
+                    pipe = self.redis.pipeline()
+                    for cs, flt in mappings.items():
+                        pipe.setex(f"iata_icao:flight_mapping:{cs}", Config.REDIS_IATA_ICAO_TTL, flt)
+                    pipe.setex(f"iata_icao:airline_mapping:{icao_prefix}", Config.REDIS_IATA_ICAO_TTL, "1")
+                    await pipe.execute()
+                if code in mappings:
+                    return mappings[code]
+            else:
+                if self.redis:
+                    await self.redis.setex(f"iata_icao:airline_mapping:{icao_prefix}", 3600, "FAILED")
+                airline_batch_failed = True
+        
+        # Step 4: Progressive narrowing (e.g. "IGO13", "IGO131", "IGO131J")
+        if airline_batch_done and not airline_batch_failed:
+            for n in range(2, len(suffix) + 1):
+                partial = icao_prefix + suffix[:n]
+                mappings = await self._fr24_batch_query(partial)
+                if mappings:
+                    if self.redis:
+                        pipe = self.redis.pipeline()
+                        for cs, flt in mappings.items():
+                            pipe.setex(f"iata_icao:flight_mapping:{cs}", Config.REDIS_IATA_ICAO_TTL, flt)
+                        await pipe.execute()
+                    if code in mappings:
+                        return mappings[code]
+                await asyncio.sleep(0.3)
+        
+        # Step 5: Fallback to airlines.csv prefix swap
         if self._icao_to_iata_airline_map is None:
             self._icao_to_iata_airline_map = await self._load_icao_to_iata_airline_map()
-                 
-        # 🌟 FIX: Allow Alphanumeric ATC callsigns (like AKJ988M) to be parsed
-        match = re.match(r"^([A-Z]{3})0*([A-Z0-9]+)$", code)
-        if match:
-            prefix = match.group(1)
-            suffix = match.group(2)
-            if prefix in self._icao_to_iata_airline_map:
-                return f"{self._icao_to_iata_airline_map[prefix]}{suffix}"
-                 
-        match_iata = re.match(r"^([A-Z0-9]{2})0*([A-Z0-9]+)$", code)
-        if match_iata:
-            return f"{match_iata.group(1)}{match_iata.group(2)}"
-             
+        if icao_prefix in self._icao_to_iata_airline_map:
+            return f"{self._icao_to_iata_airline_map[icao_prefix]}{suffix}"
+        
         return code
 
     async def _load_icao_to_iata_airline_map(self):
@@ -102,8 +181,9 @@ class AsyncDatabaseManager:
         try:
             async with self.pool.acquire() as conn:
                 await conn.execute("DELETE FROM flights_in_air")
-            if redis_client:
-                await redis_client.flushdb()
+            r = redis_client or self.redis
+            if r:
+                await r.flushdb()
             logger.info("♻️ System State Reset: Cleared flights_in_air and flushed Redis cache.")
         except Exception as e:
             logger.error(f"❌ [DB ERROR] reset_system_state failed: {e}")
@@ -116,7 +196,7 @@ class AsyncDatabaseManager:
             origin = await self._resolve_icao(origin)
             destination = await self._resolve_icao(destination)
             
-            ts = manual_timestamp if manual_timestamp else time.time()
+            ts = manual_timestamp if manual_timestamp is not None else time.time()
             async with self.pool.acquire() as conn:
                 await conn.execute("""
                     INSERT INTO flight_events (timestamp, hex_id, callsign, event_type, details, airport, origin, destination, runway, anomaly_flag) 
@@ -166,7 +246,7 @@ class AsyncDatabaseManager:
             if not airport:
                 return
                 
-            ts = datetime.fromtimestamp(float(manual_timestamp)) if manual_timestamp else datetime.fromtimestamp(time.time())
+            ts = datetime.fromtimestamp(float(manual_timestamp)) if manual_timestamp is not None else datetime.fromtimestamp(time.time())
             time_30_mins_ago = ts - timedelta(minutes=30)
             
             async with self.pool.acquire() as conn:
@@ -207,8 +287,10 @@ class AsyncDatabaseManager:
             if not airport:
                 return
                 
-            ts = datetime.fromtimestamp(float(manual_timestamp)) if manual_timestamp else datetime.fromtimestamp(time.time())
+            ts = datetime.fromtimestamp(float(manual_timestamp)) if manual_timestamp is not None else datetime.fromtimestamp(time.time())
             time_30_mins_ago = ts - timedelta(minutes=30)
+            
+
             async with self.pool.acquire() as conn:
                 # Check if there's an existing departure for this hex_id at this airport in last 30 minutes
                 existing = await conn.fetchrow("""
@@ -649,6 +731,25 @@ class AsyncDatabaseManager:
                           ABS(EXTRACT(EPOCH FROM (COALESCE(scheduled_time, TO_TIMESTAMP($4)) - TO_TIMESTAMP($4)))) ASC 
                         LIMIT 1
                     """, airport_code, direction, hex_id, timestamp)
+
+                # 3rd fallback: match by route_airport + time window when hex_id was empty in schedule
+                if not row and route_airport:
+                    row = await conn.fetchrow("""
+                        SELECT id, callsign, hex_id, anomaly_flag FROM flight_schedules
+                        WHERE airport_code = $1 AND direction = $2
+                          AND route_airport = $3
+                          AND (hex_id IS NULL OR hex_id = '')
+                          AND actual_time IS NULL
+                          AND anomaly_flag != 'CANCELLED'
+                          AND (
+                              scheduled_time BETWEEN TO_TIMESTAMP($4) - INTERVAL '18 hours' AND TO_TIMESTAMP($4) + INTERVAL '6 hours'
+                              OR anomaly_flag = 'PRE_FLIGHT'
+                          )
+                        ORDER BY
+                          CASE WHEN anomaly_flag = 'PRE_FLIGHT' THEN 0 ELSE 1 END,
+                          ABS(EXTRACT(EPOCH FROM (scheduled_time - TO_TIMESTAMP($4)))) ASC
+                        LIMIT 1
+                    """, airport_code, direction, route_airport, timestamp)
 
                 if row:
                     record_id = row['id']

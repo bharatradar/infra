@@ -4,7 +4,7 @@ import json
 import secrets
 import base64
 import urllib.parse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import asyncpg
 import httpx
@@ -53,7 +53,7 @@ def _get_session_email(token: str):
     if not entry:
         return None
     email, expires = entry
-    if datetime.utcnow() > expires:
+    if datetime.now(timezone.utc) > expires:
         del sessions[token]
         return None
     return email
@@ -169,7 +169,7 @@ async def _do_refresh(ns, token, ca):
                 if raw:
                     try:
                         secs = int(raw)
-                        reset_dt = datetime.utcnow() + timedelta(seconds=secs)
+                        reset_dt = datetime.now(timezone.utc) + timedelta(seconds=secs)
                         entry["units_reset"] = reset_dt.isoformat()
                         entry["days_until_reset"] = secs // 86400
                     except (ValueError, OSError):
@@ -244,7 +244,7 @@ async def auth_callback(code: str):
         if not row or not row["is_admin"]:
             raise HTTPException(403, "Access denied")
     token = secrets.token_urlsafe(32)
-    sessions[token] = (email, datetime.utcnow() + timedelta(days=SESSION_EXPIRE_DAYS))
+    sessions[token] = (email, datetime.now(timezone.utc) + timedelta(days=SESSION_EXPIRE_DAYS))
     resp = RedirectResponse(url="/admin/")
     resp.set_cookie(key="session", value=token, httponly=True, secure=True,
                     samesite="lax", max_age=SESSION_EXPIRE_DAYS * 86400)
@@ -463,7 +463,10 @@ async def api_schedule_update(request: Request):
                 i += 1
         if "next_run" in body:
             sets.append("next_run = $%d" % i)
-            vals.append(body["next_run"])
+            dt = datetime.fromisoformat(body["next_run"].replace("Z", ""))
+            if dt.tzinfo is not None:
+                dt = dt.replace(tzinfo=None)
+            vals.append(dt)
             i += 1
         if sets:
             query = "UPDATE download_config SET " + ", ".join(sets) + " WHERE id = 1"

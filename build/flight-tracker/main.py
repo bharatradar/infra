@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 def normalize_callsign(callsign):
     if not callsign: return None
-    match = re.match(r"([A-Z]+)(\d+)([A-Z]*)", callsign.upper())
+    match = re.match(r"([A-Z]+)(\d+)([A-Z]*)$", callsign.upper())
     if match:
         prefix, number, suffix = match.groups()
         return f"{prefix}{int(number)}{suffix}"
@@ -109,7 +109,7 @@ def extract_heading(ac_dict):
 class FlightMonitor:
     def __init__(self, db_pool, redis_client):
         self.tracked_flights = {}
-        self.db = AsyncDatabaseManager(db_pool)
+        self.db = AsyncDatabaseManager(db_pool, redis_client)
         self.redis = redis_client
         self.airline_map = {}
         self.routes_map = {}
@@ -244,7 +244,7 @@ class FlightMonitor:
     async def scheduled_data_updater(self):
         while True:
             try:
-                now = datetime.datetime.now()
+                now = datetime.datetime.now(timezone.utc)
                 t1 = now.replace(hour=9, minute=0, second=0, microsecond=0)
                 t2 = now.replace(hour=18, minute=0, second=0, microsecond=0)
                 
@@ -878,7 +878,8 @@ class FlightMonitor:
             vrate = extract_vrate(ac)
             heading = extract_heading(ac)
 
-            airline_prefix = callsign[:3].upper() if len(callsign) >= 3 else ""
+            airline_match = re.match(r"([A-Z]{2,3})", callsign.upper())
+            airline_prefix = airline_match.group(1) if airline_match else ""
             if alt > Config.MAX_TRACKING_ALTITUDE or hex_id in self.tracked_flights or (airline_prefix and airline_prefix not in self.airline_map):
                 return
 
@@ -1003,7 +1004,6 @@ class FlightMonitor:
                         }
                         
                         await self.db.log_event(hex_id, callsign, "APPROACHING", f"Approaching {closest_ap}", airport=closest_ap, origin=orig, destination=dest_code)
-                        await self.db.upsert_flight_in_air(hex_id, callsign, c_lat, c_lon, alt, speed, heading)
                         
                         orig_str = f" (From: {orig})" if orig else ""
                         custom_alert = f"🛬 <b>APPROACHING:</b> Flight {callsign}{orig_str} is approaching {dest_code}.{eta_msg}"
@@ -1460,7 +1460,6 @@ class FlightMonitor:
                                 }
                                 
                                 await self.db.log_event(hex_id, tracked_flight['callsign'], "APPROACHING", f"Approaching {closest_ap}", airport=closest_ap, origin=orig, destination=dest_code)
-                                await self.db.upsert_flight_in_air(hex_id, tracked_flight['callsign'], c_lat, c_lon, c_alt, c_speed, c_heading)
                                 
                                 orig_str = f" (From: {orig})" if orig else ""
                                 custom_alert = f"🛬 <b>APPROACHING:</b> Flight {tracked_flight['callsign']}{orig_str} is approaching {dest_code}.{eta_msg}"

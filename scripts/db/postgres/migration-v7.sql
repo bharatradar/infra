@@ -11,7 +11,12 @@ CREATE TABLE IF NOT EXISTS api_usage_log (
     status_code INTEGER
 );
 
+CREATE INDEX IF NOT EXISTS idx_api_usage_log_logged_at ON api_usage_log(logged_at DESC);
+CREATE INDEX IF NOT EXISTS idx_api_usage_log_endpoint ON api_usage_log(endpoint);
+CREATE INDEX IF NOT EXISTS idx_api_usage_log_endpoint_date ON api_usage_log(endpoint, logged_at DESC);
+
 ALTER TABLE download_config
   ADD COLUMN IF NOT EXISTS scheduler_enabled BOOLEAN DEFAULT FALSE;
 
-UPDATE download_config SET scheduler_enabled = FALSE WHERE id = 1 AND scheduler_enabled IS NULL;
+UPDATE download_config SET scheduler_enabled = FALSE
+WHERE id = (SELECT id FROM download_config ORDER BY id LIMIT 1) AND scheduler_enabled IS NULL;

@@ -1,4 +1,7 @@
 import os
+import re
+import shutil
+import time
 import hashlib
 import json
 import asyncio
@@ -7,6 +10,8 @@ from datetime import datetime, timezone, timedelta
 from telegram import send_telegram_message
 
 RAPIDAPI_HOST = "aerodatabox.p.rapidapi.com"
+AERODATABOX_LOG_DIR = "/data/aerodatabox"
+RAW_LOG_RETENTION_HOURS = 72
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +30,7 @@ def _load_rapidapi_keys():
             "key": legacy,
             "hash": hashlib.sha256(legacy.encode()).hexdigest(),
             "tier": "unknown",
-            "key_name": "rapidapi_key_1",
+            "key_name": "rapidapi_key_0",
         })
         logger.info(f"Loaded RAPIDAPI_KEY (legacy) — hash={keys[0]['hash'][:12]}...")
     i = 1
@@ -159,6 +164,18 @@ def _resolve_status(raw_status):
     return None
 
 
+def _cleanup_old_logs():
+    if not os.path.exists(AERODATABOX_LOG_DIR):
+        return
+    now = time.time()
+    cutoff = now - RAW_LOG_RETENTION_HOURS * 3600
+    for entry in os.listdir(AERODATABOX_LOG_DIR):
+        path = os.path.join(AERODATABOX_LOG_DIR, entry)
+        if os.path.isdir(path) and os.path.getmtime(path) < cutoff:
+            shutil.rmtree(path, ignore_errors=True)
+            logger.info(f"🗑️ Cleaned up old raw log: {entry}")
+
+
 def _normalize_number(number):
     return "".join(number.upper().split())
 
@@ -217,13 +234,17 @@ def _parse_flights(raw, airport_icao, direction):
 
             status = _resolve_status(f.get("status"))
 
+            aircraft = f.get("aircraft") or {}
+            mode_s = (aircraft.get("modeS") or "").upper()
+
             anomaly = None
             if status in ("CANCELED", "CANCELED_UNCERTAIN"):
                 anomaly = "CANCELLED"
             elif status == "DIVERTED":
                 anomaly = "DIVERTED"
+            elif not mode_s:
+                anomaly = "MISSING_MODE_S"
 
-            aircraft = f.get("aircraft") or {}
             airline = f.get("airline") or {}
 
             rows.append((
@@ -231,7 +252,7 @@ def _parse_flights(raw, airport_icao, direction):
                 direction.upper(),
                 number,
                 callsign_raw,
-                (aircraft.get("modeS") or "").upper(),
+                mode_s,
                 route,
                 scheduled,
                 revised,
@@ -327,6 +348,11 @@ async def aerodatabox_download(db_pool, session, target_airports):
     logger.info("AeroDataBox Schedule Download Starting")
     logger.info("=" * 50)
 
+    _cleanup_old_logs()
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+    run_log_dir = os.path.join(AERODATABOX_LOG_DIR, ts)
+    os.makedirs(run_log_dir, exist_ok=True)
+
     all_rows = []
     usage_logs = []
     api_errors = 0
@@ -346,6 +372,8 @@ async def aerodatabox_download(db_pool, session, target_airports):
             key = _get_current_key()
             try:
                 raw, units_used = await fetch_airport(session, iata, key["key"], key["hash"])
+                with open(os.path.join(run_log_dir, f"{icao}.json"), "w") as f:
+                    json.dump(raw, f, indent=2)
                 usage_logs.append({
                     "endpoint": f"/flights/airports/iata/{iata}",
                     "airport_code": icao.upper(),
@@ -492,7 +520,7 @@ async def _update_usage_tracking(db_pool, session, airports_ok, api_errors):
         daily_burn = int(os.environ.get("RAPIDAPI_DAILY_BURN", "280"))
         alert_days = int(os.environ.get("RAPIDAPI_ALERT_DAYS", "23"))
         days_remaining = remaining / max(daily_burn, 1)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         cooldown = timedelta(hours=12)
         should_alert = remaining <= 0 or days_remaining < alert_days
 

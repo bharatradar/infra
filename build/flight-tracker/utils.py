@@ -311,14 +311,9 @@ async def get_iata_from_icao_fr24(callsign: str, session: aiohttp.ClientSession 
                         flight = detail.get("flight", "")
                         operator = detail.get("operator", "")
                         if flight:
-                            # Extract IATA code from flight number (e.g., "AI1830" -> "AI")
-                            iata_code = ""
-                            for char in flight:
-                                if char.isalpha():
-                                    iata_code += char
-                                elif iata_code:
-                                    break
-                            iata_code = iata_code.upper()
+                            # Extract IATA code from flight number (e.g., "AI1830" -> "AI", "6E123" -> "6E")
+                            iata_match = re.match(r"^([A-Z0-9]{2})", flight)
+                            iata_code = iata_match.group(1).upper() if iata_match else ""
                             iata_flight = flight.upper()
                             break
                     
@@ -327,13 +322,8 @@ async def get_iata_from_icao_fr24(callsign: str, session: aiohttp.ClientSession 
                         flight = detail.get("flight", "")
                         operator = detail.get("operator", "")
                         if flight:
-                            iata_code = ""
-                            for char in flight:
-                                if char.isalpha():
-                                    iata_code += char
-                                elif iata_code:
-                                    break
-                            iata_code = iata_code.upper()
+                            iata_match = re.match(r"^([A-Z0-9]{2})", flight)
+                            iata_code = iata_match.group(1).upper() if iata_match else ""
                             iata_flight = flight.upper()
                 
                 if iata_flight:
@@ -417,40 +407,6 @@ async def get_route_from_flightaware(callsign: str, iata_flight: str, session: a
         except Exception as e:
             logger.warning(f"FlightAware route error for {lookup}: {e}")
             continue
-    
-    return None, None
-    
-    try:
-        await asyncio.sleep(0.3)
-        
-        url = f"{Config.FLIGHTAWARE_FLIGHT_URL}{iata_flight}"
-        req = urllib.request.Request(url, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5"
-        })
-        
-        with urllib.request.urlopen(req, timeout=10) as response:
-            html = response.read().decode('utf-8', errors='ignore')
-            
-            origin_match = re.search(r'<meta name="origin" content="([A-Z]{4})"', html)
-            dest_match = re.search(r'<meta name="destination" content="([A-Z]{4})"', html)
-            
-            if origin_match and dest_match:
-                origin = origin_match.group(1)
-                dest = dest_match.group(1)
-                
-                CALLSIGN_CACHE[cache_key] = {
-                    "origin": origin,
-                    "destination": dest,
-                    "iata_flight": iata_flight,
-                    "expires": asyncio.get_event_loop().time() + FR24_CACHE_TTL_SEC
-                }
-                logger.info(f"✈️ FlightAware route resolved {callsign} -> {origin} → {dest}")
-                return origin, dest
-                    
-    except Exception as e:
-        logger.warning(f"FlightAware route error: {e}")
     
     return None, None
 

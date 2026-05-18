@@ -153,6 +153,11 @@ class Config:
     REDIS_LIVE_FLIGHTS_META_KEY = "live_flights_meta"
     REDIS_FLIGHTS_TTL = 30  # seconds
 
+    # IATA-ICAO flight number mapping (FR24 batch cache)
+    REDIS_IATA_ICAO_FLIGHT_PREFIX = "iata_icao:flight_mapping"
+    REDIS_IATA_ICAO_AIRLINE_PREFIX = "iata_icao:airline_mapping"
+    REDIS_IATA_ICAO_TTL = 86400  # 24 hours
+
     # FR24 Route Enrichment
     FR24_DATA_URL = _env("FR24_DATA_URL", "https://data-cloud.flightradar24.com/zones/fcgi/data.js")
     FR24_ENRICHMENT_DEBOUNCE_SEC = int(_env("FR24_ENRICHMENT_DEBOUNCE_SEC", "5"))
@@ -330,24 +335,6 @@ except Exception as e:
     print(f"⚠️ Warning: Could not load static DB data on startup (Ignore if running db_reset.py).")
 
 
-# ==========================================
-# Database and Cache Settings
-# ==========================================
-POSTGRES_DB = os.getenv("POSTGRES_DB", "flight_db")
-POSTGRES_USER = os.getenv("POSTGRES_USER", "flight_db_user")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres_password")
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
 
-DB_PARAMS = {
-    "database": POSTGRES_DB,
-    "user": POSTGRES_USER,
-    "password": POSTGRES_PASSWORD,
-    "host": POSTGRES_HOST,
-    "port": POSTGRES_PORT,
-    "client_encoding": "UTF8"
-}
 
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-REDIS_DB = int(os.getenv("REDIS_DB", 0))
+

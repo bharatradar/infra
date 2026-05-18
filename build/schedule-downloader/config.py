@@ -132,8 +132,8 @@ class Config:
     GET_SCHEDULES_FROM_FLIGHTSFROM = False
     MISSING_AIRPORTS_IN_AVIONIO = {'VEAY': 'AYJ', 'VEDO': 'DGH', 'VIJW': 'DXN', 'VIDX': 'HDO', 'VEHO': 'HGI', 'VIAH': 'HRH', 'VAHS': 'HSR', 'VOKU': 'KJB', 'VANM': 'NMI', 'VARW': 'REW', 'VOSR': 'SDW'}
     # --- File Paths ---
-    AIRLINES_FILE = "/home/ragaradar/bharat-radar/data/airlines.csv"
-    AIRPORTS_CSV_FILE = "/home/ragaradar/bharat-radar/data/airports.csv"
+    AIRLINES_FILE = _env("AIRLINES_FILE", "/app/data/airlines.csv")
+    AIRPORTS_CSV_FILE = _env("AIRPORTS_CSV_FILE", "/app/data/airports.csv")
     
     # --- Database & Redis ---
     DB_PARAMS = {
@@ -141,7 +141,7 @@ class Config:
         "user": _env("DB_USER", "flight_db_user"),
         "password": _env("DB_PASSWORD", "flight_db_password"),
         "host": _env("DB_HOST", "localhost"),
-        "port": str(_parse_port(_env("DB_PORT"), 5432))
+        "port": _parse_port(_env("DB_PORT"), 5432)
     }
     REDIS_PARAMS = {
         "host": _env("REDIS_HOST", "127.0.0.1"),

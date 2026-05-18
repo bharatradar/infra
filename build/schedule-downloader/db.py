@@ -114,7 +114,7 @@ class AsyncDatabaseManager:
             origin = await self._resolve_icao(origin)
             destination = await self._resolve_icao(destination)
             
-            ts = manual_timestamp if manual_timestamp else time.time()
+            ts = manual_timestamp if manual_timestamp is not None else time.time()
             async with self.pool.acquire() as conn:
                 await conn.execute("""
                     INSERT INTO flight_events (timestamp, hex_id, callsign, event_type, details, airport, origin, destination, runway, anomaly_flag) 
@@ -164,7 +164,7 @@ class AsyncDatabaseManager:
             if not airport:
                 return
                 
-            ts = datetime.fromtimestamp(float(manual_timestamp)) if manual_timestamp else datetime.fromtimestamp(time.time())
+            ts = datetime.fromtimestamp(float(manual_timestamp)) if manual_timestamp is not None else datetime.fromtimestamp(time.time())
             time_30_mins_ago = ts - timedelta(minutes=30)
             
             async with self.pool.acquire() as conn:
@@ -205,7 +205,7 @@ class AsyncDatabaseManager:
             if not airport:
                 return
                 
-            ts = datetime.fromtimestamp(float(manual_timestamp)) if manual_timestamp else datetime.fromtimestamp(time.time())
+            ts = datetime.fromtimestamp(float(manual_timestamp)) if manual_timestamp is not None else datetime.fromtimestamp(time.time())
             time_30_mins_ago = ts - timedelta(minutes=30)
             async with self.pool.acquire() as conn:
                 # Check if there's an existing departure for this hex_id at this airport in last 30 minutes
@@ -377,7 +377,7 @@ class AsyncDatabaseManager:
                 await conn.execute("""
                     INSERT INTO flight_schedules (airport_code, direction, flight_number, callsign, hex_id, route_airport, scheduled_time)
                     VALUES ($1, $2, $3, $4, $5, $6, TO_TIMESTAMP($7))
-                    ON CONFLICT (airport_code, direction, flight_number, hex_id, route_airport, scheduled_time)
+                    ON CONFLICT (airport_code, direction, flight_number, route_airport, scheduled_time)
                     DO UPDATE SET
                         hex_id = COALESCE(EXCLUDED.hex_id, flight_schedules.hex_id),
                         route_airport = EXCLUDED.route_airport
@@ -738,7 +738,7 @@ class AsyncDatabaseManager:
                     INSERT INTO flight_schedules 
                     (airport_code, direction, flight_number, callsign, hex_id, route_airport, scheduled_time)
                     VALUES ($1, $2, $3, $4, $5, $6, TO_TIMESTAMP($7))
-                    ON CONFLICT (airport_code, direction, flight_number, hex_id, route_airport, scheduled_time) 
+                    ON CONFLICT (airport_code, direction, flight_number, route_airport, scheduled_time) 
                     DO NOTHING
                 """, processed_records)
 
@@ -775,6 +775,8 @@ class AsyncDatabaseManager:
 
     async def set_next_run(self, dt, status=None):
         try:
+            if dt.tzinfo is not None:
+                dt = dt.replace(tzinfo=None)
             async with self.pool.acquire() as conn:
                 await conn.execute("""
                     UPDATE download_config

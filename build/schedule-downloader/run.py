@@ -6,7 +6,6 @@ from route_schedule_downloader import download_schedules
 from aerodatabox import aerodatabox_download
 import config as sched_config
 
-IST = timezone(timedelta(hours=5, minutes=30))
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
@@ -36,11 +35,13 @@ if __name__ == "__main__":
 
         # Pre-check: skip if now < next_run
         next_run = await db.get_next_run()
-        now_naive = datetime.now(IST).replace(tzinfo=None)
-        if next_run is not None and now_naive < next_run.replace(tzinfo=None):
-            logger.info(f"⏭️ Skipping: next_run at {next_run.isoformat()}, current time {now_naive.isoformat()}")
-            db_pool.terminate()
-            return
+        now_utc = datetime.now(timezone.utc)
+        if next_run is not None:
+            next_run_naive = next_run.replace(tzinfo=None) if next_run.tzinfo else next_run
+            if now_utc.replace(tzinfo=None) < next_run_naive:
+                logger.info(f"⏭️ Skipping: next_run at {next_run_naive.isoformat()}, current UTC {now_utc.isoformat()}")
+                db_pool.terminate()
+                return
 
         # Always fetch both today and tomorrow to catch incomplete same-day data
         sched_config.Config.GET_SCHEDULES_FOR = ['TODAY', 'TOMORROW']
@@ -56,10 +57,11 @@ if __name__ == "__main__":
                 await download_schedules(db, session, {}, {})
 
         # Post-download: update last_run, schedule next run in 10 hours
-        next_run_time = now_naive + timedelta(hours=10)
+        next_run_time = now_utc + timedelta(hours=10)
         await db.set_next_run(next_run_time, "SUCCESS")
+        last_run_naive = now_utc.replace(tzinfo=None)
         async with db_pool.acquire() as conn:
-            await conn.execute("UPDATE download_config SET last_run = NOW() WHERE id = 1")
+            await conn.execute("UPDATE download_config SET last_run = $1 WHERE id = 1", last_run_naive)
         logger.info(f"📅 Last run updated, next run at {next_run_time.isoformat()}")
         db_pool.terminate()
 

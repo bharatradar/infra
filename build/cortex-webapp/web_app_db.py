@@ -1,10 +1,11 @@
 import csv
 import os
+import re
 import logging
 import asyncpg
 import orjson
 import redis.asyncio as redis
-from datetime import datetime
+from datetime import datetime, timedelta
 from config import Config
 
 TS_UTC_ISO = 'YYYY-MM-DD"T"HH24:MI:SS"Z"'
@@ -33,7 +34,8 @@ async def get_redis_client():
 AIRPORT_MAP = {}
 AIRPORT_COORDS = {}  
 AIRLINE_MAP = {}
-IATA_TO_ICAO_MEM = {} 
+IATA_TO_ICAO_MEM = {}
+ICAO_TO_IATA_AIRLINE = {}
 
 def load_airlines_csv():
     filepath = "data/airlines.csv" if os.path.exists("data/airlines.csv") else "airlines.csv"
@@ -46,6 +48,8 @@ def load_airlines_csv():
                 name = row.get("Name", "").strip()
                 if icao and icao != "\\N": AIRLINE_MAP[icao] = name
                 if iata and iata != "\\N": AIRLINE_MAP[iata] = name
+                if icao and iata and icao != "\\N" and iata != "\\N":
+                    ICAO_TO_IATA_AIRLINE[icao] = iata
     except Exception as e: logger.error(f"CSV Airline Load Error: {e}")
 
 def load_airports_csv():
@@ -133,7 +137,7 @@ async def init_web_app_db(db_pool):
         async with db_pool.acquire() as conn:
             db_airports = await conn.fetch("SELECT * FROM airports")
             for r in db_airports:
-                display = r.get('city') or r.get('name') or r.get('location') or ''
+                display = r.get('city') or r.get('name') or ''
                 icao = r.get('icao')
                 iata = r.get('iata')
                 lat, lon = r.get('lat'), r.get('lon')
@@ -557,8 +561,8 @@ async def fetch_airport_schedules(db_pool, airport, direction, target_date, tz_o
                 rows = await conn.fetch(f"""
                     SELECT flight_number, callsign, hex_id, route_airport, anomaly_flag, TO_CHAR(scheduled_time, '{TS_UTC_ISO}') as sched_time, TO_CHAR(actual_time, '{TS_UTC_ISO}') as act_time
                     FROM flight_schedules WHERE airport_code = $1 AND direction = $2 
-                      AND ((scheduled_time >= TO_TIMESTAMP($3, 'YYYY-MM-DD') AND scheduled_time < TO_TIMESTAMP($3, 'YYYY-MM-DD') + INTERVAL '1 day')
-                          OR (scheduled_time IS NULL AND actual_time >= TO_TIMESTAMP($3, 'YYYY-MM-DD') AND actual_time < TO_TIMESTAMP($3, 'YYYY-MM-DD') + INTERVAL '1 day'))
+                      AND ((scheduled_time >= $3::date::timestamp AND scheduled_time < $3::date::timestamp + INTERVAL '1 day')
+                          OR (scheduled_time IS NULL AND actual_time >= $3::date::timestamp AND actual_time < $3::date::timestamp + INTERVAL '1 day'))
                     ORDER BY COALESCE(scheduled_time, actual_time) ASC LIMIT 1500
                 """, icao, direction.upper(), target_date)
         else:
@@ -588,8 +592,11 @@ async def fetch_airport_logs(db_pool, airport, direction, target_date, tz_offset
     async with db_pool.acquire() as conn:
         icao = await resolve_airport_codes(conn, airport)
         is_today = not target_date
-        table = "arrivals_log" if direction.upper() == 'ARRIVALS' else "departures_log"
-        route_col = "origin" if direction.upper() == 'ARRIVALS' else "destination"
+        dir_upper = direction.upper()
+        tables = {"ARRIVALS": "arrivals_log", "DEPARTURES": "departures_log"}
+        route_cols = {"ARRIVALS": "origin", "DEPARTURES": "destination"}
+        table = tables.get(dir_upper, "arrivals_log")
+        route_col = route_cols.get(dir_upper, "origin")
 
         if not is_today:
             if tz_offset:
@@ -598,7 +605,7 @@ async def fetch_airport_logs(db_pool, airport, direction, target_date, tz_offset
                 utc_end = utc_start + timedelta(days=1)
                 rows = await conn.fetch(f"SELECT callsign, hex_id, {route_col} as route_airport, anomaly_flag, runway, TO_CHAR(timestamp, '{TS_UTC_ISO}') as act_time FROM {table} WHERE airport = $1 AND timestamp >= $2::timestamp AND timestamp < $3::timestamp ORDER BY timestamp DESC LIMIT 1000", icao, utc_start, utc_end)
             else:
-                rows = await conn.fetch(f"SELECT callsign, hex_id, {route_col} as route_airport, anomaly_flag, runway, TO_CHAR(timestamp, '{TS_UTC_ISO}') as act_time FROM {table} WHERE airport = $1 AND timestamp >= TO_TIMESTAMP($2, 'YYYY-MM-DD') AND timestamp < TO_TIMESTAMP($2, 'YYYY-MM-DD') + INTERVAL '1 day' ORDER BY timestamp DESC LIMIT 1000", icao, target_date)
+                rows = await conn.fetch(f"SELECT callsign, hex_id, {route_col} as route_airport, anomaly_flag, runway, TO_CHAR(timestamp, '{TS_UTC_ISO}') as act_time FROM {table} WHERE airport = $1 AND timestamp >= $2::date::timestamp AND timestamp < $2::date::timestamp + INTERVAL '1 day' ORDER BY timestamp DESC LIMIT 1000", icao, target_date)
         else:
             rows = await conn.fetch(f"SELECT callsign, hex_id, {route_col} as route_airport, anomaly_flag, runway, TO_CHAR(timestamp, '{TS_UTC_ISO}') as act_time FROM {table} WHERE airport = $1 AND timestamp >= NOW() - INTERVAL '24 hours' ORDER BY timestamp DESC LIMIT 500", icao)
             
@@ -608,7 +615,16 @@ async def fetch_airport_logs(db_pool, airport, direction, target_date, tz_offset
             d['route_airport'] = normalize_ap(d['route_airport'])
             d['route_airport_display'] = fmt_apt(d['route_airport'])
             d['sched_time'] = None 
-            d['remark'] = 'PHYSICAL_LOG' 
+            d['remark'] = 'PHYSICAL_LOG'
+            callsign = d.get('callsign', '') or ''
+            m = re.match(r'([A-Z]{3})(\d+)', callsign)
+            if m:
+                icao_prefix = m.group(1)
+                digits = m.group(2)
+                iata_prefix = ICAO_TO_IATA_AIRLINE.get(icao_prefix, '')
+                d['flight_number'] = f"{iata_prefix}{digits}" if iata_prefix else callsign
+            else:
+                d['flight_number'] = callsign
             results.append(d)
         return results
 
@@ -702,9 +718,9 @@ async def fetch_drilldown_fleet(db_pool, hex_id):
             ),
             sequenced_events AS (
                 SELECT event_type, callsign, timestamp as dep_time, airport as origin_airport,
-                    LEAD(event_type) OVER (PARTITION BY callsign ORDER BY timestamp) as next_event_type,
-                    LEAD(airport) OVER (PARTITION BY callsign ORDER BY timestamp) as dest_airport,
-                    LEAD(timestamp) OVER (PARTITION BY callsign ORDER BY timestamp) as arr_time
+                    LEAD(event_type) OVER (PARTITION BY hex_id ORDER BY timestamp) as next_event_type,
+                    LEAD(airport) OVER (PARTITION BY hex_id ORDER BY timestamp) as dest_airport,
+                    LEAD(timestamp) OVER (PARTITION BY hex_id ORDER BY timestamp) as arr_time
                 FROM combined_events
             )
             SELECT callsign, origin_airport, dest_airport, TO_CHAR(dep_time, 'YYYY-MM-DD HH24:MI') as dep_time, TO_CHAR(arr_time, 'YYYY-MM-DD HH24:MI') as arr_time, ROUND(EXTRACT(EPOCH FROM (arr_time - dep_time))/60) as duration_mins
@@ -858,6 +874,8 @@ async def fetch_flight_ai_audit(db_pool, hex_id, callsign):
 
 async def fetch_telemetry_track(influx_query_api, hex_id):
     if not influx_query_api: return {"error": "InfluxDB not connected."}
+    if not re.match(r'^[0-9a-fA-F]{6}$', hex_id):
+        return {"error": "Invalid hex_id format"}
     query = f'''
         from(bucket: "{Config.INFLUXDB_BUCKET}")
           |> range(start: -168h)
