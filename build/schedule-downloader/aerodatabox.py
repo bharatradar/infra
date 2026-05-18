@@ -186,6 +186,15 @@ def _derive_callsign(number, airline_icao):
     return f"{icao}{number[2:]}" if len(number) > 2 else number
 
 
+def is_valid_iata(code):
+    """IATA flight number: 2 alphanum prefix + 1-4 digits + optional 1 letter suffix
+    e.g. 6E2354, AI4213, AF296Q
+    """
+    if not code:
+        return False
+    return bool(re.match(r"^([A-Z]{2}|[A-Z]\d|\d[A-Z])\d{1,4}[A-Z]?$", code.upper()))
+
+
 def _extract_utc_dt(obj, key="utc"):
     if not obj:
         return None
@@ -211,6 +220,9 @@ def _parse_flights(raw, airport_icao, direction):
             if not number:
                 continue
             number = _normalize_number(number)
+            if not is_valid_iata(number):
+                logger.debug(f"Aerodatabox: ignoring invalid flight number: {number}")
+                continue
 
             callsign_raw = (f.get("callSign") or "").upper()
             airline_icao = ((f.get("airline") or {}).get("icao") or "").upper()

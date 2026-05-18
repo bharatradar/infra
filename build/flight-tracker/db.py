@@ -15,6 +15,24 @@ from influxdb_client import Point
 
 logger = logging.getLogger(__name__)
 
+def is_valid_iata(code):
+    """IATA flight number: 2 alphanum prefix + 1-4 digits + optional 1 letter suffix
+    e.g. 6E2354, AI4213, AF296Q
+    """
+    if not code:
+        return False
+    return bool(re.match(r"^([A-Z]{2}|[A-Z]\d|\d[A-Z])\d{1,4}[A-Z]?$", code.upper()))
+
+
+def is_valid_icao(code):
+    """ICAO callsign: 3 letter prefix + 1-4 digits + optional 1-2 alphanum suffix
+    e.g. IGO235F, IGO13VY, AIC3232
+    """
+    if not code:
+        return False
+    return bool(re.match(r"^[A-Z]{3}\d{1,4}[A-Z]{0,2}$", code.upper()))
+
+
 class AsyncDatabaseManager:
     def __init__(self, pool, redis_client=None):
         self.pool = pool
@@ -160,7 +178,9 @@ class AsyncDatabaseManager:
         if self._icao_to_iata_airline_map is None:
             self._icao_to_iata_airline_map = await self._load_icao_to_iata_airline_map()
         if icao_prefix in self._icao_to_iata_airline_map:
-            return f"{self._icao_to_iata_airline_map[icao_prefix]}{suffix}"
+            candidate = f"{self._icao_to_iata_airline_map[icao_prefix]}{suffix}"
+            if is_valid_iata(candidate):
+                return candidate
         
         return code
 
@@ -455,6 +475,8 @@ class AsyncDatabaseManager:
             airport_code = await self._resolve_icao(airport_code)
             route_airport = await self._resolve_icao(route_airport)
             flight_number = await self._resolve_flight_number(flight_number)
+            if flight_number and not is_valid_iata(flight_number):
+                flight_number = None
             
             direction = direction.upper() if direction else None
             callsign = callsign.upper() if callsign else None
@@ -574,6 +596,8 @@ class AsyncDatabaseManager:
         
         raw_cs = callsign.upper().strip() if callsign else None
         flt_num_iata = await self._resolve_flight_number(raw_cs)
+        if flt_num_iata and not is_valid_iata(flt_num_iata):
+            flt_num_iata = None
         hex_id = hex_id.upper() if hex_id else None
         
         try:
@@ -690,6 +714,8 @@ class AsyncDatabaseManager:
         
         raw_cs = callsign.upper().strip() if callsign else None
         flt_num_iata = await self._resolve_flight_number(raw_cs)
+        if flt_num_iata and not is_valid_iata(flt_num_iata):
+            flt_num_iata = None
         hex_id = hex_id.upper() if hex_id else None
 
         try:
@@ -942,6 +968,8 @@ class AsyncDatabaseManager:
         try:
             raw_cs = callsign.upper().strip() if callsign else None
             flt_num_iata = await self._resolve_flight_number(raw_cs)
+            if flt_num_iata and not is_valid_iata(flt_num_iata):
+                flt_num_iata = None
             hex_id = hex_id.upper().strip() if hex_id else None
             origin = await self._resolve_icao(origin)
             destination = await self._resolve_icao(destination)

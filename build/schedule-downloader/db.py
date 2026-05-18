@@ -12,6 +12,13 @@ from influxdb_client import Point
 
 logger = logging.getLogger(__name__)
 
+def is_valid_iata(code):
+    """IATA flight number: 2 alphanum prefix + 1-4 digits + optional 1 letter suffix"""
+    if not code:
+        return False
+    return bool(re.match(r"^([A-Z]{2}|[A-Z]\d|\d[A-Z])\d{1,4}[A-Z]?$", code.upper()))
+
+
 class AsyncDatabaseManager:
     def __init__(self, pool):
         self.pool = pool
@@ -368,6 +375,8 @@ class AsyncDatabaseManager:
             airport_code = await self._resolve_icao(airport_code)
             route_airport = await self._resolve_icao(route_airport)
             flight_number = await self._resolve_flight_number(flight_number)
+            if flight_number and not is_valid_iata(flight_number):
+                flight_number = None
             
             direction = direction.upper() if direction else None
             callsign = callsign.upper() if callsign else None
@@ -388,97 +397,10 @@ class AsyncDatabaseManager:
     async def get_route_from_schedule(self, callsign, current_airport=None):
         try:
             async with self.pool.acquire() as conn:
-                raw_cs = callsign.upper().strip() if callsign else None
-                flt_num_iata = await self._resolve_flight_number(raw_cs)
-                
-                if current_airport:
-                    # 🌟 FIX: Strict Diurnal Cycle Window [-18h to +6h]
-                    row = await conn.fetchrow("""
-                        SELECT airport_code, direction, route_airport 
-                        FROM flight_schedules 
-                        WHERE (TRIM(flight_number) = $1 OR TRIM(callsign) = $2)
-                          AND (
-                              (direction = 'DEPARTURES' AND airport_code = $3) OR 
-                              (direction = 'ARRIVALS' AND route_airport = $3)
-                          )
-                          AND (
-                              scheduled_time BETWEEN NOW() - INTERVAL '18 hours' AND NOW() + INTERVAL '6 hours'
-                              OR scheduled_time IS NULL
-                          )
-                        ORDER BY 
-                          CASE WHEN anomaly_flag = 'PRE_FLIGHT' THEN 0 
-                               WHEN scheduled_time IS NULL THEN 2 
-                               ELSE 1 END,
-                          ABS(EXTRACT(EPOCH FROM (COALESCE(scheduled_time, NOW()) - NOW()))) ASC 
-                        LIMIT 1
-                    """, flt_num_iata, raw_cs, current_airport)
-                    if row:
-                        return (row['airport_code'], row['route_airport']) if row['direction'] == 'DEPARTURES' else (row['route_airport'], row['airport_code'])
-
-                row = await conn.fetchrow("""
-                    SELECT airport_code, direction, route_airport 
-                    FROM flight_schedules 
-                    WHERE (TRIM(flight_number) = $1 OR TRIM(callsign) = $2)
-                    AND actual_time IS NULL 
-                    AND (
-                        scheduled_time BETWEEN NOW() - INTERVAL '18 hours' AND NOW() + INTERVAL '6 hours'
-                        OR scheduled_time IS NULL
-                    )
-                    ORDER BY 
-                      CASE WHEN anomaly_flag = 'PRE_FLIGHT' THEN 0 
-                           WHEN scheduled_time IS NULL THEN 2 
-                           ELSE 1 END,
-                      ABS(EXTRACT(EPOCH FROM (COALESCE(scheduled_time, NOW()) - NOW()))) ASC 
-                    LIMIT 1
-                """, flt_num_iata, raw_cs)
-                
-                if row:
-                    return (row['airport_code'], row['route_airport']) if row['direction'] == 'DEPARTURES' else (row['route_airport'], row['airport_code'])
-                        
-                return None, None
-        except Exception as e:
-            return None, None
-
-    async def get_planes_missing_enrichment(self):
-        return []  # DEPRECATED: flights_in_air no longer used (Redis-only)
-
-    async def cleanup_stale_ground_ops(self, hours=4):
-        try:
-            async with self.pool.acquire() as conn:
-                await conn.execute("DELETE FROM ground_ops WHERE landed_at < NOW() - INTERVAL '1 hour' * $1", hours)
-        except Exception as e:
-            logger.warning(f"Failed to cleanup stale ground_ops: {e}")
-
-    async def get_avg_approach_time(self, airport_code):
-        try:
-            async with self.pool.acquire() as conn:
-                row = await conn.fetchrow("""
-                    SELECT AVG(EXTRACT(EPOCH FROM (a.timestamp - e.timestamp)))/60 as avg_mins
-                    FROM arrivals_log a JOIN flight_events e ON a.hex_id = e.hex_id AND e.event_type = 'APPROACHING' AND e.airport = a.airport
-                    WHERE a.airport = $1 AND a.timestamp > e.timestamp AND a.timestamp < e.timestamp + INTERVAL '1 hour'
-                """, airport_code)
-                return int(row['avg_mins']) if row and row['avg_mins'] else None
-        except Exception as e:
-            return None
-            
-    async def log_user_alert(self, chat_id, target_callsign, alert_type, threshold_mins):
-        try:
-            async with self.pool.acquire() as conn:
-                await conn.execute("""
-                    INSERT INTO user_alerts (chat_id, target_callsign, alert_type, threshold_mins, status)
-                    VALUES ($1, $2, $3, $4, 'ACTIVE')
-                """, chat_id, target_callsign, alert_type, threshold_mins)
-        except Exception as e:
-            logger.warning(f"Failed to log user alert for {target_callsign}: {e}")
-
-    async def update_schedule_status(self, airport_code, direction, callsign, status_flag, hex_id=None, route_airport=None):
-        airport_code = await self._resolve_icao(airport_code)
-        route_airport = await self._resolve_icao(route_airport)
-        direction = direction.upper() if direction else None
-        status_flag = str(status_flag) if status_flag else None
-        
         raw_cs = callsign.upper().strip() if callsign else None
         flt_num_iata = await self._resolve_flight_number(raw_cs)
+        if flt_num_iata and not is_valid_iata(flt_num_iata):
+            flt_num_iata = None
         hex_id = hex_id.upper() if hex_id else None
         
         try:
@@ -595,6 +517,8 @@ class AsyncDatabaseManager:
         
         raw_cs = callsign.upper().strip() if callsign else None
         flt_num_iata = await self._resolve_flight_number(raw_cs)
+        if flt_num_iata and not is_valid_iata(flt_num_iata):
+            flt_num_iata = None
         hex_id = hex_id.upper() if hex_id else None
 
         try:
