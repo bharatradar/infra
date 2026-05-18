@@ -152,7 +152,7 @@ async def download_from_flightsfrom(db: AsyncDatabaseManager, session: aiohttp.C
                                             INSERT INTO flight_schedules
                                             (airport_code, direction, flight_number, callsign, route_airport, scheduled_time, created_from, updated_from)
                                             VALUES ($1, $2, $3, $4, $5, TO_TIMESTAMP($6), 'FLIGHTSFROM', 'FLIGHTSFROM')
-                                            ON CONFLICT (airport_code, direction, flight_number, route_airport, scheduled_time)
+                                            ON CONFLICT (airport_code, direction, flight_number, route_airport, (COALESCE(scheduled_time, 'epoch'::timestamp)))
                                             DO UPDATE SET callsign = EXCLUDED.callsign, updated_from = 'FLIGHTSFROM'
                                         """, icao_key.upper(), direction, carrier, icao_code, safe_route, midday_epoch)
                                         route_count += 1
@@ -349,7 +349,7 @@ async def download_schedules(db: AsyncDatabaseManager, session: aiohttp.ClientSe
                                             INSERT INTO flight_schedules 
                                             (airport_code, direction, flight_number, callsign, hex_id, route_airport, scheduled_time, created_from, updated_from) 
                                             VALUES ($1, $2, $3, $4, $5, $6, TO_TIMESTAMP($7), 'AVIONIO', 'AVIONIO')
-                                            ON CONFLICT (airport_code, direction, flight_number, route_airport, scheduled_time) 
+                                            ON CONFLICT (airport_code, direction, flight_number, route_airport, (COALESCE(scheduled_time, 'epoch'::timestamp))) 
                                             DO UPDATE SET hex_id = EXCLUDED.hex_id, updated_from = 'AVIONIO'
                                         """, safe_airport, safe_mode, safe_flt_num, safe_callsign, safe_hex_id, safe_route_ap, sched_ts)
                                     except Exception as ins_err:
@@ -437,7 +437,7 @@ async def download_schedules(db: AsyncDatabaseManager, session: aiohttp.ClientSe
                                                                 INSERT INTO flight_schedules 
                                                                 (airport_code, direction, flight_number, callsign, hex_id, route_airport, scheduled_time, created_from, updated_from) 
                                                                 VALUES ($1, $2, $3, $4, $5, $6, TO_TIMESTAMP($7), 'FLIGHT_RADAR', 'FLIGHT_RADAR')
-                                                                ON CONFLICT (airport_code, direction, flight_number, route_airport, scheduled_time) 
+                                                                ON CONFLICT (airport_code, direction, flight_number, route_airport, (COALESCE(scheduled_time, 'epoch'::timestamp))) 
                                                                 DO UPDATE SET hex_id = EXCLUDED.hex_id, updated_from = 'FLIGHT_RADAR'
                                                             """, safe_airport, safe_mode, safe_flt_num, safe_callsign, safe_hex_id, safe_route_ap, sched_ts)
                                                         except Exception as ins_err:

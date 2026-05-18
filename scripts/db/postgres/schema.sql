@@ -159,9 +159,10 @@ CREATE TABLE IF NOT EXISTS flight_schedules (
     created_from VARCHAR(50),
     updated_from VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (airport_code, direction, flight_number, route_airport, scheduled_time)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_flight_schedules_unique
+ON flight_schedules (airport_code, direction, flight_number, route_airport, COALESCE(scheduled_time, 'epoch'::timestamp));
 CREATE INDEX IF NOT EXISTS idx_flight_schedules_time ON flight_schedules(scheduled_time);
 CREATE INDEX IF NOT EXISTS idx_flight_schedules_airport_dir ON flight_schedules(airport_code, direction);
 CREATE INDEX IF NOT EXISTS idx_flight_schedules_callsign ON flight_schedules(callsign);

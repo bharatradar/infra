@@ -427,7 +427,7 @@ async def aerodatabox_download(db_pool, session, target_airports):
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
                     $10, $11, $12, $13, $14, $15, $16,
                     $17, $18, $19, $20, $21, 'AERODATABOX', 'AERODATABOX')
-            ON CONFLICT (airport_code, direction, flight_number, route_airport, scheduled_time)
+            ON CONFLICT (airport_code, direction, flight_number, route_airport, (COALESCE(scheduled_time, 'epoch'::timestamp)))
             DO UPDATE SET
                 status = COALESCE(EXCLUDED.status, flight_schedules.status),
                 estimated_time = COALESCE(EXCLUDED.estimated_time, flight_schedules.estimated_time),
@@ -598,7 +598,7 @@ async def test_single_airport(db_pool, session, icao, iata):
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
                             $10, $11, $12, $13, $14, $15, $16,
                             $17, $18, $19, $20, $21, 'AERODATABOX', 'AERODATABOX')
-                    ON CONFLICT (airport_code, direction, flight_number, route_airport, scheduled_time)
+                    ON CONFLICT (airport_code, direction, flight_number, route_airport, (COALESCE(scheduled_time, 'epoch'::timestamp)))
                     DO UPDATE SET
                         status = COALESCE(EXCLUDED.status, flight_schedules.status),
                         estimated_time = COALESCE(EXCLUDED.estimated_time, flight_schedules.estimated_time),

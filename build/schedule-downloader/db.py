@@ -377,7 +377,7 @@ class AsyncDatabaseManager:
                 await conn.execute("""
                     INSERT INTO flight_schedules (airport_code, direction, flight_number, callsign, hex_id, route_airport, scheduled_time)
                     VALUES ($1, $2, $3, $4, $5, $6, TO_TIMESTAMP($7))
-                    ON CONFLICT (airport_code, direction, flight_number, route_airport, scheduled_time)
+                    ON CONFLICT (airport_code, direction, flight_number, route_airport, (COALESCE(scheduled_time, 'epoch'::timestamp)))
                     DO UPDATE SET
                         hex_id = COALESCE(EXCLUDED.hex_id, flight_schedules.hex_id),
                         route_airport = EXCLUDED.route_airport
@@ -738,7 +738,7 @@ class AsyncDatabaseManager:
                     INSERT INTO flight_schedules 
                     (airport_code, direction, flight_number, callsign, hex_id, route_airport, scheduled_time)
                     VALUES ($1, $2, $3, $4, $5, $6, TO_TIMESTAMP($7))
-                    ON CONFLICT (airport_code, direction, flight_number, route_airport, scheduled_time) 
+                    ON CONFLICT (airport_code, direction, flight_number, route_airport, (COALESCE(scheduled_time, 'epoch'::timestamp))) 
                     DO NOTHING
                 """, processed_records)
 
