@@ -1191,11 +1191,11 @@ async def api_ops_otp(airport: str = Query("ALL"), airline: str = Query("ALL")):
     return await web_app_db.fetch_otp_data(db_pool, airport, airline)
 
 @app.get("/api/ops/schedules")
-async def api_ops_schedules(airport: str = Query("ALL"), direction: str = Query("ALL"), target_date: str = Query(None)):
-    return await web_app_db.fetch_airport_schedules(db_pool, airport, direction, target_date)
+async def api_ops_schedules(airport: str = Query("ALL"), direction: str = Query("ALL"), target_date: str = Query(None), tz_offset: int = Query(0)):
+    return await web_app_db.fetch_airport_schedules(db_pool, airport, direction, target_date, tz_offset)
 @app.get("/api/ops/logs")
-async def api_ops_logs(airport: str = Query("ALL"), direction: str = Query("ALL"), target_date: str = Query(None)):
-    return await web_app_db.fetch_airport_logs(db_pool, airport, direction, target_date)
+async def api_ops_logs(airport: str = Query("ALL"), direction: str = Query("ALL"), target_date: str = Query(None), tz_offset: int = Query(0)):
+    return await web_app_db.fetch_airport_logs(db_pool, airport, direction, target_date, tz_offset)
 
 # Exec Endpoints
 @app.get("/api/exec/safety")

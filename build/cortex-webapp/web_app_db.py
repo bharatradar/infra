@@ -536,20 +536,31 @@ async def fetch_otp_data(db_pool, airport, airline):
         rows = await conn.fetch(f"SELECT SUBSTRING(callsign FROM 1 FOR 3) as airline, AVG(EXTRACT(EPOCH FROM (actual_time - scheduled_time))/60) as avg_delay_mins FROM flight_schedules WHERE {where_sql} GROUP BY airline HAVING COUNT(*) > 0 ORDER BY avg_delay_mins DESC", *params)
         return [{"airline": r['airline'], "airline_display": fmt_aln(r['airline']), "delay": float(r['avg_delay_mins'])} for r in rows]
 
-async def fetch_airport_schedules(db_pool, airport, direction, target_date):
+async def fetch_airport_schedules(db_pool, airport, direction, target_date, tz_offset=0):
     async with db_pool.acquire() as conn:
         icao = await resolve_airport_codes(conn, airport)
-        today_str = datetime.utcnow().strftime('%Y-%m-%d')
-        is_today = not target_date or target_date == today_str
+        is_today = not target_date
         
         if not is_today:
-            rows = await conn.fetch(f"""
-                SELECT flight_number, callsign, hex_id, route_airport, anomaly_flag, TO_CHAR(scheduled_time, '{TS_UTC_ISO}') as sched_time, TO_CHAR(actual_time, '{TS_UTC_ISO}') as act_time
-                FROM flight_schedules WHERE airport_code = $1 AND direction = $2 
-                  AND ((scheduled_time >= TO_TIMESTAMP($3, 'YYYY-MM-DD') AND scheduled_time < TO_TIMESTAMP($3, 'YYYY-MM-DD') + INTERVAL '1 day')
-                      OR (scheduled_time IS NULL AND actual_time >= TO_TIMESTAMP($3, 'YYYY-MM-DD') AND actual_time < TO_TIMESTAMP($3, 'YYYY-MM-DD') + INTERVAL '1 day'))
-                ORDER BY COALESCE(scheduled_time, actual_time) ASC LIMIT 1500
-            """, icao, direction.upper(), target_date)
+            if tz_offset:
+                dt = datetime.strptime(target_date, '%Y-%m-%d')
+                utc_start = dt + timedelta(minutes=tz_offset)
+                utc_end = utc_start + timedelta(days=1)
+                rows = await conn.fetch(f"""
+                    SELECT flight_number, callsign, hex_id, route_airport, anomaly_flag, TO_CHAR(scheduled_time, '{TS_UTC_ISO}') as sched_time, TO_CHAR(actual_time, '{TS_UTC_ISO}') as act_time
+                    FROM flight_schedules WHERE airport_code = $1 AND direction = $2 
+                      AND ((scheduled_time >= $3::timestamp AND scheduled_time < $4::timestamp)
+                          OR (scheduled_time IS NULL AND actual_time >= $3::timestamp AND actual_time < $4::timestamp))
+                    ORDER BY COALESCE(scheduled_time, actual_time) ASC LIMIT 1500
+                """, icao, direction.upper(), utc_start, utc_end)
+            else:
+                rows = await conn.fetch(f"""
+                    SELECT flight_number, callsign, hex_id, route_airport, anomaly_flag, TO_CHAR(scheduled_time, '{TS_UTC_ISO}') as sched_time, TO_CHAR(actual_time, '{TS_UTC_ISO}') as act_time
+                    FROM flight_schedules WHERE airport_code = $1 AND direction = $2 
+                      AND ((scheduled_time >= TO_TIMESTAMP($3, 'YYYY-MM-DD') AND scheduled_time < TO_TIMESTAMP($3, 'YYYY-MM-DD') + INTERVAL '1 day')
+                          OR (scheduled_time IS NULL AND actual_time >= TO_TIMESTAMP($3, 'YYYY-MM-DD') AND actual_time < TO_TIMESTAMP($3, 'YYYY-MM-DD') + INTERVAL '1 day'))
+                    ORDER BY COALESCE(scheduled_time, actual_time) ASC LIMIT 1500
+                """, icao, direction.upper(), target_date)
         else:
             rows = await conn.fetch(f"""
                 SELECT flight_number, callsign, hex_id, route_airport, anomaly_flag, TO_CHAR(scheduled_time, '{TS_UTC_ISO}') as sched_time, TO_CHAR(actual_time, '{TS_UTC_ISO}') as act_time
@@ -573,16 +584,21 @@ async def fetch_airport_schedules(db_pool, airport, direction, target_date):
             results.append(d)
         return results
 
-async def fetch_airport_logs(db_pool, airport, direction, target_date):
+async def fetch_airport_logs(db_pool, airport, direction, target_date, tz_offset=0):
     async with db_pool.acquire() as conn:
         icao = await resolve_airport_codes(conn, airport)
-        today_str = datetime.utcnow().strftime('%Y-%m-%d')
-        is_today = not target_date or target_date == today_str
+        is_today = not target_date
         table = "arrivals_log" if direction.upper() == 'ARRIVALS' else "departures_log"
         route_col = "origin" if direction.upper() == 'ARRIVALS' else "destination"
 
         if not is_today:
-            rows = await conn.fetch(f"SELECT callsign, hex_id, {route_col} as route_airport, anomaly_flag, runway, TO_CHAR(timestamp, '{TS_UTC_ISO}') as act_time FROM {table} WHERE airport = $1 AND timestamp >= TO_TIMESTAMP($2, 'YYYY-MM-DD') AND timestamp < TO_TIMESTAMP($2, 'YYYY-MM-DD') + INTERVAL '1 day' ORDER BY timestamp DESC LIMIT 1000", icao, target_date)
+            if tz_offset:
+                dt = datetime.strptime(target_date, '%Y-%m-%d')
+                utc_start = dt + timedelta(minutes=tz_offset)
+                utc_end = utc_start + timedelta(days=1)
+                rows = await conn.fetch(f"SELECT callsign, hex_id, {route_col} as route_airport, anomaly_flag, runway, TO_CHAR(timestamp, '{TS_UTC_ISO}') as act_time FROM {table} WHERE airport = $1 AND timestamp >= $2::timestamp AND timestamp < $3::timestamp ORDER BY timestamp DESC LIMIT 1000", icao, utc_start, utc_end)
+            else:
+                rows = await conn.fetch(f"SELECT callsign, hex_id, {route_col} as route_airport, anomaly_flag, runway, TO_CHAR(timestamp, '{TS_UTC_ISO}') as act_time FROM {table} WHERE airport = $1 AND timestamp >= TO_TIMESTAMP($2, 'YYYY-MM-DD') AND timestamp < TO_TIMESTAMP($2, 'YYYY-MM-DD') + INTERVAL '1 day' ORDER BY timestamp DESC LIMIT 1000", icao, target_date)
         else:
             rows = await conn.fetch(f"SELECT callsign, hex_id, {route_col} as route_airport, anomaly_flag, runway, TO_CHAR(timestamp, '{TS_UTC_ISO}') as act_time FROM {table} WHERE airport = $1 AND timestamp >= NOW() - INTERVAL '24 hours' ORDER BY timestamp DESC LIMIT 500", icao)
             
@@ -844,7 +860,7 @@ async def fetch_telemetry_track(influx_query_api, hex_id):
     if not influx_query_api: return {"error": "InfluxDB not connected."}
     query = f'''
         from(bucket: "{Config.INFLUXDB_BUCKET}")
-          |> range(start: -24h)
+          |> range(start: -168h)
           |> filter(fn: (r) => r._measurement == "flight_path" and r.hex_id == "{hex_id.lower()}")
           |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
           |> sort(columns: ["_time"])
@@ -854,8 +870,10 @@ async def fetch_telemetry_track(influx_query_api, hex_id):
         results = []
         for table in tables:
             for record in table.records:
+                t = record.get_time()
                 results.append({
-                    "time": record.get_time().strftime('%H:%M:%S'),
+                    "time": t.strftime('%H:%M'),
+                    "date": t.strftime('%Y-%m-%d'),
                     "lat": record.values.get("lat"),
                     "lon": record.values.get("lon"),
                     "alt": record.values.get("alt"),

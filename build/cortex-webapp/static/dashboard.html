@@ -884,13 +884,14 @@
                 <div id="forensics-loading" class="flex flex-col items-center justify-center h-48 theme-text-muted"></div>
                 
                 <div id="forensics-chart-container" class="hidden flex-col gap-4 sm:gap-6">
-                    <div class="theme-bg-sidebar border theme-border p-3 sm:p-4 rounded-xl shadow-lg relative h-[250px] sm:h-[300px]">
-                        <h4 class="theme-text-muted font-bold text-xs uppercase tracking-wider mb-2 border-b theme-border pb-2"><i class="fa-solid fa-chart-area mr-2 text-blue-500"></i>Flight Profile</h4>
+                    <div class="theme-bg-sidebar border theme-border px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl shadow-lg relative h-[310px] sm:h-[370px]">
+                        <h4 class="theme-text-muted font-bold text-xs uppercase tracking-wider border-b theme-border pb-1.5 mb-1.5"><i class="fa-solid fa-chart-area mr-2 text-blue-500"></i>Flight Profile</h4>
+                        <div id="forensics-date-picker" class="flex gap-1.5 mb-1 overflow-x-auto" style="scrollbar-width:thin"></div>
                         <canvas id="forensicsChart"></canvas>
                     </div>
                     
                     <div class="theme-bg-sidebar border theme-border p-2 rounded-xl shadow-lg h-[250px] sm:h-[350px] relative overflow-hidden flex flex-col">
-                        <h4 class="absolute top-4 left-4 z-[400] theme-bg-sidebar/90 theme-text-secondary backdrop-blur border theme-border font-bold text-xs uppercase tracking-wider p-2 rounded shadow-md"><i class="fa-solid fa-map-location-dot mr-2 text-emerald-500"></i>24h Ground Track</h4>
+                        <h4 class="absolute top-4 left-4 z-[400] theme-bg-sidebar/90 theme-text-secondary backdrop-blur border theme-border font-bold text-xs uppercase tracking-wider p-2 rounded shadow-md"><i class="fa-solid fa-map-location-dot mr-2 text-emerald-500"></i>Ground Track</h4>
                         <div id="forensics-map" class="flex-1 w-full rounded-lg z-[100]"></div>
                     </div>
 

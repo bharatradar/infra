@@ -1451,7 +1451,7 @@ async function openForensicsModal(hexId, callsign) {
         const res = await fetch(`/api/telemetry/track?hex_id=${hexId}`);
         const data = await res.json();
         if (data.length === 0) {
-            document.getElementById('forensics-loading').innerHTML = `<i class="fa-solid fa-triangle-exclamation text-4xl mb-3 text-red-500"></i><p class="font-bold tracking-widest uppercase text-sm text-gray-400">No Telemetry Found in last 24h</p>`;
+            document.getElementById('forensics-loading').innerHTML = `<i class="fa-solid fa-triangle-exclamation text-4xl mb-3 text-red-500"></i><p class="font-bold tracking-widest uppercase text-sm text-gray-400">No Telemetry Found</p>`;
             return;
         }
 
@@ -1460,21 +1460,83 @@ async function openForensicsModal(hexId, callsign) {
             fPolyline = L.polyline(latlngs, { color: '#3b82f6', weight: 4, opacity: 0.8 }).addTo(fMap);
         }
 
-        const times = data.map(d => d.time); const alts = data.map(d => d.alt || 0); const speeds = data.map(d => d.speed || 0);
         document.getElementById('forensics-loading').classList.add('hidden');
-        
         document.getElementById('forensics-chart-container').classList.remove('hidden');
+
         setTimeout(() => {
             fMap.invalidateSize();
             if (fPolyline) fMap.fitBounds(fPolyline.getBounds(), { padding: [20, 20] });
         }, 100);
 
-        const ctx = document.getElementById('forensicsChart');
-        fChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: { labels: times, datasets: [{ label: 'Altitude (ft)', data: alts, borderColor: '#3b82f6', yAxisID: 'y', pointRadius: 0, tension: 0.4 }, { label: 'Speed (kts)', data: speeds, borderColor: '#ef4444', yAxisID: 'y1', pointRadius: 0, tension: 0.4 }] },
-            options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { labels: { color: '#9ca3af' } } }, scales: { x: { grid: { display: false }, ticks: { color: '#6b7280' } }, y: { display: true, position: 'left', grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }, y1: { display: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#9ca3af' } } } }
-        });
+        const dates = [...new Set(data.map(d => d.date).filter(Boolean))].sort();
+        const allChips = ['all', ...dates];
+        let selectedDate = allChips[allChips.length - 1];
+
+        function renderDateChips() {
+            const container = document.getElementById('forensics-date-picker');
+            container.innerHTML = allChips.map(d => {
+                const label = d === 'all' ? 'All' : new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const active = d === selectedDate ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-700/50 text-gray-400 hover:bg-gray-600 hover:text-gray-200';
+                return `<button class="date-chip px-2.5 py-1 rounded text-xs font-bold cursor-pointer transition-all ${active}" data-date="${d}">${label}</button>`;
+            }).join('');
+            container.querySelectorAll('.date-chip').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    selectedDate = btn.dataset.date;
+                    renderDateChips();
+                    renderChart();
+                });
+            });
+        }
+
+        function renderChart() {
+            let labels, alts, speeds, maxTicks;
+            if (selectedDate === 'all') {
+                labels = data.map(d => new Date(d.date + 'T' + d.time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
+                alts = data.map(d => d.alt || 0);
+                speeds = data.map(d => d.speed || 0);
+                maxTicks = 12;
+            } else {
+                const filtered = data.filter(d => d.date === selectedDate);
+                labels = filtered.map(d => d.time);
+                alts = filtered.map(d => d.alt || 0);
+                speeds = filtered.map(d => d.speed || 0);
+                maxTicks = 8;
+            }
+
+            if (fChartInstance) fChartInstance.destroy();
+
+            const ctx = document.getElementById('forensicsChart');
+            fChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: labels, datasets: [
+                    { label: 'Altitude (ft)', data: alts, borderColor: '#3b82f6', yAxisID: 'y', pointRadius: 0, tension: 0.4 },
+                    { label: 'Speed (kts)', data: speeds, borderColor: '#ef4444', yAxisID: 'y1', pointRadius: 0, tension: 0.4 }
+                ]},
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    layout: { padding: { bottom: 30 } },
+                    plugins: {
+                        legend: { labels: { color: '#9ca3af' } },
+                        tooltip: {
+                            callbacks: {
+                                title: function(items) {
+                                    return items[0].label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#6b7280', maxTicksLimit: maxTicks } },
+                        y: { display: true, position: 'left', beginAtZero: true, grid: { color: '#374151' }, ticks: { color: '#9ca3af' } },
+                        y1: { display: true, position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, ticks: { color: '#9ca3af' } }
+                    }
+                }
+            });
+        }
+
+        renderDateChips();
+        renderChart();
     } catch (e) { document.getElementById('forensics-loading').innerHTML = `<p class="text-red-500">Error loading telemetry.</p>`; }
 }
 function closeForensicsModal() { document.getElementById('forensics-modal').classList.add('hidden'); }
@@ -1989,7 +2051,8 @@ let rawSchedules = { arr: [], dep: [] };
 async function fetchSchedules() {
     const f = getFilters();
     const targetDate = document.getElementById('arr-date-picker').value;
-    const dateParam = targetDate ? `&target_date=${targetDate}` : '';
+    const tzOffset = new Date().getTimezoneOffset();
+    const dateParam = targetDate ? `&target_date=${targetDate}&tz_offset=${tzOffset}` : '';
     
     if (f.airport === 'ALL') {
         const msg = `<tr><td colspan="4" class="p-12 text-center text-gray-500"><i class="fa-solid fa-globe text-3xl mb-3 block"></i><br>Please select a specific airport from the top filter to view flight data.</td></tr>`;
